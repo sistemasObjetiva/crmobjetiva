@@ -1,0 +1,65 @@
+/* General */
+.tabla-pedidos-container {
+    overflow-x: auto;
+  }
+  
+  /* Table Styling */
+  .tabla-pedidos-container table {
+    min-width: 800px;
+    border-collapse: collapse;
+  }
+  
+  /* Table Header */
+  .tabla-pedidos-container th {
+    text-align: center;
+    background-color: var(--primary-color);
+    color: white;
+    font-weight: bold;
+    padding: 8px;
+  }
+  .tabla-pedidos-container tbody tr {
+    transition: background 0.3s ease;
+  }
+  .tabla-pedidos-container tbody tr:nth-child(odd) {
+    background-color: #f9f9f9;
+  }
+  .tabla-pedidos-container tbody tr:hover {
+    background-color: #f1f1f1;
+  }
+  /* Table Body */
+  .tabla-pedidos-container td {
+    padding: 8px;
+    text-align: center;
+    vertical-align: middle;
+  }
+  
+
+  .tabla-pedidos-container td input {
+    display: block;
+    width: 95%;
+  }
+  /* Responsive Design */
+  @media screen and (max-width: 768px) {
+    .tabla-pedidos-container {
+      overflow-x: auto;
+    }
+  
+    .tabla-pedidos-container input[type="text"],
+    .tabla-pedidos-container input[type="number"] {
+      font-size: 16px;
+      padding: 6px;
+      min-width: 150px;
+    }
+  
+    .barra-iconos {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      padding: 8px;
+    }
+  
+    .barra-iconos .icono-usuarios {
+      margin-bottom: 10px;
+    }
+  }
+  

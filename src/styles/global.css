@@ -1,0 +1,170 @@
+:root {
+  --primary-color: #002855;
+  --secondary-color: #2ca58d;
+  --third-color: #3498db;
+  --fourth-color: #ace7ca;
+  --button-color: #002855;
+  --button-text-color: #ffffff;
+  --error-color: rgb(241, 124, 14);
+  --context1-color: rgb(95, 167, 235);
+  --context2-color: rgb(241, 124, 14);
+  --font-family: 'Arial', sans-serif;
+  --font-size-title: 24px;
+  --font-size-body: 16px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow-x: hidden;
+  font-family: var(--font-family);
+  color-scheme: light;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+.scrollable-content {
+  max-height: calc(100vh - 200px); /* Ajusta para que el footer sea visible */
+  overflow-y: auto;
+}
+.mainContainer {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color:  white;
+}
+
+.headerContainer,
+.footerContainer {
+  position: fixed;
+  left: 0;
+  width: 100%;
+  background-color:  white;
+  color: var(--button-text-color);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  padding: 10px 20px;
+}
+
+.headerContainer {
+  top: 0;
+}
+
+.footerContainer {
+  bottom: 0;
+}
+
+.headerContainer .logo,
+.footerContainer .logo {
+  max-width: 150px;
+  height: auto;
+}
+
+.contentContainer {
+  flex: 1;
+  display: relative;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100vw;
+  margin-top: calc(70px + 50px + 50px); /* Ajuste dinámico para header */
+  margin-bottom: calc(70px + 10px); /* Ajuste dinámico para footer */
+  background-color: white;
+  overflow-y: auto; /* Asegura el scroll si el contenido es muy grande */
+}
+
+
+.pageTitleContainer {
+  position: fixed;
+  top: 70px; /* Ajusta para que quede debajo del header */
+  left: 0;
+  width: 100%;
+  background-color: white;
+  z-index: 1010; /* Asegúrate de que esté sobre el header */
+  padding: 10px;
+  color: var(--primary-color);
+  display: flex;
+  justify-content: center;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); /* Opción para agregar sombra */
+}
+.pageTitle {
+  font-size: 2em; 
+  margin: 0; 
+}
+.pageIcon {
+  width: 40px;
+  height: 40px;
+}
+
+.contentContainer::-webkit-scrollbar {
+  width: 8px;
+}
+
+.contentContainer::-webkit-scrollbar-thumb {
+  background-color: var(--secondary-color);
+  border-radius: 4px;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+  .headerContainer .logo,
+  .footerContainer .logo {
+    max-width: 100px;
+  }
+
+  :root {
+    --font-size-title: 20px;
+    --font-size-body: 14px;
+  }
+
+  .contentContainer {
+    padding: 15px;
+  }
+}
+
+
+
+.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none; /* Desactiva interacción */
+}
+
+.hidden {
+  display: none;
+}
+
+/* tabSelector ////////////////////////////////////////////////////////////////////// */
+.tabSelector-container-fixed {
+  position: relative;  /* Ajusta este valor para que quede debajo del título */
+  width: 100%; /* Ocupa el ancho completo */
+  background-color: white; /* Fondo blanco para cubrir contenido detrás */
+  z-index: 998; /* Asegúrate de que esté encima del contenido pero debajo de overlays como modals */
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); /* Sombra ligera */
+  border-bottom: 1px solid #ddd; /* Línea divisoria */
+}
+
+.tabSelector-container {
+  position: relative; /* Cambia a relativa si no es necesario que sea fija */
+  top: 120px; /* Similar al contenedor fijo */
+  width: 100%;
+  background-color: white;
+  z-index: 998;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  border-bottom: 1px solid #ddd;
+}
+

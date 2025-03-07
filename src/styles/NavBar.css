@@ -1,0 +1,83 @@
+/* General Styles */
+.navbar {
+    position: fixed; /* Fijo debajo del título */
+    top: 130px; /* Ajustado para que quede justo debajo del título */
+    left: 0;
+    width: 100%;
+    background-color: var(--primary-color);
+    padding: 10px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 1000; /* Debajo del título pero encima del contenido */
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2); /* Sombra */
+  }
+  
+  .navbar-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+  }
+  
+  /* Hamburger Menu */
+  .hamburger {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+    width: 30px;
+    height: 24px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    z-index: 1001;
+  }
+  
+  .hamburger span {
+    width: 100%;
+    height: 3px;
+    background-color: white;
+    transition: all 0.3s ease-in-out;
+  }
+  /* Navigation Links */
+.nav-links {
+    position: absolute;
+    top: 60px; /* Coloca el menú justo debajo del navbar */
+    left: 10px; /* Alinea el menú con el botón hamburguesa */
+    background-color: var(--primary-color);
+    list-style: none;
+    padding: 10px 0;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+    display: none; /* Oculto por defecto */
+    flex-direction: column;
+    align-items: flex-start;
+    z-index: 1000;
+  }
+  
+  .nav-links.open {
+    display: flex; /* Muestra el menú cuando está abierto */
+  }
+  
+  .nav-links a {
+    color: white;
+    text-decoration: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    transition: background-color 0.3s ease-in-out;
+    width: 100%;
+  }
+  
+  .nav-links a:hover {
+    background-color: var(--secondary-color);
+  }
+  
+  /* Ajuste del menú hamburguesa para pantallas pequeñas */
+  @media (max-width: 768px) {
+    .nav-links {
+      top: 50px; /* Ajusta ligeramente para pantallas pequeñas */
+      left: 10px;
+    }
+  }
+  
