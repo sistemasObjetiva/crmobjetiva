@@ -129,3 +129,12 @@ export interface Proyecto {
     contraentrega: number;
     parcialidades: number;
   }
+  export interface CustomPlan {
+    customPrecioPlan: number;
+    customPagoInicial: number;
+    customContraEntrega: number;
+    customPayments: { mes: string; monto: number }[];
+  }
+  
+  export type PaymentPlanOrCustom = PaymentPlan | CustomPlan;
+  

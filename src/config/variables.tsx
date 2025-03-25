@@ -385,8 +385,7 @@ export const icons = {
     { path: '/usuarios', name: 'Usuarios', element: React.lazy(() => import('../pages/UsuariosPage.tsx')),rol:"Gerente"},
     { path: '/configuracion', name: 'Configuración Inventario', element: React.lazy(() => import('../pages/ControlInventarioPage.tsx')),rol:"Gerente"},
     { path: '/inventario', name: 'Inventario', element: React.lazy(() => import('../pages/InventarioPage.tsx'))},
-    { path: '/seguimientos', name: 'Seguimientos', element: React.lazy(() => import('../pages/SeguimientosPage.tsx'))},
-    
+    { path: '/seguimientos', name: 'Seguimientos', element: React.lazy(() => import('../pages/SeguimientosPage.tsx'))},    
     { path: '/clientes', name: 'Clientes', element: React.lazy(() => import('../pages/ClientesPage.tsx')) },
   ];
   

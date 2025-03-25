@@ -406,6 +406,29 @@ export const actualizarProyecto = async (proyecto: Proyecto,usermail:string): Pr
     console.error("❌ Error al manejar el proyecto en Supabase:", error);
   }
 };
+export const eliminarProyecto = async (proyecto: Proyecto): Promise<void> => {
+  // Verificar que el proyecto tenga un id válido para poder eliminarlo
+  if (!proyecto || !proyecto.id) {
+    console.error("❌ Error: El proyecto no tiene un id válido.");
+    return;
+  }
+
+  try {
+    console.log("📤 Eliminando el proyecto de Supabase...");
+
+    // Realizar la eliminación utilizando el id del proyecto
+    const { error } = await supabase
+      .from('proyectos')
+      .delete()
+      .match({ id: proyecto.id });
+
+    if (error) throw error;
+
+    console.log("✅ Proyecto eliminado correctamente.");
+  } catch (error) {
+    console.error("❌ Error al eliminar el proyecto en Supabase:", error);
+  }
+};
 
 
 export const useFetchPropiedades = () => {

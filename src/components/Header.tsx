@@ -13,7 +13,7 @@ interface HeaderContainerProps {
 const HeaderContainer: React.FC<HeaderContainerProps> = ({ title, icon, userRole }) => {
   return (
     <>
-      <Link to="/index">
+      <Link to="/inicio">
         <div className="headerContainer">
           <img src={images.logo} alt="Logo" className="logo" />
         </div>

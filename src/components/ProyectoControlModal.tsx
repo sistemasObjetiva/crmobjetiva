@@ -10,7 +10,7 @@ import CustomButton from '../components/CustomButton';
 import { Proyecto, Unidad,PaymentPlan } from '../types/types';
 import { formatoMoneda } from '../hooks/useUtilsFunctions';
 import {  fechaActual } from "../hooks/useDateUtils";
-import { actualizarProyecto } from '../hooks/useFetchFunctions';
+import { actualizarProyecto, eliminarProyecto } from '../hooks/useFetchFunctions';
 
 interface ProyectoModalProps {
   proyecto: Proyecto | null;
@@ -329,7 +329,25 @@ const handleActualizarProyecto = async (proyecto: Proyecto | null): Promise<void
     alert("Hubo un error al actualizar el proyecto.");
   }
 };
+const handleEliminarProyecto = async (proyecto: Proyecto | null): Promise<void> => {
+  if (!proyecto || !proyecto.nombreProyecto||!user) {
+    console.error("❌ Error: El proyecto no tiene nombre o no es válido.");
+    return;
+  }
 
+  try {
+    console.log("📤 Actualizando proyecto en Supabase...");
+  console.log(proyecto)   
+  await eliminarProyecto(proyecto);
+
+    console.log("✅ Proyecto actualizado correctamente.");
+    alert("Proyecto actualizado con éxito.");
+  } catch (error) {
+    console.error("❌ Error al actualizar el proyecto:", error);
+    alert("Hubo un error al actualizar el proyecto.");
+  }
+  onClose( )
+};
   
 
   return (
@@ -789,10 +807,16 @@ const handleActualizarProyecto = async (proyecto: Proyecto | null): Promise<void
             text="Actualizar Proyecto"
             icon={<SaveIcon />}
             sx={{ mt: 1 }}
-            onClick={() => handleActualizarProyecto(proyecto)} // ✅ Ya no recibe `e`
-            
+            onClick={() => handleActualizarProyecto(proyecto)}            
           />
-
+        </Box>
+        <Box sx={{ overflowX: "auto", display: "flex", justifyContent: "center", alignItems: "center", mt: 2, }} >
+          <CustomButton
+            text="Eliminar Proyecto"
+            icon={<DeleteIcon />}
+            sx={{ mt: 1 }}
+            onClick={() => handleEliminarProyecto(proyecto)} 
+          />
         </Box>
         
       </Box>

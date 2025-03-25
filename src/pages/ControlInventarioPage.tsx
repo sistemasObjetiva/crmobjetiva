@@ -76,7 +76,7 @@ const Page: React.FC = () => {
     setIsProyectoModalOpen(true);
   };
 
-  const { proyectos = [] } = useFetchProyectos();
+  const { proyectos = [],fetchProyectos } = useFetchProyectos();
 
   const handleVerProyecto = (proyecto: Proyecto) => {
     setProyecto(proyecto);
@@ -115,8 +115,13 @@ const Page: React.FC = () => {
     setIsPropiedadModalOpen(true);
   };
   
-  const { propiedades = [] } = useFetchPropiedades();
+  const { propiedades = [], } = useFetchPropiedades();
 
+    const handleCloseModalProyecto = ()=>{
+      console.log("hola")
+      setIsProyectoModalOpen(false)
+      fetchProyectos()
+    }
   return (
     <>
       <div className="mainContainer">
@@ -234,7 +239,7 @@ const Page: React.FC = () => {
         <FooterContainer />
       </div>
       {proyecto && (
-        <ProyectoModal proyecto={proyecto} open={isProyectoModalOpen} onClose={() => setIsProyectoModalOpen(false)} setProyecto={setProyecto} user={user} />
+        <ProyectoModal proyecto={proyecto} open={isProyectoModalOpen} onClose={handleCloseModalProyecto} setProyecto={setProyecto} user={user} />
       )}
     </>
   );
