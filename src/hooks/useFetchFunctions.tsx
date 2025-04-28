@@ -374,30 +374,50 @@ const base64ToBlob = (base64: string, mimeType: string): Blob => {
   return new Blob([byteArray], { type: mimeType });
 };
 
-export const actualizarProyecto = async (proyecto: Proyecto,usermail:string): Promise<void> => {
+export const actualizarProyecto = async (proyecto: Proyecto, usermail: string): Promise<void> => {
   if (!proyecto || !proyecto.nombreProyecto) {
     console.error("❌ Error: El proyecto no tiene nombre.");
     return;
   }
 
   try {
-    console.log("📤 Subiendo imágenes...");
+    console.log("📤 Subiendo imágenes del proyecto...");
 
+    // Subir imágenes para logo y fachada
     let updatedProyecto = await subirImagenesProyecto(proyecto);
 
-    // ✅ Verificar si 'id' es un string antes de usar 'trim'
+    // Opcional: verificación de duplicados según nombre (solo si 'nombreProyecto' debe ser único)
+    const { data: existingProjects, error: fetchError } = await supabase
+      .from('proyectos')
+      .select('id')
+      .eq('nombreProyecto', proyecto.nombreProyecto);
+    
+    if (fetchError) {
+      console.error("Error al verificar proyecto existente:", fetchError.message);
+    } else if (existingProjects && existingProjects.length > 0) {
+      // Si encontramos un proyecto y la id es diferente de la actual, podemos asignarla para actualizar en lugar de duplicar
+      updatedProyecto.id = existingProjects[0].id;
+    }
+
+    // Subir imágenes de las unidades (si las hay)
+    if (updatedProyecto.unidades && updatedProyecto.unidades.length > 0) {
+      updatedProyecto.unidades = await subirImagenesUnidades(updatedProyecto.unidades, updatedProyecto.nombreProyecto);
+    }
+
+    // Validar la id: si no es válida, se elimina para forzar inserción
     if (!updatedProyecto.id || (typeof updatedProyecto.id === "string" && updatedProyecto.id.trim() === "")) {
       delete updatedProyecto.id;
     }
 
-    // ✅ Asignar el correo del usuario si no está definido en el proyecto
+    // Asignar el correo del usuario si no está definido
     if (!updatedProyecto.correoUsuario || typeof updatedProyecto.correoUsuario !== "string" || updatedProyecto.correoUsuario.trim() === "") {
       updatedProyecto.correoUsuario = usermail;
     }
 
     console.log("✅ Imágenes subidas con éxito. Guardando proyecto en Supabase...");
 
-    const { error } = await supabase.from('proyectos').upsert(updatedProyecto);
+    // Upsert del proyecto. Si existe la id se actualizará, si no se insertará como nuevo.
+    const { error } = await supabase.from('proyectos').upsert(updatedProyecto, { onConflict: 'id' });
 
     if (error) throw error;
 
@@ -406,6 +426,7 @@ export const actualizarProyecto = async (proyecto: Proyecto,usermail:string): Pr
     console.error("❌ Error al manejar el proyecto en Supabase:", error);
   }
 };
+
 export const eliminarProyecto = async (proyecto: Proyecto): Promise<void> => {
   // Verificar que el proyecto tenga un id válido para poder eliminarlo
   if (!proyecto || !proyecto.id) {

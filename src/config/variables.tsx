@@ -58,7 +58,7 @@ export const icons = {
       "Espectacular", "Redes sociales", "Recomendacion", "De paso",
       "Revista", "Prospecto Propio", "Otra inmobiliaria", "Ferias",
     ],
-    CapacidadDePago: ["2-3 millones", "3-4 millones", "4-5 millones", "> 5 millones"],
+    CapacidadDePago: [ "< 2 millones","2-4 millones", "4-6 millones","> 6 millones"],
     FormaDePago: ["Un solo pago", "Plazos", "Crédito bancario"],
     EstadoCivil: ["Casado", "Soltero", "Viudo", "Divorciado", "Unión libre"],
     TemperaturaDeInteres: [

@@ -4,8 +4,8 @@ import "../styles/loginPage.css";
 import FooterContainer from "../components/Footer";
 import { useState, FormEvent } from "react";
 import { signInWithEmail } from "../config/auth";
-import CustomButton from "../components/CustomButton";
 import { useNavigate } from "react-router-dom";
+import { Button } from "@mui/material";
 
 const LoginPage = () => {
   const [email, setEmail] = useState<string>("");
@@ -56,8 +56,24 @@ const LoginPage = () => {
               autoComplete="current-password"
             />
           </div>
-          {error && <p style={{ color: "var(--primary-color)" }}  className="error-message">{error}</p>}
-          <CustomButton onClick={handleLogin} text="Iniciar sesión"  />
+          {error && (
+            <p style={{ color: "var(--primary-color)" }} className="error-message">
+              {error}
+            </p>
+          )}
+          <Button
+            type="submit"
+            variant="contained"
+            sx={{
+              backgroundColor: "var(--primary-color)",
+              color: "white",
+              "&:hover": {
+                backgroundColor: "var(--secondary-color)",
+              },
+            }}
+          >
+            Iniciar sesión
+          </Button>
         </form>
       </div>
       <FooterContainer />

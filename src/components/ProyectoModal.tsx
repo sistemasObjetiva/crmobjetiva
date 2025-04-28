@@ -160,42 +160,111 @@ const ProyectoModal: React.FC<ProyectoModalProps> = ({ proyecto, open, onClose }
               </>
             )}
              {selectedTab === 2 && (
-              <>
-                <Typography variant="h5" sx={{ mb: 2, color: 'var(--primary-color)' }}>
-                  Planes de Pago
-                </Typography>
-                {proyecto.paymentPlans && proyecto.paymentPlans.length > 0 ? (
-                  <TableContainer component={Paper}>
-                    <Table>
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Nombre</TableCell>
-                          <TableCell>Meses</TableCell>
-                          <TableCell>Descuento</TableCell>
-                          <TableCell>Pago Inicial (%)</TableCell>
-                          <TableCell>Mensualidades (%)</TableCell>
-                          <TableCell>Contraentrega (%)</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {proyecto.paymentPlans.map((plan, index) => (
-                          <TableRow key={index}>
-                            <TableCell>{plan.name}</TableCell>
-                            <TableCell>{plan.months}</TableCell>
-                            <TableCell>{plan.descuento}%</TableCell>
-                            <TableCell>{plan.pInicial}%</TableCell>
-                            <TableCell>{plan.mensualidades}%</TableCell>
-                            <TableCell>{plan.contraentrega}%</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                ) : (
-                  <Typography variant="body2" color="textSecondary">No hay planes de pago registrados.</Typography>
-                )}
-              </>
-            )}
+                <>
+                  <Typography variant="h5" sx={{ mb: 2, color: 'var(--primary-color)' }}>
+                    Planes de Pago
+                  </Typography>
+                  {proyecto.paymentPlans && proyecto.paymentPlans.length > 0 ? (
+                    (() => {
+                      const maxInstallments = Math.max(
+                        ...proyecto.paymentPlans.map(
+                          (plan) =>
+                            plan.mensualidades && plan.mensualidades > 0
+                              ? plan.mensualidades
+                              : plan.parcialidades.length
+                        )
+                      );
+
+                      return (
+                        <Box sx={{ overflowX: 'auto' }}>
+                          <TableContainer component={Paper} sx={{ mt: 3 }}>
+                            <Table size="small" sx={{ minWidth: 800 }}>
+                              <TableHead>
+                                <TableRow>
+                                  {/* Columnas fijas */}
+                                  <TableCell rowSpan={2}>Nombre del Plan</TableCell>
+                                  <TableCell rowSpan={2}>% Descuento</TableCell>
+                                  <TableCell rowSpan={2}>Enganche</TableCell>
+                                  {/* Encabezados dinámicos para cada mensualidad */}
+                                  {Array.from({ length: maxInstallments }).map((_, index) => (
+                                    <TableCell key={`month-header-${index}`} align="center">
+                                      Mes {index + 2}
+                                    </TableCell>
+                                  ))}
+                                  <TableCell rowSpan={2}>Liquidación / Contraentrega</TableCell>
+                                  {/* (Si deseas agregar aquí una columna de Acciones en read-only, puedes hacerlo) */}
+                                </TableRow>
+                                <TableRow>
+                                  {Array.from({ length: maxInstallments }).map((_, index) => (
+                                    <TableCell key={`sub-header-${index}`} align="center">
+                                      % P
+                                    </TableCell>
+                                  ))}
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {proyecto.paymentPlans.map((plan, planIndex) => {
+                                  // Se determina cuántos pagos mensuales requiere este plan
+                                  const installmentsCount =
+                                    plan.mensualidades && plan.mensualidades > 0
+                                      ? plan.mensualidades
+                                      : plan.parcialidades.length;
+                                  return (
+                                    <TableRow key={planIndex}>
+                                      <TableCell>
+                                        <Typography variant="body2" sx={{ fontSize: 13 }}>
+                                          {plan.name}
+                                        </Typography>
+                                      </TableCell>
+                                      <TableCell>
+                                        <Typography variant="body2" sx={{ fontSize: 13 }}>
+                                          {plan.descuento}%
+                                        </Typography>
+                                      </TableCell>
+                                      <TableCell>
+                                        <Typography variant="body2" sx={{ fontSize: 13 }}>
+                                          {plan.pInicial}%
+                                        </Typography>
+                                      </TableCell>
+                                      {Array.from({ length: maxInstallments }).map((_, monthIndex) => {
+                                        if (monthIndex < installmentsCount) {
+                                          // Si el plan tiene definido este pago, mostramos el valor (o 0 si no está definido)
+                                          const parcialidad =
+                                            plan.parcialidades[monthIndex] || { month: monthIndex + 1, value: 0 };
+                                          return (
+                                            <TableCell key={`plan_${planIndex}_month_${monthIndex}`} align="center">
+                                              <Typography variant="body2" sx={{ fontSize: 13 }}>
+                                                {parcialidad.value}%
+                                              </Typography>
+                                            </TableCell>
+                                          );
+                                        } else {
+                                          // Si no se requiere esa mensualidad, dejamos la celda vacía
+                                          return <TableCell key={`plan_${planIndex}_empty_${monthIndex}`} />;
+                                        }
+                                      })}
+                                      <TableCell>
+                                        <Typography variant="body2" sx={{ fontSize: 13 }}>
+                                          {plan.contraentrega}%
+                                        </Typography>
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })}
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        </Box>
+                      );
+                    })()
+                  ) : (
+                    <Typography variant="body2" color="textSecondary">
+                      No hay planes de pago registrados.
+                    </Typography>
+                  )}
+                </>
+              )}
+
           </Box>
         </Box>
       </Modal>

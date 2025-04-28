@@ -50,7 +50,7 @@ const Page: React.FC = () => {
           pInicial: 100.0,
           mensualidades: 0.0,
           months: 1,
-          parcialidades: 0.0,
+          parcialidades: [],
           contraentrega: 0.0,
         },
         {
@@ -59,7 +59,9 @@ const Page: React.FC = () => {
           pInicial: 33.33,
           mensualidades: 66.67,
           months: 3,
-          parcialidades: 33.33,
+          parcialidades: [
+            { month: 2, value: 33.33 }
+          ],
           contraentrega: 33.33,
         },
         {
@@ -68,13 +70,17 @@ const Page: React.FC = () => {
           pInicial: 20.0,
           mensualidades: 50.0,
           months: 0,
-          parcialidades: -50.0,
+          parcialidades: [
+            { month: 1, value: -50.0 }
+          ],
           contraentrega: 30.0,
         },
       ],
+      fechaEntrega: "", // Agrega la propiedad requerida aquí.
     });
     setIsProyectoModalOpen(true);
   };
+    
 
   const { proyectos = [],fetchProyectos } = useFetchProyectos();
 

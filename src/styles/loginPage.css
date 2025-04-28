@@ -9,12 +9,13 @@
 }
 
 .welcome-banner .logo {
-  max-width: 100%; /* Ajusta el tamaño máximo del logo */
-  height: auto; /* Mantén la proporción del logo */
-  margin: 0 auto; /* Centrado horizontal */
-  display: block; /* Asegura que se comporte correctamente */
+  max-width: 100%;
+  height: auto;
+  max-height: 150px; /* Limita la altura para pantallas grandes */
+  margin: 0 auto;
+  display: block;
+  object-fit: contain; /* Asegura que la imagen se ajuste sin deformarse */
 }
-
 .letreroContainer {
   width: 100%; /* Ocupa el 100% del contenedor */
   display: flex;
@@ -34,7 +35,19 @@
     max-width: 70%; /* Logo más pequeño en pantallas pequeñas */
   }
 }
+.loginForm {
+  width: 100%;
+  max-width: 350px;
+  margin: 0 auto;
+  text-align: center; /* Centra los elementos internos, incluido el botón */
+}
 
+/* Si el botón no se centra con el text-align, aplica margen automático */
+.loginForm button, 
+.loginForm .MuiButton-root {
+  display: block;
+  margin: 20px auto 0;
+}
 @media (max-width: 480px) {
   .welcome-banner {
     border-radius: 8px; /* Reduce el radio en pantallas pequeñas */

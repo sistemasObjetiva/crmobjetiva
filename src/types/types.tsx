@@ -64,6 +64,7 @@ export interface Proyecto {
     unidades:Unidad[];
     paymentPlans: PaymentPlan[];
     [key: string]: unknown;
+    fechaEntrega:string;
   }
   export interface Propiedad {
     id?: string; // 🔹 Identificador único en Firestore
@@ -118,6 +119,8 @@ export interface Proyecto {
     preciolista: string;
     extras: Record<string, string>;
     imagenes: { name: string; data: string }[];
+    render?: { name: string; data: string };
+    isometrico?: { name: string; data: string };
     proyecto?: Proyecto;
   }
   export interface PaymentPlan {
@@ -127,8 +130,10 @@ export interface Proyecto {
     pInicial: number;
     mensualidades: number;
     contraentrega: number;
-    parcialidades: number;
+    parcialidades: { month: number; value: number }[];
   }
+  
+  
   export interface CustomPlan {
     customPrecioPlan: number;
     customPagoInicial: number;
