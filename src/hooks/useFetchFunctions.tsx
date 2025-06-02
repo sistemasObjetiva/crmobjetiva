@@ -23,53 +23,41 @@ export const useFetchUsuarios = () => {
 
 const projectId = import.meta.env.VITE_SUPABASE_PROJ_ID;
 
-export const deleteUsuario = async (userId: string): Promise<void> => {
+export const deleteUsuario = async (userId: string): Promise<{ success: boolean; message?: string }> => {
   if (!userId) {
     console.error("❌ Error: userId es undefined");
-    alert("Error: No se pudo eliminar el usuario.");
-    return;
+    return { success: false, message: "Error: No se pudo eliminar el usuario." };
   }
-
   try {
     console.log(`🛠️ Eliminando usuario ${userId} del proyecto ${projectId}`);
-
-    const response = await fetch(`https://wichoserver.vercel.app/delete-user/${projectId}/${userId}`, {
+    const response = await fetch(`https://serverobjetiva.vercel.app/delete-user-alt/${projectId}/${userId}`, {
       method: "DELETE",
     });
 
     if (!response.ok) {
-      throw new Error("No se pudo eliminar el usuario.");
+      const errorData = await response.json();
+      return { success: false, message: errorData.error || "No se pudo eliminar el usuario." };
     }
 
-    alert("✅ Usuario eliminado correctamente.");
+    return { success: true, message: "✅ Usuario eliminado correctamente." };
   } catch (error: any) {
     console.error("❌ Error eliminando usuario:", error.message);
-    alert("Hubo un error al eliminar el usuario.");
+    return { success: false, message: `Hubo un error al eliminar el usuario: ${error.message}` };
   }
 };
 
-
-
-
-
-
-
-export const actualizarUsuario = async (usuario: Usuario, role: string): Promise<void> => {
-  if (!usuario || !usuario.correoElectronico || !usuario.nombreCompleto || !usuario.contrasena) {
+export const actualizarUsuario = async (usuario: Usuario, role: string,isNewUser: boolean): Promise<{ success: boolean; message: string } | null> => {
+  if (!usuario || !usuario.correoElectronico || !usuario.nombreCompleto || (isNewUser && !usuario.contrasena)) {
     console.error("❌ Error: Datos incompletos del usuario.");
-    alert("Error: Faltan datos del usuario.");
-    return;
+   //alert("Error: Faltan datos del usuario.");
+   return { success: false, message: "Error: Faltan datos del usuario." };
+  }if (role !== "Gerente") {
+    //alert("❌ No tienes permisos para registrar o actualizar usuarios.");
+    return { success: false, message: "❌ No tienes permisos para registrar o actualizar usuarios." };
   }
-
-  if (role !== "Gerente") {
-    alert("❌ No tienes permisos para registrar o actualizar usuarios.");
-    return;
-  }
-
   try {
     console.log(`🛠️ Creando/actualizando usuario ${usuario.id} en el proyecto ${projectId}...`);
-
-    const response = await fetch(`https://wichoserver.vercel.app/upsert-user/${projectId}`, {
+    const response = await fetch(`https://serverobjetiva.vercel.app/upsert-user-alt/${projectId}`, {
       method: "PUT", // ✅ Usamos PUT para crear o actualizar
       headers: {
         "Content-Type": "application/json",
@@ -83,10 +71,12 @@ export const actualizarUsuario = async (usuario: Usuario, role: string): Promise
       throw new Error(errorData.error || "No se pudo actualizar el usuario.");
     }
 
-    alert("✅ Usuario creado o actualizado correctamente.");
+    //alert("✅ Usuario creado o actualizado correctamente.");
+    return { success: true, message: `✅ Usuario ${isNewUser ? 'creado' : 'actualizado'} correctamente.` };
   } catch (error: any) {
     console.error("❌ Error actualizando usuario:", error.message);
-    alert("Hubo un error al actualizar el usuario.");
+    //alert("Hubo un error al actualizar el usuario.");
+    return { success: false, message: `Hubo un error al ${isNewUser ? 'crear' : 'actualizar'} el usuario: ${error.message}` };
   }
 };
 
@@ -94,8 +84,8 @@ export const actualizarUsuario = async (usuario: Usuario, role: string): Promise
 
 
 
-
-
+//**************************************************************************************************************************** */
+//***********************************************CLENTES********************************************************************** */
 
 export const useFetchClientes = () => {
   const [clientes, setClientes] = useState<any[]>([]);
@@ -117,22 +107,25 @@ export const useFetchClientes = () => {
 };
 
 // ✅ Eliminar cliente
-export const deleteCliente = async (clienteId: string): Promise<void> => {
+export const deleteCliente = async (clienteId: string): Promise<{ success: boolean; message: string }> => {
   const { error } = await supabase.from('clients').delete().eq('id', clienteId);
   if (error) {
     console.error('Error eliminando cliente:', error.message);
+    return { success: false, message: `Error al eliminar el cliente: ${error.message}` };
   }
+  return { success: true, message: 'Cliente eliminado correctamente.' };
 };
 
 // ✅ Actualizar cliente
 export const actualizarCliente = async (
-  cliente: any, 
+  cliente: any,
   email: string
-): Promise<{ success?: string; error?: string }> => {
+): Promise<{ success?: boolean; message?: string } | null> => {
   try {
     // 1️⃣ Validar que el número de celular no esté vacío
     if (!cliente?.celular) {
-      return { error: "El número de celular es obligatorio." };
+      console.error("❌ Error: El número de celular es obligatorio.");
+      return { success: false, message: "El número de celular es obligatorio." };
     }
 
     // 2️⃣ Normalizar el número de celular
@@ -143,28 +136,33 @@ export const actualizarCliente = async (
     if (!cliente.id) {
       delete clienteData.id;
     }
+    console.log("🧪 proyectosInteres:", cliente.proyectosInteres, typeof cliente.proyectosInteres);
 
     // 4️⃣ Intentamos hacer `upsert` para insertar o actualizar en un solo paso
     const { data, error } = await supabase
       .from("clients")
-      .upsert(clienteData, { onConflict: "celular" }) // Si ya existe un cliente con el mismo celular, lo actualiza
+      .upsert(clienteData, { onConflict: "id" }) // Si ya existe un cliente con el mismo celular, lo actualiza
       .select()
       .single();
 
-    // 5️⃣ Manejo de errores
+    // 5️⃣ Manejo de errores de Supabase
     if (error) {
       console.error("❌ Error al actualizar/crear cliente en Supabase:", error);
-      return { error: `Error en Supabase: ${error.message}` };
+      return { success: false, message: `Error en Supabase: ${error.message}` };
     }
 
-    return { success: `Cliente ${data.nombreCompleto} ${cliente.id ? "actualizado" : "creado"} correctamente.` };
+    return {
+      success: true,
+      message: `Cliente ${data?.nombreCompleto} ${cliente.id ? "actualizado" : "creado"} correctamente.`,
+    };
   } catch (error: any) {
     console.error("❌ Error en actualizarCliente:", error.message);
-    return { error: `Error al procesar el cliente: ${error.message}` };
+    return { success: false, message: `Error al procesar el cliente: ${error.message}` };
   }
 };
 
-
+//************************************************************************************************************************
+// ********************************************SEGUIMIENTOS*************************************************************** */
 export const useFetchSeguimientos = () => {
   const [seguimientos, setSeguimientos] = useState<any[]>([]);
 
@@ -236,28 +234,24 @@ export const actualizarSeguimiento = async (
   }
 };
 
-export const deleteSeguimiento = async (seguimientoId: string): Promise<{ success?: string; error?: string }> => {
+export const deleteSeguimiento = async (seguimientoId: string): Promise<{ success?: boolean; message?: string }> => {
   if (!seguimientoId) {
-    return { error: "ID del seguimiento inválido." };
+    return { success: false, message: "ID del seguimiento inválido." };
   }
-
   try {
     const { error } = await supabase.from("seguimientos").delete().eq("id", seguimientoId);
 
     if (error) {
       console.error("❌ Error eliminando seguimiento:", error);
-      return { error: `Error en Supabase: ${error.message}` };
+      return { success: false, message: `Error en Supabase: ${error.message}` };
     }
 
-    return { success: "Seguimiento eliminado correctamente." };
+    return { success: true, message: "Seguimiento eliminado correctamente." };
   } catch (error: any) {
     console.error("❌ Error en deleteSeguimiento:", error.message);
-    return { error: `Error al eliminar seguimiento: ${error.message}` };
+    return { success: false, message: `Error al eliminar seguimiento: ${error.message}` };
   }
 };
-
-
-
 
 
 
@@ -280,8 +274,9 @@ export const useFetchProyectos = () => {
   return { proyectos, fetchProyectos };
 };
 export const subirImagenesProyecto = async (proyecto: Proyecto): Promise<Proyecto> => {
+  console.error("entre a subirImagenesProyecto");
   if (!proyecto || !proyecto.nombreProyecto) {
-    console.error("❌ Error: Proyecto inválido.");
+    console.error("❌ Error: Proyecto inválido. subirImagenesProyecto");
     return proyecto;
   }
 
@@ -294,7 +289,8 @@ export const subirImagenesProyecto = async (proyecto: Proyecto): Promise<Proyect
     if (!base64String.startsWith("data:image")) return; // 🛑 Evita imágenes ya subidas
 
     try {
-      const filePath = `proyectos/${proyecto.nombreProyecto}/${field}.jpg`;
+      const filePath = `${proyecto.nombreProyecto}/${field}.jpg`;
+      console.log("filepath",filePath);
       const imageBlob = base64ToBlob(base64String, "image/jpeg");
 
       // ✅ Subimos la imagen al bucket "proyectos"
@@ -308,7 +304,7 @@ export const subirImagenesProyecto = async (proyecto: Proyecto): Promise<Proyect
       const { data } = supabase.storage.from("proyectos").getPublicUrl(filePath);
       updatedProyecto = { ...updatedProyecto, [field]: data.publicUrl };
     } catch (error) {
-      console.error(`❌ Error al subir la imagen ${field}:`, error);
+      console.error(`❌ subirImagenesProyecto Error al subir la imagen ${field}:`, error);
     }
   });
 
@@ -317,7 +313,7 @@ export const subirImagenesProyecto = async (proyecto: Proyecto): Promise<Proyect
 };
 export const subirImagenesUnidades = async (unidades: any[], nombreProyecto: string) => {
   if (!Array.isArray(unidades)) return [];
-
+  console.log("entre a subirImagenesUnidades");
   const unidadesActualizadas = await Promise.all(
     unidades.map(async (unidad) => {
       if (!unidad || typeof unidad !== "object") return unidad;
@@ -343,6 +339,7 @@ export const subirImagenesUnidades = async (unidades: any[], nombreProyecto: str
 
                 // ✅ Obtenemos la URL pública
                 const { data } = supabase.storage.from("proyectos").getPublicUrl(storagePath);
+                console.log("imagen unidad correcta");
                 return { name: fileName, data: data.publicUrl };
               } catch (error) {
                 console.error(`❌ Error al subir la imagen de la unidad ${unidad.numerounidad}:`, error);
@@ -374,29 +371,28 @@ const base64ToBlob = (base64: string, mimeType: string): Blob => {
   return new Blob([byteArray], { type: mimeType });
 };
 
-export const actualizarProyecto = async (proyecto: Proyecto, usermail: string): Promise<void> => {
+export const actualizarProyecto = async (proyecto: Proyecto, usermail: string): Promise<{ success: boolean; message: string } | null> => {
   if (!proyecto || !proyecto.nombreProyecto) {
-    console.error("❌ Error: El proyecto no tiene nombre.");
-    return;
+    return { success: false, message: "Error: El proyecto no tiene nombre." };
   }
 
   try {
-    console.log("📤 Subiendo imágenes del proyecto...");
-
     // Subir imágenes para logo y fachada
     let updatedProyecto = await subirImagenesProyecto(proyecto);
 
-    // Opcional: verificación de duplicados según nombre (solo si 'nombreProyecto' debe ser único)
+    // Opcional: verificación de duplicados según nombre
     const { data: existingProjects, error: fetchError } = await supabase
       .from('proyectos')
       .select('id')
       .eq('nombreProyecto', proyecto.nombreProyecto);
-    
+
     if (fetchError) {
       console.error("Error al verificar proyecto existente:", fetchError.message);
-    } else if (existingProjects && existingProjects.length > 0) {
-      // Si encontramos un proyecto y la id es diferente de la actual, podemos asignarla para actualizar en lugar de duplicar
-      updatedProyecto.id = existingProjects[0].id;
+      return { success: false, message: `Error al verificar proyecto existente: ${fetchError.message}` };
+    } else if (existingProjects && existingProjects.length > 0 && (!proyecto.id || existingProjects[0].id !== proyecto.id)) {
+      console.warn("⚠️ Ya existe un proyecto con este nombre.");
+      updatedProyecto.id = existingProjects[0].id; // Decide cómo manejar duplicados
+      // Podemos no retornar un error aquí y permitir la actualización del existente
     }
 
     // Subir imágenes de las unidades (si las hay)
@@ -404,50 +400,51 @@ export const actualizarProyecto = async (proyecto: Proyecto, usermail: string): 
       updatedProyecto.unidades = await subirImagenesUnidades(updatedProyecto.unidades, updatedProyecto.nombreProyecto);
     }
 
-    // Validar la id: si no es válida, se elimina para forzar inserción
+    // Validar la id
     if (!updatedProyecto.id || (typeof updatedProyecto.id === "string" && updatedProyecto.id.trim() === "")) {
       delete updatedProyecto.id;
     }
 
-    // Asignar el correo del usuario si no está definido
+    // Asignar el correo del usuario
     if (!updatedProyecto.correoUsuario || typeof updatedProyecto.correoUsuario !== "string" || updatedProyecto.correoUsuario.trim() === "") {
       updatedProyecto.correoUsuario = usermail;
     }
 
-    console.log("✅ Imágenes subidas con éxito. Guardando proyecto en Supabase...");
-
-    // Upsert del proyecto. Si existe la id se actualizará, si no se insertará como nuevo.
+    // Upsert del proyecto
     const { error } = await supabase.from('proyectos').upsert(updatedProyecto, { onConflict: 'id' });
 
-    if (error) throw error;
+    if (error) {
+      return { success: false, message: `Error al guardar el proyecto: ${error.message}` };
+    }
 
-    console.log("✅ Proyecto guardado correctamente.");
-  } catch (error) {
+    return { success: true, message: "Proyecto guardado correctamente." };
+
+  } catch (error: any) {
     console.error("❌ Error al manejar el proyecto en Supabase:", error);
+    return { success: false, message: `Error al manejar el proyecto: ${error?.message || 'Error desconocido'}` };
   }
 };
 
-export const eliminarProyecto = async (proyecto: Proyecto): Promise<void> => {
-  // Verificar que el proyecto tenga un id válido para poder eliminarlo
+export const eliminarProyecto = async (proyecto: Proyecto): Promise<{ success: boolean; message: string } | null> => {
   if (!proyecto || !proyecto.id) {
-    console.error("❌ Error: El proyecto no tiene un id válido.");
-    return;
+    return { success: false, message: "Error: El proyecto no tiene un id válido." };
   }
-
   try {
-    console.log("📤 Eliminando el proyecto de Supabase...");
-
     // Realizar la eliminación utilizando el id del proyecto
     const { error } = await supabase
       .from('proyectos')
       .delete()
       .match({ id: proyecto.id });
 
-    if (error) throw error;
+    if (error) {
+      console.error("❌ Error al eliminar el proyecto en Supabase:", error.message);
+      return { success: false, message: `Error al eliminar el proyecto: ${error.message}` };
+    }
 
-    console.log("✅ Proyecto eliminado correctamente.");
-  } catch (error) {
+    return { success: true, message: "Proyecto eliminado correctamente" };
+  } catch (error: any) {
     console.error("❌ Error al eliminar el proyecto en Supabase:", error);
+    return { success: false, message: `Error al eliminar el proyecto: ${error?.message || 'Error desconocido'}` };
   }
 };
 
@@ -462,7 +459,7 @@ export const useFetchPropiedades = () => {
     setError(null);
 
     const { data, error } = await supabase.from("propiedades").select("*");
-
+    //console.log("estoy en useFetchPropiedades: ",data);
     if (error) {
       console.error("❌ Error obteniendo propiedades:", error.message);
       setError("Error al obtener propiedades.");
@@ -479,6 +476,30 @@ export const useFetchPropiedades = () => {
 
   return { propiedades, fetchPropiedades, loading, error };
 };
+
+export const eliminarPropiedades = async (propiedad: Propiedad): Promise<{ success?: string; error?: string }> => {
+  try {
+    if (!propiedad.tituloPropiedad) {
+      return { error: "El título de la propiedad es obligatorio." };
+    }
+    // Realizar la eliminación utilizando el id del proyecto
+    const { error } = await supabase
+      .from('propiedades')
+      .delete()
+      .match({ id: propiedad.id });
+
+    if (error) {
+      console.error("❌ Error al eliminar la propiedad:", error.message);
+      return { error: `Error al eliminar la propiedad: ${error.message || 'Error desconocido'}` };
+    }
+
+    return { success: `Propiedad eliminada correctamente.` };
+  } catch (error: any) {
+    console.error("❌ Error al eliminar la propiedad en Supabase:", error);
+    return { error: `Error al eliminar la propiedad: ${error.message || 'Error desconocido'}` };
+  }
+};
+
 export const actualizarPropiedad = async (
   propiedad: Propiedad
 ): Promise<{ success?: string; error?: string }> => {
@@ -489,76 +510,72 @@ export const actualizarPropiedad = async (
 
     const propiedadData = { ...propiedad };
     const userID = propiedadData.userID || "usuario_desconocido";
-    
-    // Eliminar userEmail de los datos a guardar en la base de datos
+
     delete propiedadData.userID;
-    
-    // Comprobar si es una actualización o creación nueva
-    if (!propiedadData.id) {
-      // Es una nueva propiedad (sin ID)
-      delete propiedadData.id; // Asegurar que no hay un ID vacío
+
+    const isUpdate = !!propiedadData.id;
+    let supabaseError;
+    const action = isUpdate ? "actualizada" : "creada";
+
+    if (!isUpdate) {
+      delete propiedadData.id;
       propiedadData.creado_por = userID;
       propiedadData.fecha_creacion = new Date().toISOString();
     } else {
-      // Verificar si la propiedad existe para confirmar que es una actualización
       const { data: existingProperty } = await supabase
         .from("propiedades")
         .select("id")
         .eq("id", propiedadData.id)
         .single();
-        
+
       if (!existingProperty) {
-        // Si no existe, es una nueva propiedad con ID predefinido
-        propiedadData.creado_por = userID;
-        propiedadData.fecha_creacion = new Date().toISOString();
+        return { error: `No se encontró la propiedad con ID: ${propiedadData.id}. Imposible actualizar.` };
       }
     }
-    
-    // Siempre actualizar el campo de actualización
+
     propiedadData.actualizado_por = userID;
     propiedadData.fecha_actualizacion = new Date().toISOString();
 
-    // 🔄 Subir imágenes si son Base64 y reemplazar con URL pública
     if (Array.isArray(propiedad.imagenes)) {
       const imagenesSubidas = await Promise.all(
         propiedad.imagenes.map(async (img) => {
           if (typeof img === "string") {
             if (img.startsWith("data:image")) {
-              // Es una imagen en Base64, se debe subir
               return await subirImagenPropiedad(img, propiedad.tituloPropiedad);
-            } else if (img.includes("https://xyz.supabase.co/storage/v1/object/public/imagenes/")) {
-              // Es una imagen ya almacenada en Supabase, mantenerla
+            } else if (img.includes("supabase.co/storage/v1/object/public/propiedades/")) {
               return img;
             }
           }
-          return null; // Evitar valores nulos
+          return null;
         })
       );
-    
+
       propiedadData.imagenes = imagenesSubidas.filter((url) => typeof url === "string");
     }
 
-    const {  error } = await supabase
+    const { error } = await supabase
       .from("propiedades")
       .upsert(propiedadData, { onConflict: "id" })
       .select()
       .single();
 
-    if (error) {
-      console.error("❌ Error al actualizar propiedad en Supabase:", error);
-      return { error: `Error en Supabase: ${error.message}` };
+    supabaseError = error;
+
+    if (supabaseError) {
+      console.error(`❌ Error al ${action} propiedad en Supabase:`, supabaseError);
+      return { error: `Error en Supabase al ${action} la propiedad: ${supabaseError.message}` };
     }
 
-    return { success: `Propiedad ${propiedadData.id ? "actualizada" : "creada"} correctamente.` };
+    return { success: `Propiedad ${action} correctamente.` };
   } catch (error: any) {
     console.error("❌ Error en actualizarPropiedad:", error.message);
     return { error: `Error al procesar la propiedad: ${error.message}` };
   }
 };
 
-
 export const subirImagenPropiedad = async (base64Image: string, nombrePropiedad: string): Promise<string> => {
   try {
+    console.log("entre a subirImagenPropiedad");
     // 1️⃣ Validar que la imagen sea en formato base64
     if (!base64Image.startsWith("data:image")) {
       console.error("❌ El archivo no es una imagen válida.");

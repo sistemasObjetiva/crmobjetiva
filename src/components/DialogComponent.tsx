@@ -19,11 +19,11 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({ open, onClose, onConfirm,
         <DialogContentText>{message}</DialogContentText>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} color="primary">
-          <CloseIcon />
+        <Button onClick={onClose} sx={{fontWeight: 'bold', fontSize: '16px', textTransform: 'none'}}>
+          Cancelar
         </Button>
-        <Button onClick={onConfirm} color="secondary">
-          <CheckIcon />
+        <Button onClick={onConfirm} autoFocus color="error" sx={{fontWeight: 'bold', fontSize: '16px', textTransform: 'none'}}>
+          Eliminar
         </Button>
       </DialogActions>
     </Dialog>

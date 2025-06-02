@@ -46,6 +46,7 @@ export interface Event {
     unidadInteres: string;
     formaDePago: string;
     temperaturaInteres: string;
+    estatusSeguimiento:string;
     comentarios: string;    
     proyectoInteres: string;
     capacidadDePago: string;

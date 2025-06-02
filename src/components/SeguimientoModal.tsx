@@ -14,14 +14,15 @@ import {
   TableBody,
   TableCell,
   TableRow,
-  TableHead
+  TableHead,
+  Button,
+  Alert, // Importa Alert
 } from '@mui/material';
 
 import CloseIcon from '@mui/icons-material/Close';
 
-
 import CustomButton from '../components/CustomButton';
-
+import SaveIcon from '@mui/icons-material/Save';
 import { ListasDesplegables } from '../config/variables';
 import { useFetchClientes,useFetchProyectos,actualizarSeguimiento } from "../hooks/useFetchFunctions.tsx"; 
 
@@ -33,10 +34,9 @@ interface SeguimientoModalProps {
   email:string | null;
   role:string | null;
   open: boolean;
-  onClose: () => void;
+  onClose: (success?: boolean, message?: string) => void; // Modifica el tipo de onClose para recibir parámetros
   setSeguimiento: (seguimiento: Seguimiento | null) => void;
 }
-
 
 const SeguimientoModal: React.FC<SeguimientoModalProps> = ({ seguimiento, open, onClose, setSeguimiento, email,role }) => {
 
@@ -45,52 +45,83 @@ const SeguimientoModal: React.FC<SeguimientoModalProps> = ({ seguimiento, open, 
     const { proyectos = [] } = useFetchProyectos();
 
     const [clientesFiltrados, setClientesFiltrados] = useState<any[]>([]);
+    // Estados para las alertas dentro del modal
+    const [warningMessage, setWarningMessage] = useState<string | null>(null);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+    const showAlertMessage = (message: string, severity: "success" | "error" | "warning" | "info") => {
+      setErrorMessage(severity === 'error' ? message : null);
+      setWarningMessage(severity === 'warning' ? message : null);
+    };
+    useEffect(() => {
+      if (open) {
+        setWarningMessage(null); // limpia el mensaje al abrir el modal
+        setErrorMessage(null);
+      }
+    }, [open]);
+  
     useEffect(() => {
       if (role === "Gerente") {
-        setClientesFiltrados(clientes); // Muestra todos los clientes si es Gerente
+        setClientesFiltrados(clientes);
       } else {
         setClientesFiltrados(clientes.filter(cliente => cliente.correoUsuario === email));
       }
-    }, [clientes, role, email]); // 🔄 Se ejecuta cada vez que cambian los clientes, el rol o el email
-
+    }, [clientes, role, email]);
+  
+    const actualizacionesArray = React.useMemo(() => {
+      let val = seguimiento?.actualizaciones;
+      if (typeof val === 'string') {
+        try {
+          val = JSON.parse(val);
+        } catch (e) {
+          console.error("No se pudo parsear actualizaciones:", e);
+          val = [];
+        }
+      }
+      return Array.isArray(val) ? val : [];
+    }, [seguimiento]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const { name, value } = e.target;
       setSeguimiento(seguimiento ? { ...seguimiento, [name]: value } : null);
     };
 
-  const handleActualizarSeguimiento = async (seguimiento: Seguimiento,  email: string) => {
-  if (!seguimiento) {
-    alert("❌ No hay usuario autenticado o seguimiento no válido.");
-    return;
-  }
-
-  // ✅ Respeta el correoUsuario si ya existe, de lo contrario usa el email proporcionado
-  const correoUsuarioFinal = seguimiento.correoUsuario || email;
-
-  const updatedSeguimiento: Seguimiento = {
-    ...seguimiento,
-    correoUsuario: correoUsuarioFinal, // 👈 Mantiene el original o asigna el nuevo
-    fechaCreacion: seguimiento.fechaCreacion || fechaActual,
-    fechaActualizacion: fechaActual,
-    fechaProximoSeguimiento: seguimiento.fechaProximoSeguimiento
-      ? (seguimiento.fechaProximoSeguimiento)
-      : "",
-  };
-
-  try {
-    const result = await actualizarSeguimiento(updatedSeguimiento);
-    if (result.error) {
-      alert(`❌ ${result.error}`);
-    } else {
-      alert(`✅ ${result.success}`);
-      onClose();
-    }
-  } catch (error) {
-    alert("❌ Error inesperado al guardar el seguimiento: " + error);
-  }
-};
+    const handleActualizarSeguimiento = async (seguimientoParaGuardar: Seguimiento, emailUsuario: string) => {
+      if (!seguimientoParaGuardar || !emailUsuario) {
+        showAlertMessage("No hay usuario autenticado o seguimiento no válido.", "error");
+        return;
+      }
+      if (!seguimientoParaGuardar.cliente || !seguimientoParaGuardar.proyectoInteres || !seguimientoParaGuardar.estatusSeguimiento) {
+        showAlertMessage("Por favor completa todos los campos obligatorios (*).", "warning");
+        return;
+      }
+  
+      const correoUsuarioFinal = seguimientoParaGuardar.correoUsuario || emailUsuario;
+  
+      const updatedSeguimiento: Seguimiento = {
+        ...seguimientoParaGuardar,
+        correoUsuario: correoUsuarioFinal,
+        fechaCreacion: seguimientoParaGuardar.fechaCreacion || fechaActual,
+        fechaActualizacion: fechaActual,
+        fechaProximoSeguimiento: seguimientoParaGuardar.fechaProximoSeguimiento ? (seguimientoParaGuardar.fechaProximoSeguimiento) : "",
+      };
+  
+      try {
+        const result = await actualizarSeguimiento(updatedSeguimiento);
+        if (result?.error) {
+          showAlertMessage(result.error, "error");
+        } else if (result?.success) {
+          showAlertMessage(result.success, "success");
+          onClose(true, result.success); // Llama a onClose con éxito y mensaje
+        } else {
+          showAlertMessage("Error al guardar el seguimiento.", "error");
+          onClose(false, "Error al guardar el seguimiento."); // Llama a onClose con error
+        }
+      } catch (error: any) {
+        showAlertMessage(`Error inesperado al guardar el seguimiento: ${error}`, "error");
+        onClose(false, `Error inesperado al guardar el seguimiento: ${error}`); // Llama a onClose con error
+      }
+    };
 
 
   return (
@@ -110,7 +141,7 @@ const SeguimientoModal: React.FC<SeguimientoModalProps> = ({ seguimiento, open, 
         }}
         onClick={(event) => event.stopPropagation()}
       >
-        <IconButton sx={{ position: 'absolute', top: 8, right: 8 }} onClick={onClose}>
+        <IconButton sx={{ position: 'absolute', top: 8, right: 8 }} onClick={() => onClose(false)} >
           <CloseIcon />
         </IconButton>
 
@@ -119,55 +150,62 @@ const SeguimientoModal: React.FC<SeguimientoModalProps> = ({ seguimiento, open, 
             Seguimiento
           </Typography>
         </Box>
-
+        {errorMessage && (
+          <Alert severity="error" onClose={() => setErrorMessage(null)} sx={{ mb: 2 }}>
+            {errorMessage}
+          </Alert>
+        )}
+        {warningMessage && (
+          <Alert severity="warning" onClose={() => setWarningMessage(null)} sx={{ mb: 2 }}>
+            {warningMessage}
+          </Alert>
+        )}
         <Box sx={{ padding: 2 }}>
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={6} sx={{ mb: "15px" }}>
-              <TextField
-                sx={{ mb: "15px" }}
-                InputLabelProps={{
-                  shrink: true,
-                  sx: { fontSize: "14px" },
-                }}
-                label="Folio Seguimiento"
-                value={seguimiento?.id || ""}
-                disabled
-                variant="outlined"
-              />
-            </Grid>
+        <Grid container spacing={2}>
+          {/* Campo de Folio Seguimiento */}
+          <Grid item xs={12} sm={6} sx={{ mb: "15px" }}>
+            <TextField
+              fullWidth
+              sx={{ mb: "15px" }}
+              InputLabelProps={{
+                shrink: true,
+                sx: { fontSize: "14px" },
+              }}
+              label="Folio Seguimiento"
+              value={seguimiento?.id || ""}
+              disabled
+              variant="outlined"
+            />
           </Grid>
 
           {/* Select de Cliente */}
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={12} sx={{ mb: "15px" }}>
+          <Grid item xs={12} sm={6} sx={{ mb: "15px" }}> 
             <Autocomplete
-                fullWidth
-                options={clientesFiltrados}
-                getOptionLabel={(option) => option.nombreCompleto || ""} 
-                value={clientesFiltrados.find((cliente) => cliente.id === seguimiento?.idCliente) || null} // Busca el cliente en la lista
-                onChange={(_, newValue) =>
-                    setSeguimiento(seguimiento
-                    ? { ...seguimiento, idCliente: newValue?.id || "", cliente: newValue?.nombreCompleto || "" }
-                    : null
-                    )
-                } 
-                renderInput={(params) => (
-                    <TextField
-                    {...params}
-                    label="Seleccionar Cliente"
-                    variant="outlined"
-                    InputLabelProps={{
-                        shrink: true,
-                        sx: { fontSize: "14px" },
-                    }}
-                    />
-                )}
+              fullWidth
+              options={clientesFiltrados}
+              getOptionLabel={(option) => option.nombreCompleto || ""}
+              value={clientesFiltrados.find((cliente) => cliente.id === seguimiento?.idCliente) || null} // Busca el cliente en la lista
+              onChange={(_, newValue) =>
+                setSeguimiento(seguimiento
+                  ? { ...seguimiento, idCliente: newValue?.id || "", cliente: newValue?.nombreCompleto || "" }
+                  : null
+                )
+              }
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Seleccionar cliente"
+                  variant="outlined"
+                  required
+                  InputLabelProps={{
+                    shrink: true,
+                    sx: { fontSize: "14px" },
+                  }}
                 />
-
-
-
-            </Grid>
+              )}
+            />
           </Grid>
+        </Grid>
 
           {/* Proyecto y Unidad de Interés */}
           <Grid container spacing={2}>
@@ -182,7 +220,8 @@ const SeguimientoModal: React.FC<SeguimientoModalProps> = ({ seguimiento, open, 
               renderInput={(params) => (
                 <TextField
                   {...params}
-                  label="Seleccionar Proyecto"
+                  required
+                  label="Seleccionar proyecto"
                   variant="outlined"
                 />
               )}
@@ -192,7 +231,7 @@ const SeguimientoModal: React.FC<SeguimientoModalProps> = ({ seguimiento, open, 
             <Grid item xs={12} sm={6} sx={{ mb: "15px" }}>
               <TextField
                 fullWidth
-                label="Unidad Interes"
+                label="Unidad intéres"
                 name="unidadInteres"
                 value={seguimiento?.unidadInteres || ""}
                 onChange={handleInputChange}
@@ -206,7 +245,7 @@ const SeguimientoModal: React.FC<SeguimientoModalProps> = ({ seguimiento, open, 
               <TextField
                 select
                 fullWidth
-                label="Forma de Pago"
+                label="Forma de pago"
                 name="formaDePago"
                 value={seguimiento?.formaDePago || ""}
                 onChange={handleInputChange}
@@ -222,7 +261,7 @@ const SeguimientoModal: React.FC<SeguimientoModalProps> = ({ seguimiento, open, 
               <TextField
                 select
                 fullWidth
-                label="Capacidad de Pago"
+                label="Capacidad de pago"
                 name="capacidadDePago"
                 value={seguimiento?.capacidadDePago || ""}
                 onChange={handleInputChange}
@@ -236,16 +275,33 @@ const SeguimientoModal: React.FC<SeguimientoModalProps> = ({ seguimiento, open, 
             </Grid>
           </Grid>
           <Grid container spacing={2}>
-            <Grid item xs={12} sm={12} sx={{ mb: "15px" }}>
+            <Grid item xs={12} sm={6} sx={{ mb: "15px" }}>
               <TextField
                 select
                 fullWidth
-                label="Temperatura Interés"
+                label="Temperatura de interés"
                 name="temperaturaInteres"
                 value={seguimiento?.temperaturaInteres || ""}
                 onChange={handleInputChange}
               >
                 {ListasDesplegables.TemperaturaDeInteres.map((opcion, index) => (
+                  <MenuItem key={index} value={opcion}>
+                    {opcion}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+            <Grid item xs={12} sm={6} sx={{ mb: "15px" }}>
+              <TextField
+                select
+                fullWidth
+                label="Estatus del seguimiento"
+                name="estatusSeguimiento"
+                value={seguimiento?.estatusSeguimiento || ""}
+                onChange={handleInputChange}
+                required
+              >
+                {ListasDesplegables.EstatusSeguimiento.map((opcion, index) => (
                   <MenuItem key={index} value={opcion}>
                     {opcion}
                   </MenuItem>
@@ -271,7 +327,7 @@ const SeguimientoModal: React.FC<SeguimientoModalProps> = ({ seguimiento, open, 
             <Grid item xs={12} sx={{ mb: "15px" }}>
               <TextField
                 fullWidth
-                label="Fecha Próximo Seguimiento"
+                label="Fecha de próximo seguimiento"
                 type="date"
                 variant="outlined"
                 name="fechaProximoSeguimiento"
@@ -287,19 +343,19 @@ const SeguimientoModal: React.FC<SeguimientoModalProps> = ({ seguimiento, open, 
           <Grid container spacing={2}>
             <Grid item xs={12} sx={{ mb: "15px" }}>
               <Typography variant="h6" sx={{ mb: 2 }}>
-                Historial de Actualizaciones
+                Historial de actualizaciones
               </Typography>
               <TableContainer component={Paper} style={{ maxHeight: "300px", overflowY: "auto" }}>
                 <Table stickyHeader>
                   <TableHead>
-                    <TableRow>
-                      <TableCell>Fecha</TableCell>
-                      <TableCell>Comentarios</TableCell>
-                      <TableCell>Temperatura</TableCell>
+                    <TableRow sx={{ '& .MuiTableCell-root': { fontWeight: 'bold', fontSize: '14px', color: 'white', backgroundColor: '#002855' } }}>
+                      <TableCell align="center">Fecha</TableCell>
+                      <TableCell align="center">Comentarios</TableCell>
+                      <TableCell align="center">Temperatura</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {seguimiento?.actualizaciones?.map((actualizacion, index) => (
+                  {actualizacionesArray.map((actualizacion, index) => (
                       <TableRow key={index}>
                         <TableCell>{(actualizacion.fechaActualizacion)}</TableCell>
                         <TableCell>{actualizacion.comentarios}</TableCell>
@@ -312,20 +368,18 @@ const SeguimientoModal: React.FC<SeguimientoModalProps> = ({ seguimiento, open, 
             </Grid>
           </Grid>
         </Box>
-
-        {/* Botón Actualizar */}
         <Box sx={{ textAlign: "center", marginTop: "20px" }}>
-          <CustomButton
-            onClick={() => {
-              if (seguimiento&&email) {
-                handleActualizarSeguimiento(seguimiento, email);
-              } else {
-                alert("❌ No hay seguimiento válido.");
-              }
-            }}
-            text={"Actualizar Seguimiento"}
-          />
-
+          <CustomButton 
+              onClick={() => {
+                if (seguimiento&&email) {
+                  handleActualizarSeguimiento(seguimiento, email);
+                } }} icon={<SaveIcon />}
+              text="Guardar seguimiento" sx={{ minWidth: '150px', padding: '8px 10px', textTransform: 'none',
+                backgroundColor: '#2ca58d', '&:hover': {
+                  backgroundColor: '#002855', // Un tono más oscuro al pasar el ratón
+                },
+                }}/>
+          <Button onClick={() => onClose()} sx={{ fontWeight: 'bold', fontSize: '16px',mr: 2, textTransform: 'none' }}> Cancelar</Button>
         </Box>
       </Box>
     </Modal>

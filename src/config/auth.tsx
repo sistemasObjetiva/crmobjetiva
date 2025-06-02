@@ -3,7 +3,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from "react-router-dom";
 
 
-
+export interface AuthResponse {
+  error: { message: string } | null;
+}
 
 export const signInWithEmail = async (
   email: string,
@@ -32,9 +34,6 @@ export const signInWithEmail = async (
 };
 
 
-
-
-
 export const signOut = async () => {
   await supabase.auth.signOut();
 };
@@ -47,6 +46,30 @@ export const getUser = async () => {
   }
   return data.user;
 };
+/* -----------------------------------------------CODIGO INSERTADO DEL SISTEMA MODELO OBJETIVA----------------------------------------------------------------------------------*/
+export const loginWithGoogle = async (): Promise<AuthResponse> => {
+  //const redirectUrl = import.meta.env.VITE_APP_REDIRECT_URL+ "/inicio";;
+  const redirectTo = `${window.location.origin}/inicio`;
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    
+    options: { redirectTo },
+  });
+  if (error) return { error };
+  // este es el único paso que dispara el flujo:
+  window.location.href = data!.url!;
+  return { error: null };
+};
+
+// Función para resetear la contraseña
+export const resetPassword = async (
+  email: string
+): Promise<AuthResponse> => {
+  return await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin + '/reset',
+  });
+};
+/* -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
 export const useAuthRole = () => {
   const [user, setUser] = useState<any>(null);

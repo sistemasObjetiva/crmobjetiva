@@ -14,6 +14,13 @@ import {
   TableHead,
   Paper,
   TableBody,
+  InputAdornment,
+  Alert,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import EditIcon from '@mui/icons-material/Edit';
@@ -33,9 +40,11 @@ interface ProyectoModalProps {
   onClose: () => void;
   setProyecto: React.Dispatch<React.SetStateAction<Proyecto | null>>;
   user: { id: string; email: string };
+  onProyectoGuardado: (message: string, severity: "success" | "error" | "warning" | "info") => void;
+  
 }
 
-const ProyectoModal: React.FC<ProyectoModalProps> = ({ proyecto, open, onClose, setProyecto, user }) => {
+const ProyectoModal: React.FC<ProyectoModalProps> = ({ proyecto, open, onClose, setProyecto, user,onProyectoGuardado }) => {
   const [selectedTab, setSelectedTab] = useState<number>(0);
   const [unidad, setUnidad] = useState<Unidad>({
     numerounidad: '',
@@ -44,7 +53,18 @@ const ProyectoModal: React.FC<ProyectoModalProps> = ({ proyecto, open, onClose, 
     extras: {},
     imagenes: [],
   });
-
+  //----------**ALERTAS**-------------------------------------------------------------
+  const [warningMessage, setWarningMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [openConfirmDelete, setOpenConfirmDelete] = useState<boolean>(false);
+  const [proyectoToDelete, setProyectoToDelete] = useState<Proyecto | null>(null);
+  useEffect(() => {
+    if (open) {
+      setWarningMessage(null); // limpia el mensaje al abrir el modal
+      setErrorMessage(null);
+    }
+  }, [open]);
+  //----------------**TERMINAN ALERTAS**------------------------------------------------
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setSelectedTab(newValue);
   };
@@ -110,7 +130,7 @@ const ProyectoModal: React.FC<ProyectoModalProps> = ({ proyecto, open, onClose, 
 
   const handleAddExtraKey = (event?: React.MouseEvent<HTMLButtonElement>) => {
     event?.preventDefault();
-    setExtrasKeys([...extrasKeys, `extra_${extrasKeys.length}`]);
+    setExtrasKeys([...extrasKeys, `columna_${extrasKeys.length}`]);
   };
 
   const handleChangeExtraKey = (index: number, newKey: string) => {
@@ -210,33 +230,40 @@ const ProyectoModal: React.FC<ProyectoModalProps> = ({ proyecto, open, onClose, 
   // Sección de Planes de Pago (adaptada para PaymentPlan con parcialidades: number[])
   // ===============================
 
-  const handleAddPaymentPlanRow = () => {
-    setProyecto((prevProyecto) => {
-      if (!prevProyecto) return prevProyecto;
-      const monthsCount = prevProyecto.fechaEntrega
-        ? calculateMonthsDifference(fechaActual, prevProyecto.fechaEntrega)
-        : 1;
-      return {
-        ...prevProyecto,
-        paymentPlans: [
-          ...(prevProyecto.paymentPlans || []),
-          {
-            name: "",
-            months: monthsCount,
-            // <<--- AÑADIR:
-            mensualidades: monthsCount,
-            descuento: 0,
-            pInicial: 0,
-            contraentrega: 0,
-            parcialidades: Array.from({ length: monthsCount }, (_, index) => ({
-              month: index + 1,
-              value: 0,
-            })),
-          },
-        ],
-      };
-    });
-  };
+  const [nuevoPlanNombre, setNuevoPlanNombre] = useState(''); // Estado para almacenar el valor del TextField
+
+const handleNuevoPlanNombreChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  setNuevoPlanNombre(e.target.value);
+};
+
+const handleAddPaymentPlanRow = (planNombre: string) => {
+  console.log("entre a handleAddPaymentPlanRow con nombre:", planNombre);
+  setProyecto((prevProyecto) => {
+    if (!prevProyecto) return prevProyecto;
+    const monthsCount = prevProyecto.fechaEntrega
+      ? calculateMonthsDifference(fechaActual, prevProyecto.fechaEntrega)
+      : 1;
+    return {
+      ...prevProyecto,
+      paymentPlans: [
+        ...(prevProyecto.paymentPlans || []),
+        {
+          name: planNombre, // Usamos el valor pasado a la función
+          months: monthsCount,
+          mensualidades: monthsCount,
+          descuento: 0,
+          pInicial: 0,
+          contraentrega: 0,
+          parcialidades: Array.from({ length: monthsCount }, (_, index) => ({
+            month: index + 1,
+            value: 0,
+          })),
+        },
+      ],
+    };
+  });
+  setNuevoPlanNombre(''); // Limpia el TextField después de agregar el plan
+};
   
 
   // Actualiza campos fijos del plan (name, descuento, pInicial, etc.)
@@ -284,6 +311,7 @@ const ProyectoModal: React.FC<ProyectoModalProps> = ({ proyecto, open, onClose, 
   };
 
   const handleDeliveryDateChange = (newDate: string) => {
+    console.log("new date",newDate)
     if (!newDate) return;
     setProyecto((prevProyecto) => {
       if (!prevProyecto) return prevProyecto;
@@ -319,6 +347,7 @@ const ProyectoModal: React.FC<ProyectoModalProps> = ({ proyecto, open, onClose, 
       return 1;
     }
     let months = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+    console.log(Math.max(1,months));
     return Math.max(1, months);
   };
 
@@ -326,39 +355,65 @@ const ProyectoModal: React.FC<ProyectoModalProps> = ({ proyecto, open, onClose, 
   // Fin Sección de Planes de Pago
   // ===============================
 
-  const handleActualizarProyecto = async (proyecto: Proyecto | null): Promise<void> => {
-    if (!proyecto || !proyecto.nombreProyecto || !user) {
-      console.error("❌ Error: El proyecto no tiene nombre o no es válido.");
+  const handleActualizarProyecto = async (proyecto: Proyecto | null,  onClose: () => void, 
+  onProyectoGuardado: (message: string, severity: "success" | "error" | "warning" | "info") => void 
+): Promise<void> => {
+    if (!proyecto || !proyecto.nombreProyecto || !proyecto.fechaEntrega || !user) {
+      setWarningMessage("Por favor, completa el nombre del proyecto y la fecha de entrega.");
       return;
     }
+    setWarningMessage(null); 
+    setErrorMessage(null);   
     try {
-      console.log("📤 Actualizando proyecto en Supabase...");
-      console.log(proyecto);
-      await actualizarProyecto(proyecto, user.email);
-      console.log("✅ Proyecto actualizado correctamente.");
-      alert("Proyecto actualizado con éxito.");
-    } catch (error) {
+      const result = await actualizarProyecto(proyecto, user.email);
+      if (result?.success) {
+        onClose();
+        onProyectoGuardado(result.message, "success"); // Llamamos con el mensaje y la severidad
+        setErrorMessage(null);
+      } else if (result?.message) {
+        setErrorMessage(result.message);
+        onProyectoGuardado(result.message, "error"); // También podrías mostrar un error aquí si lo deseas
+      } else {
+        setErrorMessage("Error: Respuesta inesperada del servidor.");
+        onProyectoGuardado("Error: Respuesta inesperada del servidor.", "error");
+      }
+    } catch (error: any) {
       console.error("❌ Error al actualizar el proyecto:", error);
-      alert("Hubo un error al actualizar el proyecto.");
+      setErrorMessage(`Error inesperado al actualizar el proyecto: ${error.message}`);
+      onProyectoGuardado(`Error inesperado al actualizar el proyecto: ${error.message}`, "error");
     }
   };
 
-  const handleEliminarProyecto = async (proyecto: Proyecto | null): Promise<void> => {
+  const handleEliminarProyecto = async (
+    proyecto: Proyecto | null,
+    onClose: () => void,
+    onProyectoGuardado: (message: string, severity: "success" | "error" | "warning" | "info") => void
+  ): Promise<void> => {
     if (!proyecto || !proyecto.nombreProyecto || !user) {
-      console.error("❌ Error: El proyecto no tiene nombre o no es válido.");
+      setWarningMessage("Por favor completa el nombre de proyecto");
       return;
     }
+    setWarningMessage(null);
+    setErrorMessage(null);
     try {
-      console.log("📤 Eliminando proyecto en Supabase...");
-      console.log(proyecto);
-      await eliminarProyecto(proyecto);
-      console.log("✅ Proyecto eliminado correctamente.");
-      alert("Proyecto eliminado con éxito.");
-    } catch (error) {
+      const result = await eliminarProyecto(proyecto);
+      if (result?.success) {
+        onClose();
+        onProyectoGuardado(result.message, "success");
+      } else if (result?.message) {
+        setErrorMessage(result.message);
+        onProyectoGuardado(result.message, "error");
+      } else {
+        setErrorMessage("Error al eliminar el proyecto.");
+        onProyectoGuardado("Error al eliminar el proyecto.", "error");
+      }
+    } catch (error: any) {
       console.error("❌ Error al eliminar el proyecto:", error);
-      alert("Hubo un error al eliminar el proyecto.");
+      setErrorMessage(`Error al eliminar el proyecto: ${error.message}`);
+      onProyectoGuardado(`Error al eliminar el proyecto: ${error.message}`, "error");
+    } finally {
+      onClose(); // Asegúrate de cerrar el modal incluso si hay un error
     }
-    onClose();
   };
 
   const handleSingleUnidadImageUpload = (
@@ -424,8 +479,8 @@ const ProyectoModal: React.FC<ProyectoModalProps> = ({ proyecto, open, onClose, 
 
         <Typography
           id="modal-proyecto"
-          variant="h2"
-          component="h2"
+          variant="h4"
+          component="h4"
           sx={{
             mb: 2,
             textAlign: "center",
@@ -435,7 +490,17 @@ const ProyectoModal: React.FC<ProyectoModalProps> = ({ proyecto, open, onClose, 
         >
           {proyecto?.nombreProyecto || "Proyecto"}
         </Typography>
-
+        {/* Alerta si hay error */}
+        {warningMessage && (
+          <Alert severity="warning" onClose={() => setWarningMessage(null)} sx={{ mb: 2 }}>
+            {warningMessage}
+          </Alert>
+        )}
+        {errorMessage && (
+          <Alert severity="error" onClose={() => setErrorMessage(null)} sx={{ mb: 2 }}>
+            {errorMessage}
+          </Alert>
+        )}   
         <Tabs
           value={selectedTab}
           onChange={handleTabChange}
@@ -443,30 +508,30 @@ const ProyectoModal: React.FC<ProyectoModalProps> = ({ proyecto, open, onClose, 
           scrollButtons="auto"
           aria-label="Scrollable tabs for navigation"
         >
-          <Tab label="Información General" />
-          <Tab label="Unidades" />
-          <Tab label="Planes de Pago" />
-          <Tab label="P Sheets" />
+          <Tab label="Información general" sx={{ textTransform: 'none','&:focus': { outline: 'none' } }}/>
+          <Tab label="Unidades" sx={{ textTransform: 'none','&:focus': { outline: 'none' } }}/>
+          <Tab label="Planes de pago" sx={{ textTransform: 'none' ,'&:focus': { outline: 'none' }}}/>
+          <Tab label="P Sheets" sx={{ textTransform: 'none','&:focus': { outline: 'none' } }}/>
         </Tabs>
 
         <Box sx={{ mt: 3 }}>
           {selectedTab === 0 && (
             <>
-              <Typography variant="body1" sx={{ mb: 2, color: "var(--primary-color)" }}>
+              <Typography variant="body1">
                 Nombre del proyecto:
               </Typography>
-              <input
+              <TextField
                 type="text"
                 value={proyecto?.nombreProyecto || ""}
+                required
                 onChange={(e) =>
                   setProyecto((prevProyecto) =>
                     prevProyecto ? { ...prevProyecto, nombreProyecto: e.target.value } : prevProyecto
                   )
                 }
                 placeholder="Nombre del proyecto"
-                style={{ width: "100%", padding: "8px", marginBottom: "16px" }}
+                style={{ width: "100%", padding: "2px", marginBottom: "16px" }}
               />
-
               <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, mb: 4 }}>
                 {/* Logo del Proyecto */}
                 <Box sx={{ flex: 1 }}>
@@ -493,12 +558,15 @@ const ProyectoModal: React.FC<ProyectoModalProps> = ({ proyecto, open, onClose, 
                     </Box>
                   ) : (
                     <CustomButton
-                      text="Subir Logo"
+                      text="Subir logo"
                       icon={<UploadIcon />}
                       inputType="file"
                       accept="image/*"
                       onInputChange={(e) => handleImageUpload(e, "logo")}
-                    />
+                      sx={{ minWidth: '150px',padding: '5px 16px',textTransform: 'none',
+                        '&:focus': { // Estilos para cuando el botón tiene el foco
+                          outline: 'none', // Opcional: quitar el outline predeterminado
+                        } }} />
                   )}
                 </Box>
 
@@ -527,12 +595,16 @@ const ProyectoModal: React.FC<ProyectoModalProps> = ({ proyecto, open, onClose, 
                     </Box>
                   ) : (
                     <CustomButton
-                      text="Subir Fachada"
+                      text="Subir fachada"
                       icon={<UploadIcon />}
                       inputType="file"
                       accept="image/*"
                       onInputChange={(e) => handleImageUpload(e, "fachada")}
-                    />
+                      sx={{ minWidth: '150px',
+                        padding: '5px 16px',textTransform: 'none','&:focus': { // Estilos para cuando el botón tiene el foco
+                          outline: 'none', 
+                        } }} 
+                        />
                   )}
                 </Box>
               </Box>
@@ -557,6 +629,7 @@ const ProyectoModal: React.FC<ProyectoModalProps> = ({ proyecto, open, onClose, 
                       placeholder="Nueva amenidad"
                     />
                     <IconButton
+                    color="error"
                       onClick={() => {
                         setProyecto((prevProyecto) => {
                           if (!prevProyecto) return prevProyecto;
@@ -578,9 +651,12 @@ const ProyectoModal: React.FC<ProyectoModalProps> = ({ proyecto, open, onClose, 
               )}
 
               <CustomButton
-                text="Agregar Amenidad"
+                text="Amenidades"
                 icon={<AddCircleIcon />}
-                sx={{ mt: 1 }}
+                sx={{ mt: 1, minWidth: '150px',
+                  padding: '5px 16px',textTransform: 'none','&:focus': { // Estilos para cuando el botón tiene el foco
+                          outline: 'none', 
+                        } }}
                 onClick={() => {
                   setProyecto((prevProyecto) => {
                     if (!prevProyecto) return prevProyecto;
@@ -596,60 +672,78 @@ const ProyectoModal: React.FC<ProyectoModalProps> = ({ proyecto, open, onClose, 
 
           {selectedTab === 1 && (
             <>
-              <Typography variant="body1" sx={{ mb: 2, color: "var(--primary-color)" }}>
-                Agregar Unidades
+              <Typography variant="body1" sx={{ mb: 1, color: "var(--primary-color)" }}>
+                Agregar unidades
               </Typography>
+              <Box
+                  sx={{
+                    mb: 2,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 2, // Añade un espacio de 2 unidades del tema entre los elementos
+                    }}
+                >
               <TextField
-                fullWidth
-                label="Número de Unidad"
+                label="Número de unidad"
                 value={unidad.numerounidad}
                 onChange={(e) => setUnidad({ ...unidad, numerounidad: e.target.value })}
-                sx={{ mb: 2 }}
+                sx={{width: '250px'}}
               />
+              
               <TextField
-                fullWidth
-                label="Unidad Privativa"
+                label="Unidad privativa"
                 value={unidad.unidadprivativa}
                 onChange={(e) => setUnidad({ ...unidad, unidadprivativa: e.target.value })}
-                sx={{ mb: 2 }}
+                sx={{width: '250px'}}
               />
+              
               <TextField
-                fullWidth
-                label="Precio Lista"
+                label="Precio lista"
                 value={unidad.preciolista || ""}
                 onChange={(e) =>
                   setUnidad({ ...unidad, preciolista: e.target.value.replace(/[^0-9.]/g, "") })
                 }
                 onBlur={(e) => setUnidad({ ...unidad, preciolista: formatoMoneda(e.target.value) })}
-                sx={{ mb: 2 }}
+                sx={{width: '250px'}}
               />
-
-              <CustomButton
-                text="Agregar Variable"
+              <CustomButton text="Agrega unidad" 
+                onClick={() => handleAddUnidad()} 
                 icon={<AddCircleIcon />}
-                sx={{ mt: 1, mb: 2 }}
-                onClick={handleAddExtraKey}
+                sx={{ minWidth: '100px', maxHeight: '30px',
+                  textTransform: 'none' ,
+                   '&:focus': { // Estilos para cuando el botón tiene el foco
+                          outline: 'none', // Opcional: quitar el outline predeterminado
+                        }}} />
+              </Box>
+              <CustomButton
+                text="Variables"
+                icon={<AddCircleIcon />}
+                sx={{minWidth: '150px',
+                  padding: '5px 16px', textTransform: 'none','&:focus': { // Estilos para cuando el botón tiene el foco
+                          outline: 'none', // Opcional: quitar el outline predeterminado
+                        } }}
+                onClick={handleAddExtraKey} 
               />
               {extrasKeys.map((key, index) => (
-                <Box key={index} sx={{ display: "flex", gap: 2, mb: 2 }}>
+                <Box key={index} sx={{ display: "flex", gap: 2, mt: 2, mb: 1 }}>
                   <TextField
-                    fullWidth
                     label="Nombre de la Variable"
                     value={key}
                     onChange={(e) => handleChangeExtraKey(index, e.target.value)}
+                    sx={{ mb: 2,width: '250px'}}
                   />
                   <TextField
-                    fullWidth
                     label="Valor"
                     value={unidad.extras[key] || ""}
                     onChange={(e) => handleChangeExtraValue(key, e.target.value)}
+                    sx={{ mb: 2,width: '250px'}}
                   />
-                  <IconButton onClick={() => handleRemoveExtraKey(index)}>
-                    <DeleteIcon />
+                  <IconButton color="error" onClick={() => handleRemoveExtraKey(index)} >
+                    <CloseIcon />
                   </IconButton>
                 </Box>
               ))}
-
+            
               <Typography variant="body1" sx={{ mt: 2, mb: 1 }}>
                 Render de la unidad:
               </Typography>
@@ -669,12 +763,15 @@ const ProyectoModal: React.FC<ProyectoModalProps> = ({ proyecto, open, onClose, 
                 </Box>
               ) : (
                 <CustomButton
-                  text="Subir Render"
+                  text="Renders"
                   icon={<UploadIcon />}
                   inputType="file"
                   accept="image/*"
                   onInputChange={(e) => handleSingleUnidadImageUpload(e, "render")}
-                />
+                  sx={{ minWidth: '150px',
+                    padding: '5px 16px',textTransform: 'none' , '&:focus': { // Estilos para cuando el botón tiene el foco
+                          outline: 'none', // Opcional: quitar el outline predeterminado
+                        }}} />
               )}
 
               <Typography variant="body1" sx={{ mt: 2, mb: 1 }}>
@@ -696,26 +793,32 @@ const ProyectoModal: React.FC<ProyectoModalProps> = ({ proyecto, open, onClose, 
                 </Box>
               ) : (
                 <CustomButton
-                  text="Subir Isométrico"
+                  text="Isométricos"
                   icon={<UploadIcon />}
                   inputType="file"
                   accept="image/*"
                   onInputChange={(e) => handleSingleUnidadImageUpload(e, "isometrico")}
-                />
+                  sx={{ minWidth: '150px',
+                    padding: '5px 16px',textTransform: 'none', '&:focus': { // Estilos para cuando el botón tiene el foco
+                          outline: 'none', // Opcional: quitar el outline predeterminado
+                        }}} />
               )}
 
-              <Typography variant="body1" sx={{ mb: 2 }}>
+              <Typography variant="body1" sx={{ mt: 2, mb: 1 }}>
                 Subir imágenes de la unidad:
               </Typography>
 
               <CustomButton
-                text="Seleccionar Imágenes"
+                text="Imágenes"
                 icon={<UploadIcon />}
                 inputType="file"
                 multiple
                 accept="image/*"
                 onInputChange={(e) => handleUnidadImageUpload(e)}
-              />
+                sx={{minWidth: '150px',
+                  padding: '5px 16px', textTransform: 'none','&:focus': { // Estilos para cuando el botón tiene el foco
+                          outline: 'none', // Opcional: quitar el outline predeterminado
+                        } }} />
 
               <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, mt: 2 }}>
                 {unidad.imagenes?.map((img, index) => (
@@ -741,17 +844,17 @@ const ProyectoModal: React.FC<ProyectoModalProps> = ({ proyecto, open, onClose, 
                 ))}
               </Box>
 
-              <CustomButton text="Agregar Unidad" onClick={() => handleAddUnidad()} />
-              <Typography variant="h6" sx={{ mt: 4 }}>
-                Unidades Agregadas
+              
+              <Typography variant="h6" sx={{ mt: 2 }}>
+                Unidades agregadas
               </Typography>
               <TableContainer component={Paper} sx={{ mt: 2 }}>
                 <Table>
                   <TableHead>
-                    <TableRow>
-                      <TableCell>Número Unidad</TableCell>
-                      <TableCell>Unidad Privativa</TableCell>
-                      <TableCell>Precio Lista</TableCell>
+                    <TableRow sx={{ '& .MuiTableCell-root': { fontWeight: 'bold', fontSize: '14px', color: 'white', backgroundColor: '#002855' } }}>
+                      <TableCell>Número unidad</TableCell>
+                      <TableCell>Unidad privativa</TableCell>
+                      <TableCell>Precio lista</TableCell>
                       {extrasKeys.map((key) => (
                         <TableCell key={key}>{key}</TableCell>
                       ))}
@@ -804,10 +907,10 @@ const ProyectoModal: React.FC<ProyectoModalProps> = ({ proyecto, open, onClose, 
                             </Box>
                           </TableCell>
                           <TableCell>
-                            <IconButton onClick={() => handleEditUnidad(index)}>
+                            <IconButton  color="inherit"  onClick={() => handleEditUnidad(index)}>
                               <EditIcon />
                             </IconButton>
-                            <IconButton onClick={() => handleDeleteUnidad(index)}>
+                            <IconButton color="error" onClick={() => handleDeleteUnidad(index)}>
                               <DeleteIcon />
                             </IconButton>
                           </TableCell>
@@ -820,160 +923,134 @@ const ProyectoModal: React.FC<ProyectoModalProps> = ({ proyecto, open, onClose, 
           )}
 {selectedTab === 2 && (
   <>
-    <Typography variant="h6" gutterBottom>
-      Fecha de Entrega
+  <Typography variant="body1" gutterBottom>
+      Fecha de entrega:
     </Typography>
+  <Box sx={{mb: 2,display: 'flex',alignItems: 'center', gap: 2,}}>
     <TextField
       type="date"
+      required
       value={proyecto?.fechaEntrega ?? ""}
       onChange={(e) => handleDeliveryDateChange(e.target.value)}
-      fullWidth
-      sx={{ mb: 2 }}
+      sx={{minWidth: '150px'}}
     />
-
-    <Box sx={{ mt: 3, display: "flex", justifyContent: "flex-end" }}>
-      <CustomButton
-        onClick={handleAddPaymentPlanRow}
-        text="Agregar Plan de Pago"
-        icon={<span style={{ fontSize: "1.5rem", fontWeight: "bold" }}>+</span>}
-      />
+    <TextField
+      label="Nombre de plan de pago (opcional)"
+      value={nuevoPlanNombre}
+      onChange={handleNuevoPlanNombreChange}
+      sx={{width: '250px'}}
+    />
+    <CustomButton
+      onClick={() => handleAddPaymentPlanRow(nuevoPlanNombre)}
+      text="Nuevo plan de pago"
+      icon={<AddCircleIcon />}
+      sx={{minWidth: '150px',
+        padding: '5px 16px', textTransform: 'none',
+        '&:focus': { // Estilos para cuando el botón tiene el foco
+            outline: 'none', // Opcional: quitar el outline predeterminado
+          } }} />
     </Box>
-
+    
     {proyecto &&
-      proyecto.paymentPlans &&
-      proyecto.paymentPlans.length > 0 && (
-        (() => {
-          const maxInstallments = Math.max(
-            ...proyecto.paymentPlans.map(
-              (plan) =>
-                (plan.mensualidades && plan.mensualidades > 0
-                  ? plan.mensualidades
-                  : plan.parcialidades.length)
-            )
-          );
-
+    proyecto.paymentPlans &&
+    proyecto.paymentPlans.length > 0 &&
+    proyecto.fechaEntrega && ( // Solo renderiza si proyecto.fechaEntrega tiene un valor
+      (() => {
+        const maxInstallments = Math.max(
+          ...(proyecto.paymentPlans || []).map(
+            (plan) =>
+              (plan.mensualidades && plan.mensualidades > 0
+                ? plan.mensualidades
+                : plan.parcialidades.length)
+          )
+        );
           return (
             <Box sx={{ overflowX: "auto" }}>
-              <TableContainer component={Paper} sx={{ mt: 3 }}>
+              <TableContainer component={Paper} sx={{ mt: 2 }}>
                 <Table sx={{ minWidth: 800 }}>
                   <TableHead>
-                    <TableRow>
-                      {/* Columnas fijas */}
-                      <TableCell rowSpan={2}>Nombre del Plan</TableCell>
-                      <TableCell rowSpan={2}>% Descuento</TableCell>
-                      <TableCell rowSpan={2}>Enganche</TableCell>
-                      {/* Generamos dinámicamente los encabezados para cada pago mensual */}
-                      {Array.from({ length: maxInstallments }).map((_, index) => (
-                        <TableCell key={`month-header-${index}`} align="center">
-                          Mes {index + 2}
-                        </TableCell>
+                    <TableRow sx={{ '& .MuiTableCell-root': { fontWeight: 'bold', fontSize: '14px', color: 'white', backgroundColor: '#002855' } }}>
+                      <TableCell>Plan de pago</TableCell>
+                      {proyecto.paymentPlans.map((plan) => (
+                        <TableCell key={plan.name} align="center">{plan.name}</TableCell>
                       ))}
-                      <TableCell rowSpan={2}>Liquidación / Contraentrega</TableCell>
-                      {/* Agregamos una nueva columna de Acciones */}
-                      <TableCell rowSpan={2}>Acciones</TableCell>
                     </TableRow>
                     <TableRow>
-                      {Array.from({ length: maxInstallments }).map((_, index) => (
-                        <TableCell key={`sub-header-${index}`} align="center">
-                          % P
+                      <TableCell>Acciones</TableCell>
+                      {proyecto.paymentPlans.map((plan, planIndex) => (
+                        <TableCell key={`plan-acciones-${planIndex}`} align="center">
+                          <IconButton color="error" onClick={() => handleDeletePaymentPlanRow(planIndex)}>
+                            <DeleteIcon />
+                          </IconButton>
                         </TableCell>
                       ))}
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {proyecto.paymentPlans.map((plan, planIndex) => {
-                      const installmentsCount =
-                        plan.mensualidades && plan.mensualidades > 0
-                          ? plan.mensualidades
-                          : plan.parcialidades.length;
-                      return (
-                        <TableRow key={planIndex}>
-                          {/* Columnas fijas */}
-                          <TableCell>
-                            <TextField
-                              value={plan.name}
-                              onChange={(e) =>
-                                handlePaymentPlanChange(planIndex, "name", e.target.value)
-                              }
-                              fullWidth
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <TextField
-                              type="number"
-                              value={plan.descuento}
-                              onChange={(e) =>
-                                handlePaymentPlanChange(
-                                  planIndex,
-                                  "descuento",
-                                  parseFloat(e.target.value)
-                                )
-                              }
-                              fullWidth
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <TextField
-                              type="number"
-                              value={plan.pInicial}
-                              onChange={(e) =>
-                                handlePaymentPlanChange(
-                                  planIndex,
-                                  "pInicial",
-                                  parseFloat(e.target.value)
-                                )
-                              }
-                              fullWidth
-                            />
-                          </TableCell>
-                          {/* Columnas dinámicas para cada pago mensual */}
-                          {Array.from({ length: maxInstallments }).map((_, monthIndex) => {
-                            if (monthIndex < installmentsCount) {
-                              const parcialidad =
-                                plan.parcialidades[monthIndex] || { month: monthIndex + 1, value: 0 };
-                              return (
-                                <TableCell key={`plan_${planIndex}_month_${monthIndex}`}>
-                                  <TextField
-                                    type="number"
-                                    value={parcialidad.value}
-                                    onChange={(e) =>
-                                      handleParcialidadChange(
-                                        planIndex,
-                                        monthIndex,
-                                        parseFloat(e.target.value)
-                                      )
-                                    }
-                                    fullWidth
-                                  />
-                                </TableCell>
-                              );
-                            } else {
-                              return <TableCell key={`plan_${planIndex}_empty_${monthIndex}`} />;
-                            }
-                          })}
-                          <TableCell>
+                    <TableRow>
+                      <TableCell>% Descuento</TableCell>
+                      {proyecto.paymentPlans.map((plan, planIndex) => (
+                        <TableCell key={`plan-descuento-${planIndex}`} align="center">
+                          <TextField
+                            type="number"
+                            value={plan.descuento}
+                            onChange={(e) => handlePaymentPlanChange(planIndex, "descuento", parseFloat(e.target.value))}
+                            InputProps={{
+                              endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                            }}
+                          />
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                    <TableRow>
+                      <TableCell>Enganche</TableCell>
+                      {proyecto.paymentPlans.map((plan, planIndex) => (
+                        <TableCell key={`plan-enganche-${planIndex}`} align="center">
+                          <TextField
+                            type="number"
+                            value={plan.pInicial}
+                            onChange={(e) => handlePaymentPlanChange(planIndex, "pInicial", parseFloat(e.target.value))}
+                            InputProps={{
+                              endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                            }}
+                          />
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                    {/* Filas para las mensualidades */}
+                    {Array.from({ length: maxInstallments }).map((_, monthIndex) => (
+                      <TableRow key={`month-${monthIndex + 2}`}>
+                        <TableCell>Mes {monthIndex + 2} (% P)</TableCell>
+                        {proyecto.paymentPlans.map((plan, planIndex) => (
+                          <TableCell key={`plan-${planIndex}-month-${monthIndex}`} align="center">
                             <TextField
                               type="number"
-                              value={plan.contraentrega}
-                              onChange={(e) =>
-                                handlePaymentPlanChange(
-                                  planIndex,
-                                  "contraentrega",
-                                  parseFloat(e.target.value)
-                                )
-                              }
-                              fullWidth
+                              value={plan.parcialidades[monthIndex]?.value || 0}
+                              onChange={(e) => handleParcialidadChange(planIndex, monthIndex, parseFloat(e.target.value))}
+                              InputProps={{
+                                endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                              }}
                             />
                           </TableCell>
-                          {/* Columna de Acciones: Botón para borrar el plan */}
-                          <TableCell>
-                            <IconButton onClick={() => handleDeletePaymentPlanRow(planIndex)}>
-                              <DeleteIcon />
-                            </IconButton>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
+                        ))}
+                      </TableRow>
+                    ))}
+                    <TableRow>
+                      <TableCell>Liquidación / Contraentrega</TableCell>
+                      {proyecto.paymentPlans.map((plan, planIndex) => (
+                        <TableCell key={`plan-contraentrega-${planIndex}`} align="center">
+                          <TextField
+                            type="number"
+                            value={plan.contraentrega}
+                            onChange={(e) => handlePaymentPlanChange(planIndex, "contraentrega", parseFloat(e.target.value))}
+                            InputProps={{
+                              endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                            }}
+                          />
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                    
                   </TableBody>
                 </Table>
               </TableContainer>
@@ -985,38 +1062,72 @@ const ProyectoModal: React.FC<ProyectoModalProps> = ({ proyecto, open, onClose, 
 )}
 
         </Box>
+        
         <Box
           sx={{
-            overflowX: "auto",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
+            display: "flex", // Habilita el diseño en fila para los hijos
+            justifyContent: "center", // Centra los botones horizontalmente
+            alignItems: "center", // Centra los botones verticalmente (si es necesario)
             mt: 2,
+            gap: 2, // Opcional: añade un espacio entre los botones
+            overflowX: "auto", // Por si los botones son demasiado anchos
           }}
         >
           <CustomButton
-            text="Actualizar Proyecto"
+            text="Guardar proyecto"
             icon={<SaveIcon />}
-            sx={{ mt: 1 }}
-            onClick={() => handleActualizarProyecto(proyecto)}
+            sx={{ minWidth: '150px', padding: '8px 10px', textTransform: 'none',
+              backgroundColor: '#2ca58d', '&:hover': {
+                backgroundColor: '#c0c0c0', // Un tono más oscuro al pasar el ratón
+              },
+             }}
+             onClick={() => handleActualizarProyecto(proyecto, onClose, onProyectoGuardado)}
           />
-        </Box>
-        <Box
-          sx={{
-            overflowX: "auto",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            mt: 2,
-          }}
-        >
           <CustomButton
-            text="Eliminar Proyecto"
+            text="Eliminar proyecto"
             icon={<DeleteIcon />}
-            sx={{ mt: 1 }}
-            onClick={() => handleEliminarProyecto(proyecto)}
-          />
+            sx={{
+              minWidth: '150px',
+              padding: '8px 10px',
+              textTransform: 'none',
+              '&:hover': {
+                backgroundColor: 'error.light', // Color de fondo al pasar el ratón
+                color: 'white',
+              },
+            }}
+            onClick={() => {
+              setProyectoToDelete(proyecto);
+              setOpenConfirmDelete(true);
+            }}
+            />
         </Box>
+        {/* Diálogo de confirmación de eliminación */}
+      <Dialog
+        open={openConfirmDelete}
+        onClose={() => setOpenConfirmDelete(false)}
+        aria-labelledby="alert-dialog-title"
+        aria-describedby="alert-dialog-description"
+      >
+        <DialogTitle id="alert-dialog-title">
+          {"¿Estás seguro de eliminar este proyecto?"}
+        </DialogTitle>
+        <DialogContent>
+          <Typography id="alert-dialog-description">
+            Esta acción eliminará permanentemente el proyecto "{proyectoToDelete?.nombreProyecto}". ¿Deseas continuar?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenConfirmDelete(false)}>Cancelar</Button>
+          <Button onClick={() => {
+            if (proyectoToDelete) {
+              handleEliminarProyecto(proyectoToDelete, onClose, onProyectoGuardado);
+            }
+            setOpenConfirmDelete(false);
+          }} autoFocus color="error">
+            Eliminar
+          </Button>
+        </DialogActions>
+      </Dialog>
       </Box>
     </Modal>
   );

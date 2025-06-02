@@ -14,61 +14,65 @@ import {
   Paper,
   TextField,
   Typography,
-  Autocomplete
+  Autocomplete,
+  Alert, 
 } from '@mui/material';
-import PersonIcon from '@mui/icons-material/Person';
 import DeleteIcon from '@mui/icons-material/Delete';
-
-
-
+import CreateIcon from "@mui/icons-material/Create";
+import CustomButton from '../components/CustomButton.tsx';
 import HeaderContainer from '../components/Header';
 import FooterContainer from '../components/Footer';
 import SeguimientoModal from '../components/SeguimientoModal.tsx';
 import DialogComponent from "../components/DialogComponent"; 
-
 import { icons } from '../config/variables';
-
 import '../styles/UsuariosPage.css';
 import '../styles/global.css';
-
 import { Seguimiento } from '../types/types';
-
 import { useAuthRole } from "../config/auth.tsx";
 import { useFetchClientes, useFetchSeguimientos,deleteSeguimiento} from "../hooks/useFetchFunctions.tsx"; 
-
 import  {  fechaActual }  from '../hooks/useDateUtils';
 
 const title = "Seguimientos";
 
 const Page: React.FC = () => {
-  // Estado para la vista seleccionada
   const [selectedView, setSelectedView] = useState<number>(0);
   const handleViewChange = (_event: React.SyntheticEvent, newValue: number) => {
     setSelectedView(newValue);
   };
-
     const { role, user } = useAuthRole(); 
-
     const { clientes = [] } = useFetchClientes();
-
     const { seguimientos = [] , fetchSeguimientos } = useFetchSeguimientos();
 
   // Estado para el seguimiento
     const [seguimiento, setSeguimiento] = useState<Seguimiento | null>(null);
     const [isSeguimientoModalOpen, setIsSeguimientoModalOpen] = useState<boolean>(false);
 
+    // Estados para las alertas en la página
+    const [showAlert, setShowAlert] = useState<boolean>(false);
+    const [alertMessage, setAlertMessage] = useState<string>("");
+    const [alertSeverity, setAlertSeverity] = useState<"success" | "error" | "warning" | "info">("info");
+
+    const showAlertMessage = (message: string, severity: "success" | "error" | "warning" | "info") => {
+      setAlertMessage(message);
+      setAlertSeverity(severity);
+      setShowAlert(true);
+      setTimeout(() => {
+        setShowAlert(false);
+      }, 3000);
+    };
+
     const openSeguimientoModal = () => {
-        
         setSeguimiento({
-            id: '', // Asignar un ID único si es necesario
+            id: '', 
             cliente: '',
-            correoUsuario: user?.email || '', // Si ya tienes el email del usuario autenticado, lo asignas
+            correoUsuario: user?.email || '',
             fechaCreacion: (fechaActual),
             fechaActualizacion: (fechaActual),
             fechaProximoSeguimiento: (fechaActual),
             unidadInteres: '',
             formaDePago: '',
             temperaturaInteres: '',
+            estatusSeguimiento:'',
             comentarios: '',
             proyectoInteres:'',
             capacidadDePago:'',
@@ -78,15 +82,20 @@ const Page: React.FC = () => {
       };
       
 
-  const handleEditarSeguimiento = (seguimiento: Seguimiento) => {
-    setSeguimiento(seguimiento);
+  const handleEditarSeguimiento = (seguimientoParaEditar: Seguimiento) => {
+    setSeguimiento(seguimientoParaEditar);
     setIsSeguimientoModalOpen(true);
   };
 
-  const closeSeguimientoModal = () => {
+  const closeSeguimientoModal = (success?: boolean, message?: string) => {
     setIsSeguimientoModalOpen(false);
     setSeguimiento(null);
-    fetchSeguimientos()
+    fetchSeguimientos();
+    if (success && message) {
+      showAlertMessage(message, "success");
+    } else if (!success && message) {
+      showAlertMessage(message, "error");
+    }
   };
 
   const [seguimientosFiltrados, setSeguimientosFiltrados] = useState<Seguimiento[]>([]);
@@ -106,7 +115,8 @@ const Page: React.FC = () => {
   const [openConfirmDialog, setOpenConfirmDialog] = useState<boolean>(false);
   const [seguimientoToDelete, setSeguimientoToDelete] = useState<Seguimiento | null>(null);
 
-  const handleOpenConfirmDialog = (seguimiento: Seguimiento) => {
+  const handleOpenConfirmDialog = (seguimiento: Seguimiento, event: React.MouseEvent) => {
+    event.stopPropagation(); // Evita que se ejecute el onClick de la fila
     setSeguimientoToDelete(seguimiento);
     setOpenConfirmDialog(true);
   };
@@ -114,39 +124,38 @@ const Page: React.FC = () => {
   const handleCloseConfirmDialog = () => {
     setSeguimientoToDelete(null);
     setOpenConfirmDialog(false);
-    fetchSeguimientos()
   };
 
   const handleDeleteSeguimiento = async () => {
-    if (!seguimientoToDelete|| !seguimientoToDelete.id) return;
+    if (!seguimientoToDelete || !seguimientoToDelete.id) return;
   
     try {
-      const result = await deleteSeguimiento(seguimientoToDelete?.id);
+      const result = await deleteSeguimiento(seguimientoToDelete.id);
   
-      if (result.error) {
-        alert(`❌ ${result.error}`);
+      if (result?.success) {
+        showAlertMessage(`Seguimiento del cliente ${seguimientoToDelete.cliente} eliminado correctamente.`, "success");
+      } else if (result?.message) {
+        showAlertMessage(result.message, "error");
       } else {
-        alert(`✅ ${result.success}`);
-        fetchSeguimientos(); // 🔄 Recargar los seguimientos después de eliminar
+        showAlertMessage("Error al eliminar el seguimiento.", "error");
       }
+      fetchSeguimientos(); // 🔄 Recargar los seguimientos después de eliminar
     } catch (error) {
-      alert("❌ Error inesperado al eliminar seguimiento: " + error);
+      showAlertMessage("Error inesperado al eliminar seguimiento: " + error, "error");
     }
-  
     handleCloseConfirmDialog(); // Cerrar el diálogo después de eliminar
   };
-  
 
     const [busquedaCliente, setBusquedaCliente] = useState<string>("");
 
     const seguimientosFiltradosBuscador = seguimientosFiltrados.filter(seguimiento =>
       seguimiento.cliente.toLowerCase().includes(busquedaCliente.toLowerCase())
     );
-
+/*
   useEffect(() => {
    console.log(seguimiento)
   }, [role,seguimiento,seguimientos,seguimientosFiltrados,user?.email,clientes]);
-
+*/
   return (
     <div className="mainContainer">
       <HeaderContainer title={title} icon={icons.iconoMuestra} userRole={role} />
@@ -154,48 +163,61 @@ const Page: React.FC = () => {
         <div className="tabSelector-container-fixed">
           <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
             <Tabs value={selectedView} onChange={handleViewChange} variant="scrollable" scrollButtons="auto">
-              <Tab label="Seguimientos Activos" />
+              <Tab label="Seguimientos activos" sx={{textTransform: 'none' }}/>
             </Tabs>
           </Box>
         </div>
-
+        {showAlert && (
+          <Alert severity={alertSeverity} onClose={() => setShowAlert(false)} sx={{ mb: 2 }}>
+            {alertMessage}
+          </Alert>
+        )}
         {/* Vista de seguimientos activos */}
         {selectedView === 0 && (
           <Box className="usuarios-list">
-            <Toolbar className="barra-iconos">
+            <Toolbar className="usuarios-list" sx={{ display: 'flex', justifyContent: 'center', padding: 1 }}>
+            <Typography variant="body1" sx={{ color: "var(--primary-color)", mr: 2 }}>
+              Buscar clientes:
+            </Typography>
             <Autocomplete
                 options={clientes.map((cliente) => cliente.nombreCompleto)}
                 renderInput={(params) => (
                     <TextField
                     {...params}
-                    placeholder="Buscar Cliente"
+                    placeholder="Buscar seguimiento de cliente"
                     variant="outlined"
                     size="small"
-                    sx={{ backgroundColor: "white", borderRadius: 1, mr: 2, minWidth: 200 }}
+                    sx={{ backgroundColor: "white", borderRadius: 1,  minWidth: 200 }}
                     />
                 )}
                 value={busquedaCliente}
                 onInputChange={(_, newValue) => setBusquedaCliente(newValue)}
                 freeSolo
                 />
-              <IconButton onClick={openSeguimientoModal} className="icono-usuario">
-                <PersonIcon style={{ color: 'white' }} />
-                <Typography style={{ color: 'white' }}>Nuevo Seguimiento</Typography>
-              </IconButton>
+              <Box className="usuarios-list" sx={{ display: 'flex', justifyContent: 'center', padding: 1 }}>
+                  <CustomButton
+                    onClick={openSeguimientoModal}
+                    text="Nuevo seguimiento"
+                    icon={<span style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>+</span>}
+                    sx={{ textTransform: 'none' ,
+                      '&:focus': { 
+                        outline: 'none', 
+                      } }} />
+              </Box>
             </Toolbar>
 
             <TableContainer component={Paper} className="user-table" style={{ maxHeight: '500px', overflowY: 'auto' }}>
               <Table stickyHeader>
                 <TableHead className="sticky-header">
-                  <TableRow>
+                  <TableRow sx={{ '& .MuiTableCell-root': { fontWeight: 'bold', fontSize: '14px', color: 'white', backgroundColor: '#002855' } }}>
                     <TableCell>Folio</TableCell>
-                    <TableCell>Nombre Cliente</TableCell>
-                    <TableCell>Correo Vendedor</TableCell>
-                    <TableCell>Fecha Creación</TableCell>
-                    <TableCell>Fecha Actualización</TableCell>
-                    <TableCell>Unidad Interés</TableCell>
-                    <TableCell>Forma de Pago</TableCell>
-                    <TableCell>Temperatura de Interés</TableCell>
+                    <TableCell>Nombre cliente</TableCell>
+                    <TableCell>Correo vendedor</TableCell>
+                    <TableCell>Fecha creación</TableCell>
+                    <TableCell>Fecha actualización</TableCell>
+                    <TableCell>Unidad interés</TableCell>
+                    <TableCell>Forma de pago</TableCell>
+                    <TableCell>Temperatura de interés</TableCell>
                     <TableCell>Comentarios</TableCell>
                     {role === 'Gerente' && <TableCell>Acciones</TableCell>}
                   </TableRow>
@@ -212,10 +234,13 @@ const Page: React.FC = () => {
                         <TableCell>{seguimiento.unidadInteres}</TableCell>
                         <TableCell>{seguimiento.formaDePago}</TableCell>
                         <TableCell>{seguimiento.temperaturaInteres}</TableCell>
-                        <TableCell>{seguimiento.comentarios}</TableCell>
+                        <TableCell>{seguimiento.comentarios || "Sin comentarios"}</TableCell>
                         {role === 'Gerente' && (
-                          <TableCell>
-                            <IconButton  onClick={() => handleOpenConfirmDialog(seguimiento)}>
+                          <TableCell onClick={(event) => event.stopPropagation()}> {/* Evita que el onClick de la fila se active */}
+                            <IconButton color="inherit" onClick={(event) => {event.stopPropagation();handleEditarSeguimiento(seguimiento)}}>
+                              <CreateIcon />
+                            </IconButton>
+                            <IconButton color="error" onClick={(event) =>  handleOpenConfirmDialog(seguimiento,event)}>
                               <DeleteIcon />
                             </IconButton>
                           </TableCell>
@@ -237,8 +262,8 @@ const Page: React.FC = () => {
             open={openConfirmDialog}
             onClose={handleCloseConfirmDialog}
             onConfirm={handleDeleteSeguimiento}
-            title="¿Estás seguro?"
-            message={`¿Estás seguro de que deseas eliminar el seguimiento con folio ${seguimientoToDelete?.id}? Esta acción no se puede deshacer.`}
+            title="¿Estás seguro de eliminar este seguimiento?"
+            message={`Esta acción eliminará permanentemene al seguimiento del cliente ${seguimientoToDelete?.cliente}. ¿Deseas continuar?`}
           />
       </div>
       <FooterContainer />
