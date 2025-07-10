@@ -1,0 +1,48 @@
+/* Encabezado sticky con ajuste para evitar superposición */
+.sticky-header th {
+  position: sticky;
+  top: 0; /* Fijamos el encabezado en la parte superior */
+  background-color: var(--primary-color); /* Color del fondo del encabezado */
+  z-index: 10; /* Asegura que esté sobre el contenido */
+  font-size: clamp(10px, 1vw, 12px); /* Tamaño adaptable */
+  padding: 10px;
+  border-bottom: 2px solid var(--primary-color); /* Línea inferior para separar encabezado */
+}
+.barra-iconos{
+  background-color: var(--primary-color);
+}
+.usuarios-list{
+  padding-top: "150px";
+}
+/* Espaciado para las filas de la tabla */
+.user-table tbody tr {
+  background-color: #ffffff; /* Fondo de las filas */
+  border-bottom: 1px solid #ddd; /* Líneas divisorias */
+}
+
+.user-table th, .user-table td {
+  padding: 10px; /* Espaciado interno en celdas */
+  text-align: center; /* Centrado del texto */
+  overflow: hidden; /* Esconde texto desbordante */
+  text-overflow: ellipsis; /* Elipsis para texto muy largo */
+  white-space: nowrap; /* Evita que el texto se ajuste a varias líneas */
+}
+
+/* Tabla con scroll vertical */
+.user-table {
+  width: 100%;
+  table-layout: auto; /* Ajusta automáticamente el ancho de las columnas */
+  border-collapse: collapse;
+}
+
+.user-table thead th {
+  background-color: #e3e3e3; /* Color de fondo claro para el encabezado */
+  text-align: center;
+}
+
+/* Ajustes responsivos */
+@media (max-width: 768px) {
+  .user-table th, .user-table td {
+      font-size: 12px; /* Tamaño más pequeño para pantallas pequeñas */
+  }
+}

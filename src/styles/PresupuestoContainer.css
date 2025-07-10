@@ -1,0 +1,79 @@
+/* Contenedor del encabezado (botones) */
+.presupuesto-header {
+  display: flex;
+  justify-content: flex-end; /* Alinea los botones a la derecha */
+  align-items: center;
+  width: 90%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 10px 0;
+  /* Puedes agregar un fondo o borde si lo deseas */
+}
+
+/* Contenedor de la tabla */
+.tabla-presupuesto {
+  width:98%;
+  margin: 0 auto; /* Centra la tabla en la pantalla */
+  overflow-x: auto; /* Permite scroll horizontal si la tabla es muy ancha */
+}
+
+/* La tabla en sí */
+.presupuesto-table {
+  width: 100%; /* Ocupa el 100% del contenedor 'tabla-presupuesto' */
+  border-collapse: collapse;
+  margin-top: 20px;
+  min-width: 900px; /* Para evitar que se encoja demasiado */
+}
+
+/* Estilos existentes para filas y celdas... */
+.header-row {
+  background-color: #2c3e50;
+  color: white;
+}
+.header-cell {
+  font-weight: bold;
+  text-align: center;
+  padding: 10px;
+  border: 1px solid #ccc;
+}
+.row-cuenta-mayor {
+  background-color: rgba(var(--primary-color-rgb), 0.6);
+  font-weight: bold;
+  color: white;
+  margin-top: 125px;
+}
+.row-cuenta-mayor input {
+  color: white;
+}
+.row-cuenta-mayor input::placeholder {
+  color: rgba(255, 255, 255, 0.7);
+}
+.row-cuenta {
+  background-color: rgba(var(--secondary-color-rgb), 0.6);
+  font-weight: bold;
+  color: white;
+}
+.row-subcuenta {
+  background-color: white;
+  color: black;
+}
+.cell-sum {
+  font-weight: bold;
+  text-align: right;
+}
+td, th {
+  padding: 5px;
+  text-align: left;
+  border: 1px solid #ccc;
+}
+
+/* Estilos para botones */
+.botones-presupuesto {
+  display: flex;
+  gap: 15px;
+}
+
+.boton-texto {
+  margin-left: 5px;
+  font-size: 16px;
+}

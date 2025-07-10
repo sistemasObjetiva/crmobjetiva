@@ -1,0 +1,305 @@
+import React from 'react'
+import {
+  Modal,
+  Box,
+  Typography,
+  Grid,
+  Divider,
+  IconButton,
+  Chip,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableRow,
+  TableHead,
+  Paper,
+  TableContainer,
+} from '@mui/material'
+import CloseIcon from '@mui/icons-material/Close'
+import { Proyecto, Unidad } from '../../config/types'
+import SignedAvatar from '../general/SignedAvatar'
+import SignedImage from '../general/SignedImage'
+import SignedImageCarousel from '../general/SinedImageCarousel'
+import VisibilityIcon from '@mui/icons-material/Visibility';
+
+interface ProyectoViewModalProps {
+  open: boolean
+  onClose: () => void
+  proyecto: Proyecto | null
+  onCotizarUnidad: (unidad: Unidad, proyecto: Proyecto) => void
+
+}
+
+const ProyectoViewModal: React.FC<ProyectoViewModalProps> = ({
+  open,
+  onClose,
+  proyecto,
+  onCotizarUnidad
+}) => {
+  if (!proyecto) return null
+
+  const camposBasicos = [
+    { label: 'Nombre', value: proyecto.nombre },
+    { label: 'Estatus', value: proyecto.estatus },
+    { label: 'Fecha de entrega', value: proyecto.fechaEntrega && new Date(proyecto.fechaEntrega).toLocaleDateString() },
+    { label: 'Amenidades', value: proyecto.amenidades?.length > 0 ? proyecto.amenidades.join(', ') : null },
+    { label: 'Unidades', value: proyecto.unidades?.length ?? 0 },
+    { label: 'Planes de pago', value: proyecto.paymentPlans?.length ?? 0 },
+  ]
+const maxMeses = Math.max(...proyecto.paymentPlans.map(p => p.months));
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      aria-labelledby="modal-proyecto-view"
+      aria-describedby="modal-proyecto-view-content"
+    >
+      <Box
+        sx={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          bgcolor: 'white',
+          borderRadius: 3,
+          boxShadow: 24,
+          width: { xs: '95%', sm: 600 },
+          maxHeight: '95vh',
+          outline: 'none',
+          p: 4,
+          overflow: 'auto',
+        }}
+      >
+        <IconButton
+          onClick={onClose}
+          sx={{ position: 'absolute', top: 12, right: 12 }}
+        >
+          <CloseIcon />
+        </IconButton>
+
+        {/* Logo y/o Render arriba, si existen */}
+        <Box
+            sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 3,
+                mb: 2,
+                flexWrap: 'wrap', // Si tienes poco espacio se apilan vertical
+                minHeight: 88
+            }}
+            >
+            {proyecto.logo && (
+                <SignedAvatar
+                value={proyecto.logo}
+                alt="logo"
+                sx={{
+                    width: { xs: 60, sm: 70, md: 80 },
+                    height: { xs: 60, sm: 70, md: 80 },
+                    border: '2px solid #eee',
+                    boxShadow: 1,
+                    background: '#fff'
+                }}
+                />
+            )}
+            {proyecto.render && (
+                <SignedImage
+                path={proyecto.render.path!}
+                bucket={proyecto.render.bucket!}
+                alt="render"
+                sx={{
+                    width: { xs: 110, sm: 140, md: 180 },
+                    height: { xs: 74, sm: 90, md: 110 },
+                    borderRadius: 3,
+                    border: '2px solid #eee',
+                    boxShadow: 1,
+                    objectFit: 'cover',
+                    background: '#fff',
+                    ml: proyecto.logo ? 2 : 0
+                }}
+                />
+            )}
+            </Box>
+
+
+        <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'var(--primary-color)', mb: 2, textAlign: 'center' }}>
+          {proyecto.nombre}
+        </Typography>
+
+        <Divider sx={{ mb: 3 }} />
+
+        <Grid container spacing={2} sx={{ mb: 2 }}>
+          {camposBasicos.map(
+            (campo, i) =>
+              campo.value && (
+                <Grid item xs={12} sm={6} key={campo.label + i}>
+                  <Typography variant="subtitle2" sx={{ color: 'var(--primary-color)', fontWeight: 600 }}>
+                    {campo.label}
+                  </Typography>
+                  {campo.label === 'Amenidades' ? (
+                    <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 0.5 }}>
+                      {proyecto.amenidades.map((am, idx) => (
+                        <Chip key={am + idx} label={am} color="secondary" size="small" />
+                      ))}
+                    </Stack>
+                  ) : (
+                    <Typography sx={{ color: '#555', mb: 1 }}>{campo.value}</Typography>
+                  )}
+                </Grid>
+              )
+          )}
+        </Grid>
+
+        {/* Descripción larga */}
+        {proyecto.descripcion && (
+          <>
+            <Divider sx={{ my: 2 }} />
+            <Typography variant="h6" sx={{ color: 'var(--primary-color)', fontWeight: 600, mb: 1 }}>
+              Descripción
+            </Typography>
+            <Typography sx={{ color: '#444', whiteSpace: 'pre-line' }}>
+              {proyecto.descripcion}
+            </Typography>
+          </>
+        )}
+
+
+          {proyecto.imagenesProyecto && proyecto.imagenesProyecto.length > 0 && (
+            <>
+              <Divider sx={{ my: 2 }} />
+              <Typography variant="subtitle1" sx={{ color: 'var(--primary-color)', fontWeight: 500, mb: 1 }}>
+                Imágenes del Proyecto
+              </Typography>
+              <Box
+                sx={{
+                  mb: 2,
+                  width: '100%',
+                  maxWidth: 380,
+                  mx: 'auto',
+                  display: 'flex',
+                  justifyContent: 'center',
+                }}
+              >
+                <SignedImageCarousel
+                  items={Array.isArray(proyecto.imagenesProyecto) ? proyecto.imagenesProyecto : []}
+                  width="100%"
+                  height={180}
+                />
+              </Box>
+            </>
+          )}
+
+
+        {/* Unidades resumen */}
+        {proyecto.unidades && proyecto.unidades.length > 0 && (
+          <>
+            <Divider sx={{ my: 2 }} />
+            <Typography variant="h6" sx={{ color: 'var(--primary-color)', fontWeight: 600, mb: 2 }}>
+              Unidades
+            </Typography>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>No. Unidad</TableCell>
+                  <TableCell>Privativa</TableCell>
+                  <TableCell>Precio lista</TableCell>
+                  <TableCell>Estatus</TableCell>
+                   <TableCell align="center"></TableCell> 
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {proyecto.unidades.map((u, idx) => (
+                  <TableRow key={u.id || idx}>
+                    <TableCell>{u.numerounidad}</TableCell>
+                    <TableCell>{u.unidadprivativa}</TableCell>
+                    <TableCell>{u.preciolista ? `$${u.preciolista}` : ''}</TableCell>
+                    <TableCell>
+                      <Chip
+                        size="small"
+                        label={u.estatus}
+                        color={
+                          u.estatus === 'vendido'
+                            ? 'error'
+                            : u.estatus === 'apartado'
+                            ? 'warning'
+                            : 'success'
+                        }
+                      />
+                    </TableCell>
+                    <TableCell align="center">
+                      <IconButton
+                        color="info"
+                        onClick={() => onCotizarUnidad(u, proyecto)}
+                      >
+                        <VisibilityIcon />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </>
+        )}
+        <Divider sx={{ my: 2 }} />
+            <Typography variant="h6" sx={{ color: 'var(--primary-color)', fontWeight: 600, mb: 2 }}>
+              Planes de Pago
+            </Typography>
+         <TableContainer component={Paper} sx={{ mb: 2 }}>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Mes</TableCell>
+                {proyecto.paymentPlans.map((plan, idx) => (
+                  <TableCell key={idx} align="right">{plan.name}</TableCell>
+                ))}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {/* Fila de pago inicial */}
+              <TableRow>
+                <TableCell sx={{ fontWeight: 600 }}>Pago inicial</TableCell>
+                {proyecto.paymentPlans.map((plan, idx) => (
+                  <TableCell key={idx} align="right">
+                    {plan.pInicial ? `%${plan.pInicial.toLocaleString()}` : '-'}
+                  </TableCell>
+                ))}
+              </TableRow>
+
+              {/* Renglones para cada mes */}
+              {Array.from({ length: maxMeses }).map((_, rowIdx) => (
+                <TableRow key={rowIdx}>
+                  <TableCell sx={{ fontWeight: 600 }}>{`Mes ${rowIdx + 1}`}</TableCell>
+                  {proyecto.paymentPlans.map((plan, colIdx) => {
+                    const parcialidad = plan.parcialidades.find(p => p.month === rowIdx + 1);
+                    return (
+                      <TableCell key={colIdx} align="right">
+                        {parcialidad ? `%${parcialidad.value.toLocaleString()}` : '-'}
+                      </TableCell>
+                    );
+                  })}
+                </TableRow>
+              ))}
+
+              {/* Fila de contraentrega */}
+              <TableRow>
+                <TableCell sx={{ fontWeight: 600 }}>Contraentrega</TableCell>
+                {proyecto.paymentPlans.map((plan, idx) => (
+                  <TableCell key={idx} align="right">
+                    {plan.contraentrega ? `%${plan.contraentrega.toLocaleString()}` : '-'}
+                  </TableCell>
+                ))}
+              </TableRow>
+            </TableBody>
+          </Table>
+        </TableContainer>
+
+        {/* Planes de pago */}
+        {/* Puedes agregar aquí una tabla o resumen para paymentPlans si quieres */}
+
+      </Box>
+    </Modal>
+  )
+}
+
+export default ProyectoViewModal

@@ -1,0 +1,75 @@
+  :root {
+    --primary-color: #002855;
+    --secondary-color: #2ca58d;
+    --third-color: #3498db;
+    --fourth-color: #ace7ca;
+    --button-color: #002855;
+    --button-text-color: #ffffff;
+    --error-color: rgb(241, 124, 14);
+    --context1-color: rgb(95, 167, 235);
+    --context2-color: rgb(241, 124, 14);
+    --font-family: 'Arial', sans-serif;
+    --font-size-title: 24px;
+    --font-size-body: 16px;
+
+    --primary-color-rgb: 0, 40, 85;
+    --secondary-color-rgb: 44, 165, 141;
+  }
+
+  /* Contenedor de la tabla */
+  .tableContainer {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  /* Encabezado de la tabla */
+  .tableHeader {
+    background-color: rgba(var(--primary-color-rgb), 0.15); /* Un toque transparente del color primario */
+    font-weight: bold;
+    font-family: var(--font-family);
+  }
+
+  .thCell {
+    color: var(--primary-color);
+    border: 1px solid #ccc;
+    font-size: var(--font-size-body);
+    padding: 8px;
+    text-align: left;
+  }
+
+  .tdCell {
+    border: 1px solid #ccc;
+    font-size: var(--font-size-body);
+    padding: 8px;
+    font-family: var(--font-family);
+  }
+
+  /* Estilos para cada tipo de fila */
+  .cuentaMayorRow {
+    background-color: var(--primary-color);
+    color: #ffffff!important;  /* Para asegurar la legibilidad sobre fondo oscuro */
+    cursor: pointer;
+  }
+  .cuentaMayorRow .tdCell {
+    color: #ffffff;
+  }
+  .cuentaRow {
+    background-color: var(--secondary-color);
+    color: var(--button-text-color);
+    cursor: pointer;
+  }
+
+  .subcuentaRow {
+    background-color: #ffffff;
+    color: #000000;
+  }
+
+  /* Opcional: efecto hover para mejorar la interactividad */
+  .cuentaMayorRow:hover,
+  .cuentaRow:hover {
+    filter: brightness(0.9);
+  }
+
+  .subcuentaRow:hover {
+    background-color: #f5f5f5;
+  }

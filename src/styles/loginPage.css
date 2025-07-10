@@ -1,0 +1,161 @@
+.welcome-banner {
+  text-align: center;
+  width: 90%; 
+  padding: 20px; 
+  overflow: hidden; /* Asegura que el contenido se mantenga dentro */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.welcome-banner .logo {
+  max-width: 100%;
+  height: auto;
+  max-height: 150px; /* Limita la altura para pantallas grandes */
+  margin: 0 auto;
+  display: block;
+  object-fit: contain; /* Asegura que la imagen se ajuste sin deformarse */
+}
+.letreroContainer {
+  width: 100%; /* Ocupa el 100% del contenedor */
+  display: flex;
+  justify-content: center; /* Centra horizontalmente */
+  align-items: center; /* Centra verticalmente */
+  margin: 0 auto; /* Asegura el centrado horizontal */
+}
+
+/* Media Queries para responsividad */
+@media (max-width: 768px) {
+  .welcome-banner {
+    width: 95%; /* Mayor ajuste para pantallas pequeñas */
+    padding: 15px; /* Reduce el padding */
+  }
+
+  .welcome-banner .logo {
+    max-width: 70%; /* Logo más pequeño en pantallas pequeñas */
+  }
+}
+.loginForm {
+  width: 100%;
+  max-width: 350px;
+  margin: 0 auto;
+  text-align: center; /* Centra los elementos internos, incluido el botón */
+}
+
+/* Si el botón no se centra con el text-align, aplica margen automático */
+.loginForm button, 
+.loginForm .MuiButton-root {
+  display: block;
+  margin: 20px auto 0;
+}
+@media (max-width: 480px) {
+  .welcome-banner {
+    border-radius: 8px; /* Reduce el radio en pantallas pequeñas */
+  }
+
+  .welcome-banner .logo {
+    max-width: 60%; /* Logo aún más reducido */
+  }
+}
+.contentContainerLogin {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100vw;
+  margin-top: calc(70px + 50px + 40px); /* Ajuste dinámico para header */
+  margin-bottom: calc(70px + 10px); /* Ajuste dinámico para footer */
+  background-color: white;
+  overflow-y: auto; /* Asegura el scroll si el contenido es muy grande */
+}  
+/* Contenedor principal de la página */
+.loginPageContainer {
+display: flex;
+flex-direction: column;
+height: 100vh;
+align-items: center;
+justify-content: center;
+background-color: #ffffff;
+}
+
+/* Contenedor de la sección de login */
+.loginContent {
+display: flex;
+flex-direction: row;
+justify-content: center;
+align-items: center;
+max-width: 900px;
+width: 90%;
+background: white;
+box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+border-radius: 10px;
+padding: 40px;
+gap: 30px;
+}
+
+/* Sección Izquierda (Logo) */
+.loginLeft {
+flex: 1;
+display: flex;
+align-items: center;
+justify-content: center;
+}
+
+.logo {
+max-width: 200px;
+height: auto;
+}
+
+/* Sección Derecha (Formulario) */
+.loginRight {
+flex: 1;
+display: flex;
+flex-direction: column;
+align-items: center;
+text-align: center;
+}
+
+.loginForm {
+width: 100%;
+max-width: 350px;
+}
+
+h2 {
+font-size: 22px;
+color: #333;
+margin-bottom: 15px;
+}
+
+/* Inputs */
+.inputContainer {
+width: 100%;
+margin-bottom: 15px;
+}
+
+.inputContainer input {
+width: 100%;
+padding: 12px;
+border: 1px solid #ccc;
+border-radius: 5px;
+font-size: 16px;
+}
+
+/* Botón de login */
+.error-message {
+color: red;
+font-size: 14px;
+margin-bottom: 10px;
+}
+
+/* Responsividad */
+@media (max-width: 768px) {
+.loginContent {
+  flex-direction: column;
+  padding: 20px;
+}
+
+.logo {
+  max-width: 150px;
+}
+}
