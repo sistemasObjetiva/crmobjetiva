@@ -10,7 +10,7 @@ import {
   useFetchProspectos,
   useFetchProyects,
   useFetchSeguimientos,
-  useFetchUsuarios     // <-- nuevo hook para traer la lista de usuarios
+  useFetchUsuarios
 } from '../../hooks/useFetchFunctions'
 import { Seguimiento } from '../../config/types'
 import SeguimientoModal from './SeguimientoModal'
@@ -22,13 +22,43 @@ interface Props {
   userid: string
 }
 
+const ESTATUS_LIST = [
+  'contactado',
+  'interaccion',
+  'cotizacion',
+  'visita',
+  'posible',
+  'apartado',
+  'vendido'
+] as const;
+
+const ESTATUS_LABEL: Record<(typeof ESTATUS_LIST)[number], string> = {
+  contactado:   'Contactado',
+  interaccion:  'Interacción',
+  cotizacion:   'Cotización',
+  visita:       'Visita',
+  posible:      'Posible',
+  apartado:     'Apartado',
+  vendido:      'Vendido'
+}
+
+const COLOR_CHIP: Record<string, "default" | "primary" | "success" | "warning" | "info" | "error" | "secondary"> = {
+  contactado:   'default',
+  interaccion:  'info',
+  cotizacion:   'primary',
+  visita:       'secondary',
+  posible:      'warning',
+  apartado:     'success',
+  vendido:      'error'
+}
+
 const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
   const { showStatus } = useStatusChip()
   const { seguimientos, loading: loadingSeguimientos } = useFetchSeguimientos()
   const { prospectos } = useFetchProspectos()
   const { proyectos } = useFetchProyects()
   const { propiedades } = useFetchPropiedades()
-  const { usuarios } = useFetchUsuarios() // trae [{ id, correoElectronico, ... }, ...]
+  const { usuarios } = useFetchUsuarios()
 
   const [modalOpen, setModalOpen] = useState(false)
   const [seguimientoLocal, setSeguimientoLocal] = useState<Seguimiento | null>(null)
@@ -48,7 +78,7 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
     capacidadDePago: '',
     proyectoInteres: '',
     historialSeguimiento: [],
-    estatusSeguimiento: 'activo'
+    estatusSeguimiento: 'contactado'
   })
 
   const handleAbrirModalVer = (s: Seguimiento) => {
@@ -80,6 +110,19 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
     setSeguimientoLocal(prev => prev ? { ...prev, [field]: value } : null)
   }
 
+  // Agrupa los seguimientos por estatus
+  const seguimientosByEstatus: Record<string, Seguimiento[]> = {};
+  ESTATUS_LIST.forEach(status => {
+    seguimientosByEstatus[status] = [];
+  });
+  if (seguimientos) {
+    seguimientos.forEach(s => {
+      if (ESTATUS_LIST.includes(s.estatusSeguimiento as any)) {
+        seguimientosByEstatus[s.estatusSeguimiento].push(s);
+      }
+    });
+  }
+
   return (
     <Box>
       {loading && <Spinner open={true} />}
@@ -88,86 +131,98 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
           Seguimientos
         </Typography>
       </Box>
-
-      <Paper variant="outlined">
-        {loadingSeguimientos ? (
+      {loadingSeguimientos ? (
+        <Paper variant="outlined">
           <Box p={4} display="flex" justifyContent="center">
             <CircularProgress />
           </Box>
-        ) : (
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Usuario</TableCell>
-                <TableCell>Nombre</TableCell>
-                <TableCell>Correo</TableCell>
-                <TableCell>Estatus</TableCell>
-                <TableCell>Temperatura</TableCell>
-                <TableCell>Unidad/Proyecto interés</TableCell>
-                <TableCell>Fecha Próx. Seguimiento</TableCell>
-                <TableCell>Comentarios</TableCell>
-                <TableCell align="center">Ver</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {!seguimientos || seguimientos.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={9}>
-                    <Typography color="text.secondary" align="center">
-                      Sin seguimientos registrados
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                seguimientos.map((s) => {
-                  const prospecto = prospectos.find(p => p.id === s.idprospecto)
-                  const usuario  = usuarios.find(u => u.id === s.userid)
-                  const isActivo = s.estatusSeguimiento === 'activo'
-                  return (
-                    <TableRow key={s.id}>
-                      {/* Columna Usuario (correo) */}
-                      <TableCell>
-                        {usuario?.email ?? ''}
-                      </TableCell>
-
-                      {/* Datos del prospecto */}
-                      <TableCell>{prospecto?.nombreCompleto ?? ''}</TableCell>
-                      <TableCell>{prospecto?.correoElectronico ?? ''}</TableCell>
-
-                      {/* Estatus */}
-                      <TableCell>
-                        <Chip
-                          label={isActivo ? 'Activo' : 'Cerrado'}
-                          size="small"
-                          color={isActivo ? 'success' : 'default'}
-                          variant="outlined"
-                        />
-                      </TableCell>
-
-                      <TableCell>{s.temperaturaInteres}</TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                          {s.unidadInteres || s.proyectoInteres}
-                        </Box>
-                      </TableCell>
-                      <TableCell>{s.fechaProximoSeguimiento}</TableCell>
-                      <TableCell>{s.comentarios}</TableCell>
-                      <TableCell align="center">
-                        <Tooltip title="Ver seguimiento">
-                          <IconButton onClick={() => handleAbrirModalVer(s)} size="small">
-                            <VisibilityIcon />
-                          </IconButton>
-                        </Tooltip>
+        </Paper>
+      ) : (
+        ESTATUS_LIST.map(estatus => (
+          <Box key={estatus} mb={4}>
+            <Typography
+              variant="subtitle1"
+              fontWeight={700}
+              color="text.secondary"
+              sx={{ mb: 1, textTransform: 'uppercase', letterSpacing: 1 }}
+            >
+              <Chip
+                label={ESTATUS_LABEL[estatus]}
+                color={COLOR_CHIP[estatus]}
+                size="small"
+                sx={{ fontWeight: 700, fontSize: 14, px: 2, borderRadius: 1.5, mr: 1 }}
+              />
+              {`(${seguimientosByEstatus[estatus].length})`}
+            </Typography>
+            <Paper variant="outlined" sx={{ mb: 2, borderLeft: `5px solid var(--primary-color, #1976d2)` }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Usuario</TableCell>
+                    <TableCell>Nombre</TableCell>
+                    <TableCell>Correo</TableCell>
+                    <TableCell>Estatus</TableCell>
+                    <TableCell>Temperatura</TableCell>
+                    <TableCell>Unidad/Proyecto interés</TableCell>
+                    <TableCell>Fecha Próx. Seguimiento</TableCell>
+                    <TableCell>Comentarios</TableCell>
+                    <TableCell align="center">Ver</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {seguimientosByEstatus[estatus].length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={9}>
+                        <Typography color="text.secondary" align="center" fontSize={14}>
+                          Sin seguimientos en este estatus
+                        </Typography>
                       </TableCell>
                     </TableRow>
-                  )
-                })
-              )}
-            </TableBody>
-          </Table>
-        )}
-      </Paper>
-
+                  ) : (
+                    seguimientosByEstatus[estatus].map((s) => {
+                      const prospecto = prospectos.find(p => p.id === s.idprospecto)
+                      const usuario = usuarios.find(u => u.id === s.userid)
+                      return (
+                        <TableRow key={s.id}>
+                          <TableCell>
+                            {usuario?.email ?? ''}
+                          </TableCell>
+                          <TableCell>{prospecto?.nombreCompleto ?? ''}</TableCell>
+                          <TableCell>{prospecto?.correoElectronico ?? ''}</TableCell>
+                          <TableCell>
+                            <Chip
+                              label={ESTATUS_LABEL[s.estatusSeguimiento as typeof ESTATUS_LIST[number]]}
+                              color={COLOR_CHIP[s.estatusSeguimiento]}
+                              size="small"
+                              variant="outlined"
+                              sx={{ fontWeight: 600 }}
+                            />
+                          </TableCell>
+                          <TableCell>{s.temperaturaInteres}</TableCell>
+                          <TableCell>
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                              {s.unidadInteres || s.proyectoInteres}
+                            </Box>
+                          </TableCell>
+                          <TableCell>{s.fechaProximoSeguimiento}</TableCell>
+                          <TableCell>{s.comentarios}</TableCell>
+                          <TableCell align="center">
+                            <Tooltip title="Ver seguimiento">
+                              <IconButton onClick={() => handleAbrirModalVer(s)} size="small">
+                                <VisibilityIcon />
+                              </IconButton>
+                            </Tooltip>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </Paper>
+          </Box>
+        ))
+      )}
       <SeguimientoModal
         open={modalOpen}
         seguimiento={seguimientoLocal || initialSeguimiento()}

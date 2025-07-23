@@ -660,18 +660,23 @@ export async function updateSeguimiento(seguimiento: Seguimiento) {
     ? [...seguimiento.historialSeguimiento]
     : []
 
-  // Crea un nuevo registro para el historial, omitiendo el propio historial para evitar loops
+  // Saca historialSeguimiento y deja el resto (esto es el snapshot)
   const { historialSeguimiento, ...rest } = seguimiento
+
+  // Agrega marca de tiempo si tu modelo lo necesita:
+  // const fechaCreacion = new Date().toISOString()
+
   const nuevoHistorial: SeguimientoHistorial = {
     ...rest,
+    // fechaCreacion, // ← Descomenta si quieres la marca
     id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}${Math.random()}`,
   }
 
-  // Agrega al inicio del array (último primero)
+  // Agrega el snapshot como el nuevo primer elemento
   historial.unshift(nuevoHistorial)
 
-  // Crea el seguimiento a guardar con historial actualizado
-  const seguimientoToSave = {
+  // Crea el seguimiento a guardar, ya con historial actualizado
+  const seguimientoToSave: Seguimiento = {
     ...seguimiento,
     historialSeguimiento: historial
   }

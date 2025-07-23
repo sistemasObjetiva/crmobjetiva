@@ -1,105 +1,85 @@
-import React from 'react'
+import React from 'react';
 import {
-  Box,
-  Typography,
-  Paper,
-  Chip,
-  Stack,
-  Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle
-} from '@mui/material'
+  Box, Typography, Paper,  Stack, Button,
+  Dialog, DialogActions, DialogContent, DialogTitle
+} from '@mui/material';
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip as ReTooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Legend
-} from 'recharts'
-import { Temporal } from '@js-temporal/polyfill'
-import type { Seguimiento } from '../../config/types'
-import Calendar from '../general/calendar/Calendar'
+  BarChart, Bar, XAxis, YAxis, Tooltip as ReTooltip,
+  ResponsiveContainer, PieChart, Pie, Cell, Legend
+} from 'recharts';
+import { Temporal } from '@js-temporal/polyfill';
+import type { Seguimiento } from '../../config/types';
+import Calendar from '../general/calendar/Calendar';
 import {
   useFetchSeguimientos,
   useFetchProspectos
-} from '../../hooks/useFetchFunctions'
+} from '../../hooks/useFetchFunctions';
 
-// Colores para el PieChart
-const PIE_COLORS = ['#2ca58d', '#aaa']
-interface SeguimientosPorDia {
-  fecha: string;      // YYYY-MM-DD
-  activos: number;
-  cerrados: number;
-  pendientes: number;
-}
-function getSeguimientosPorDia(seguimientos: Seguimiento[]): SeguimientosPorDia[] {
+// Los nuevos estatus y colores
+const ESTATUS_LIST = [
+  'contactado',
+  'interaccion',
+  'cotizacion',
+  'visita',
+  'posible',
+  'apartado',
+  'vendido'
+];
+const STATUS_COLORS = [
+  '#3b82f6', // contactado - azul
+  '#14b8a6', // interaccion - turquesa
+  '#6366f1', // cotizacion - indigo
+  '#f59e42', // visita - naranja
+  '#06d6a0', // posible - verde
+  '#eab308', // apartado - amarillo
+  '#ef4444', // vendido - rojo
+];
+
+function getSeguimientosPorDia(seguimientos: Seguimiento[]) {
   const hoy = Temporal.Now.plainDateISO();
-
   return Array.from({ length: 7 }).map((_, i) => {
-   const fecha = hoy.add({ days: i }).toString();   // "2025-07-09"
-
-    const activos = seguimientos.filter(s => {
-    // si tu s.fechaProximoSeguimiento = "2025-07-09T14:32:00Z"
-    const soloFecha = s.fechaProximoSeguimiento.slice(0, 10); // "2025-07-09"
-    return soloFecha === fecha && s.estatusSeguimiento === "activo";
-    }).length;
-
-
-    const cerrados = seguimientos.filter(
-      (s) =>
-        s.fechaProximoSeguimiento === fecha &&
-        s.estatusSeguimiento === "cerrado"
-    ).length;
-
-    // “Pendientes” = todos los que no están cerrados ni activos (ajusta según tu lógica)
-    const totalDelDia = seguimientos.filter(
-      (s) => s.fechaProximoSeguimiento === fecha
-    ).length;
-    const pendientes = totalDelDia - activos - cerrados;
-
-    return {
-      fecha,
-      activos,
-      cerrados,
-      pendientes: pendientes > 0 ? pendientes : 0,
-    };
+    const fecha = hoy.add({ days: i }).toString();
+    const obj: any = { fecha };
+    ESTATUS_LIST.forEach((estatus) => {
+      obj[estatus] = seguimientos.filter(
+        (s) =>
+          s.fechaProximoSeguimiento?.slice(0, 10) === fecha &&
+          s.estatusSeguimiento === estatus
+      ).length;
+    });
+    return obj;
   });
 }
+
 interface Props {
-  userid: string
+  userid: string;
 }
 
-const ResumenSeguimientosTab: React.FC<Props> = ({  }) => {
-  const { seguimientos } = useFetchSeguimientos()
-  const { prospectos } = useFetchProspectos()
+const ResumenSeguimientosTab: React.FC<Props> = ({ }) => {
+  const { seguimientos } = useFetchSeguimientos();
+  const { prospectos } = useFetchProspectos();
 
-  const activos = seguimientos.filter(s => s.estatusSeguimiento === 'activo')
-  const cerrados = seguimientos.filter(s => s.estatusSeguimiento === 'cerrado')
-  const porDia = getSeguimientosPorDia(seguimientos)
+  // PieChart: cuenta por estatus
+  const pieData = ESTATUS_LIST.map((estatus, i) => ({
+    name: estatus.charAt(0).toUpperCase() + estatus.slice(1),
+    value: seguimientos.filter(s => s.estatusSeguimiento === estatus).length,
+    color: STATUS_COLORS[i]
+  }));
 
-  // Datos para PieChart
-  const pieData = [
-    { name: 'Activos', value: activos.length },
-    { name: 'Cerrados', value: cerrados.length }
-  ]
+  const porDia = getSeguimientosPorDia(seguimientos);
 
-  // Función para comparar días con Temporal
+  // Para calendario (solo los que tengan fecha y no estén vendidos)
+  const calendarEvents = seguimientos
+    .filter(s => s.fechaProximoSeguimiento && s.estatusSeguimiento !== 'vendido')
+    .map(s => ({
+      id: s.id,
+      fecha: s.fechaProximoSeguimiento,
+      label: s.estatusSeguimiento
+    }));
+
+  // Función para comparar días
   const esMismoDia = (f1: string, f2: string) =>
-    Temporal.PlainDate.from(f1).equals(Temporal.PlainDate.from(f2))
-
-  // Eventos para calendario
-  const calendarEvents = activos.map(s => ({
-    id: s.id,
-    fecha: s.fechaProximoSeguimiento,
-    label: 'Seguimiento'
-  }))
+    Temporal.PlainDate.from(f1).equals(Temporal.PlainDate.from(f2));
 
   return (
     <Box>
@@ -107,22 +87,24 @@ const ResumenSeguimientosTab: React.FC<Props> = ({  }) => {
         Resumen de Seguimientos
       </Typography>
 
-      {/* Gráfica comparativa Activos vs Cerrados */}
+      {/* Gráfica pastel por estatus */}
       <Paper elevation={1} sx={{ p: 2, mb: 2 }}>
         <Typography variant="subtitle1" fontWeight={700} mb={1}>
-          Activos vs Cerrados
+          Seguimientos por Estatus
         </Typography>
-        <ResponsiveContainer width="100%" height={200}>
+        <ResponsiveContainer width="100%" height={220}>
           <PieChart>
             <Pie
               data={pieData}
-              innerRadius={50}
-              outerRadius={80}
               dataKey="value"
-              label
+              innerRadius={50}
+              outerRadius={85}
+              label={({ name, percent }) =>
+                `${name} (${Math.round(percent * 100)}%)`
+              }
             >
-              {pieData.map((_, idx) => (
-                <Cell key={idx} fill={PIE_COLORS[idx]} />
+              {pieData.map((entry) => (
+                <Cell key={entry.name} fill={entry.color} />
               ))}
             </Pie>
             <Legend verticalAlign="bottom" />
@@ -131,27 +113,33 @@ const ResumenSeguimientosTab: React.FC<Props> = ({  }) => {
         </ResponsiveContainer>
       </Paper>
 
-      {/* Gráfica de barra de próximos seguimientos */}
+      {/* Gráfica barras: próximos seguimientos 7 días por estatus */}
       <Paper elevation={1} sx={{ p: 2, mb: 2 }}>
         <Typography variant="subtitle1" fontWeight={700} mb={1}>
-          Seguimientos Siguientes 7 Días (Activos vs Cerrados)
+          Seguimientos próximos 7 días (por Estatus)
         </Typography>
-        <ResponsiveContainer width="100%" height={240}>
+        <ResponsiveContainer width="100%" height={270}>
           <BarChart data={porDia} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
             <XAxis
               dataKey="fecha"
               tickFormatter={v => {
-                const d = Temporal.PlainDate.from(v)
-                return `${d.day}/${d.month}`
+                const d = Temporal.PlainDate.from(v);
+                return `${d.day}/${d.month}`;
               }}
             />
             <YAxis allowDecimals={false} />
-            <ReTooltip
-              formatter={(value: any, name: any) => [value, name === 'activos' ? 'Activos' : 'Cerrados']}
-            />
+            <ReTooltip />
             <Legend verticalAlign="top" height={36} />
-            <Bar dataKey="activos" name="Activos" fill="#2ca58d" />
-            <Bar dataKey="cerrados" name="Cerrados" fill="#aaa" />
+            {ESTATUS_LIST.map((estatus, idx) => (
+              <Bar
+                key={estatus}
+                dataKey={estatus}
+                name={estatus.charAt(0).toUpperCase() + estatus.slice(1)}
+                stackId="a"
+                fill={STATUS_COLORS[idx]}
+                radius={idx === ESTATUS_LIST.length - 1 ? [4, 4, 0, 0] : 0}
+              />
+            ))}
           </BarChart>
         </ResponsiveContainer>
       </Paper>
@@ -164,10 +152,10 @@ const ResumenSeguimientosTab: React.FC<Props> = ({  }) => {
         <Calendar
           events={calendarEvents}
           renderDayModal={(date, close) => {
-            const fechaStr = date.toString()
-            const seguimientosDia = activos.filter(
+            const fechaStr = date.toString();
+            const seguimientosDia = seguimientos.filter(
               s => esMismoDia(s.fechaProximoSeguimiento, fechaStr)
-            )
+            );
             return (
               <Dialog open onClose={close} maxWidth="sm" fullWidth>
                 <DialogTitle>Seguimientos para el {fechaStr}</DialogTitle>
@@ -187,18 +175,14 @@ const ResumenSeguimientosTab: React.FC<Props> = ({  }) => {
                           <Typography variant="body2">
                             Unidad/Proyecto: {s.unidadInteres || s.proyectoInteres}
                           </Typography>
-                          <Typography variant="body2">Comentario: {s.comentarios}</Typography>
-                          <Chip
-                            label={s.temperaturaInteres}
-                            color={
-                              s.temperaturaInteres === 'Alta'
-                                ? 'error'
-                                : s.temperaturaInteres === 'Media'
-                                ? 'warning'
-                                : 'default'
-                            }
-                            size="small"
-                          />
+                          <Typography variant="body2">
+                            Estatus: <b style={{ color: STATUS_COLORS[ESTATUS_LIST.indexOf(s.estatusSeguimiento as any)] }}>
+                              {s.estatusSeguimiento.charAt(0).toUpperCase() + s.estatusSeguimiento.slice(1)}
+                            </b>
+                          </Typography>
+                          <Typography variant="body2">
+                            Comentario: {s.comentarios}
+                          </Typography>
                         </Box>
                       ))}
                     </Stack>
@@ -210,12 +194,12 @@ const ResumenSeguimientosTab: React.FC<Props> = ({  }) => {
                   </Button>
                 </DialogActions>
               </Dialog>
-            )
+            );
           }}
         />
       </Paper>
     </Box>
-  )
-}
+  );
+};
 
-export default ResumenSeguimientosTab
+export default ResumenSeguimientosTab;

@@ -150,22 +150,39 @@ export interface PlanPago {
     comentarios?: string;
     proyectosInteres?: string[];
   }
-  export interface Seguimiento {
-    id: string;
-    idprospecto:string;    
-    userid:string;
-    fechaCreacion: string;  
-    fechaActualizacion: string;
-    fechaProximoSeguimiento: string;
-    unidadInteres: string;
-    formaDePago: string;
-    temperaturaInteres: string;
-    comentarios: string;    
-    proyectoInteres: string;
-    capacidadDePago: string;
-    estatusSeguimiento:'activo'|'cerrado'
-    historialSeguimiento:SeguimientoHistorial[]
-  }
+
+// Define el tipo de estatus como un union type:
+export const ESTATUS_LIST = [
+  'contactado',
+  'interaccion',
+  'cotizacion',
+  'visita',
+  'posible',
+  'apartado',
+  'vendido'
+] as const;
+
+// Ahora, extrae el tipo union de ese array:
+export type EstatusSeguimiento = typeof ESTATUS_LIST[number];
+
+// Úsalo en la interfaz:
+export interface Seguimiento {
+  id: string;
+  idprospecto: string;
+  userid: string;
+  fechaCreacion: string;
+  fechaActualizacion: string;
+  fechaProximoSeguimiento: string;
+  unidadInteres: string;
+  formaDePago: string;
+  temperaturaInteres: string;
+  comentarios: string;
+  proyectoInteres: string;
+  capacidadDePago: string;
+  estatusSeguimiento: EstatusSeguimiento;
+  historialSeguimiento: SeguimientoHistorial[];
+}
+
    export interface SeguimientoHistorial {
     id: string;
     idprospecto:string;    
@@ -179,5 +196,5 @@ export interface PlanPago {
     comentarios: string;    
     proyectoInteres: string;
     capacidadDePago: string;
-    estatusSeguimiento:'activo'|'cerrado'
+    estatusSeguimiento: EstatusSeguimiento;
   }

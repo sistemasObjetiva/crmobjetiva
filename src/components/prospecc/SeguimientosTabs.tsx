@@ -22,6 +22,37 @@ interface Props {
   userid: string
 }
 
+// Estatus posibles y etiquetas visuales
+const ESTATUS_LIST = [
+  'contactado',
+  'interaccion',
+  'cotizacion',
+  'visita',
+  'posible',
+  'apartado',
+  'vendido'
+]
+
+const ESTATUS_LABELS: Record<string, string> = {
+  contactado: 'Contactado',
+  interaccion: 'Interacción',
+  cotizacion: 'Cotización',
+  visita: 'Visita',
+  posible: 'Posible',
+  apartado: 'Apartado',
+  vendido: 'Vendido'
+}
+
+const ESTATUS_COLORS: Record<string, any> = {
+  contactado: 'info',
+  interaccion: 'primary',
+  cotizacion: 'secondary',
+  visita: 'warning',
+  posible: 'success',
+  apartado: 'default',
+  vendido: 'error'
+}
+
 const SeguimientosTab: React.FC<Props> = ({ userid }) => {
   const { showStatus } = useStatusChip()
   const { seguimientos, loading: loadingSeguimientos } = useFetchSeguimientosUser(userid)
@@ -46,7 +77,7 @@ const SeguimientosTab: React.FC<Props> = ({ userid }) => {
     capacidadDePago: '',
     proyectoInteres: '',
     historialSeguimiento: [],
-    estatusSeguimiento: 'activo'
+    estatusSeguimiento: 'contactado'
   })
 
   const handleAbrirModalNuevo = () => {
@@ -83,6 +114,12 @@ const SeguimientosTab: React.FC<Props> = ({ userid }) => {
     setSeguimientoLocal(prev => prev ? { ...prev, [field]: value } : null)
   }
 
+  // Agrupa los seguimientos por estatus para mostrar cada grupo por separado
+  const seguimientosByStatus = ESTATUS_LIST.map(status => ({
+    status,
+    rows: seguimientos.filter(s => s.estatusSeguimiento === status)
+  }))
+
   return (
     <Box>
       {loading && <Spinner open={true} />}
@@ -96,73 +133,76 @@ const SeguimientosTab: React.FC<Props> = ({ userid }) => {
           </IconButton>
         </Tooltip>
       </Box>
-      <Paper variant="outlined">
-        {loadingSeguimientos ? (
-          <Box p={4} display="flex" justifyContent="center">
-            <CircularProgress />
-          </Box>
-        ) : (
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Nombre</TableCell>
-                <TableCell>Correo</TableCell>
-                <TableCell>Estatus</TableCell>      {/* ← Nueva columna */}
-                <TableCell>Temperatura</TableCell>
-                <TableCell>Unidad/Proyecto interés</TableCell>
-                <TableCell>Fecha Próx. Seguimiento</TableCell>
-                <TableCell>Comentarios</TableCell>
-                <TableCell align="center">Ver</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {!seguimientos || seguimientos.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={8}>
-                    <Typography color="text.secondary" align="center">
-                      Sin seguimientos registrados
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                seguimientos.map((s) => {
-                  const prospecto = prospectos.find(p => p.id === s.idprospecto)
-                  const isActivo = s.estatusSeguimiento === 'activo'
-                  return (
-                    <TableRow key={s.id}>
-                      <TableCell>{prospecto?.nombreCompleto ?? ''}</TableCell>
-                      <TableCell>{prospecto?.correoElectronico ?? ''}</TableCell>
-                      <TableCell>
-                        <Chip
-                          label={ isActivo ? 'Activo' : 'Cerrado' }
-                          size="small"
-                          color={ isActivo ? 'success' : 'default' }
-                          variant="outlined"
-                        />
-                      </TableCell>
-                      <TableCell>{s.temperaturaInteres}</TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                          {s.unidadInteres || s.proyectoInteres}
-                        </Box>
-                      </TableCell>
-                      <TableCell>{s.fechaProximoSeguimiento}</TableCell>
-                      <TableCell>{s.comentarios}</TableCell>
-                      <TableCell align="center">
-                        <Tooltip title="Ver seguimiento">
-                          <IconButton onClick={() => handleAbrirModalVer(s)} size="small">
-                            <VisibilityIcon />
-                          </IconButton>
-                        </Tooltip>
-                      </TableCell>
+
+      {loadingSeguimientos ? (
+        <Box p={4} display="flex" justifyContent="center">
+          <CircularProgress />
+        </Box>
+      ) : (
+        seguimientosByStatus.map(({ status, rows }) =>
+          rows.length > 0 && (
+            <Box key={status} mb={4}>
+              <Typography
+                variant="subtitle1"
+                fontWeight={700}
+                color="primary"
+                mb={1}
+                mt={2}
+                sx={{ textTransform: "capitalize", display: 'flex', alignItems: 'center' }}
+              >
+                {ESTATUS_LABELS[status] || status}
+                <Chip
+                  size="small"
+                  color={ESTATUS_COLORS[status] || "default"}
+                  label={`${rows.length}`}
+                  sx={{ ml: 1, fontWeight: 700 }}
+                />
+              </Typography>
+              <Paper variant="outlined">
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Nombre</TableCell>
+                      <TableCell>Correo</TableCell>
+                      <TableCell>Temperatura</TableCell>
+                      <TableCell>Unidad/Proyecto interés</TableCell>
+                      <TableCell>Fecha Próx. Seguimiento</TableCell>
+                      <TableCell>Comentarios</TableCell>
+                      <TableCell align="center">Ver</TableCell>
                     </TableRow>
-                  )
-                })
-              )}
-            </TableBody>
-          </Table>
-        )}
-      </Paper>
+                  </TableHead>
+                  <TableBody>
+                    {rows.map((s) => {
+                      const prospecto = prospectos.find(p => p.id === s.idprospecto)
+                      return (
+                        <TableRow key={s.id}>
+                          <TableCell>{prospecto?.nombreCompleto ?? ''}</TableCell>
+                          <TableCell>{prospecto?.correoElectronico ?? ''}</TableCell>
+                          <TableCell>{s.temperaturaInteres}</TableCell>
+                          <TableCell>
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                              {s.unidadInteres || s.proyectoInteres}
+                            </Box>
+                          </TableCell>
+                          <TableCell>{s.fechaProximoSeguimiento}</TableCell>
+                          <TableCell>{s.comentarios}</TableCell>
+                          <TableCell align="center">
+                            <Tooltip title="Ver seguimiento">
+                              <IconButton onClick={() => handleAbrirModalVer(s)} size="small">
+                                <VisibilityIcon />
+                              </IconButton>
+                            </Tooltip>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              </Paper>
+            </Box>
+          )
+        )
+      )}
 
       <SeguimientoModal
         open={modalOpen}
