@@ -42,13 +42,13 @@ const ContainerPropiedades: React.FC<Props> = ({ userId }) => {
       setLoading(true)
       try {
         await upsertPropiedad(nuevo)
-        showStatus('Empresa guardada exitosamente', 'success')
+        showStatus('Propiedad guardada exitosamente', 'success')
       } catch (err: any) {
         console.error(err)
         showStatus(
           err?.message
-            ? `Error al guardar empresa: ${err.message}`
-            : 'Error al guardar empresa',
+            ? `Error al guardar Propiedad: ${err.message}`
+            : 'Error al guardar Propiedad',
           'error'
         )
       } finally {

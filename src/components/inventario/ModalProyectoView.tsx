@@ -22,6 +22,7 @@ import SignedAvatar from '../general/SignedAvatar'
 import SignedImage from '../general/SignedImage'
 import SignedImageCarousel from '../general/SinedImageCarousel'
 import VisibilityIcon from '@mui/icons-material/Visibility';
+import { formatoMoneda } from '../../hooks/useUtilsFunctions'
 
 interface ProyectoViewModalProps {
   open: boolean
@@ -213,7 +214,7 @@ const maxMeses = Math.max(...proyecto.paymentPlans.map(p => p.months));
                   <TableRow key={u.id || idx}>
                     <TableCell>{u.numerounidad}</TableCell>
                     <TableCell>{u.unidadprivativa}</TableCell>
-                    <TableCell>{u.preciolista ? `$${u.preciolista}` : ''}</TableCell>
+                    <TableCell>{formatoMoneda(u.preciolista)}</TableCell>
                     <TableCell>
                       <Chip
                         size="small"

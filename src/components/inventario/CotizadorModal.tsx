@@ -1,16 +1,22 @@
 import React, { useState, useMemo } from 'react';
 import {
   Dialog, DialogTitle, DialogContent, DialogActions,
-  Box, Typography, IconButton, Button, Table, TableContainer,
-  TableHead, TableRow, TableCell, TableBody, Paper, Select,
-  MenuItem, TextField, Stack
+  Box, Typography, IconButton, Button
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
+
 import { Proyecto, Unidad, PlanPago } from '../../config/types';
-import { formatoMoneda } from '../../hooks/useUtilsFunctions';
 import SignedAvatar from '../general/SignedAvatar';
 import SignedImage from '../general/SignedImage';
-import SignedImageCarousel from '../general/SinedImageCarousel';
+import CotizacionPDF from './CotizacionUnidadPDF';
+
+import UnidadInfo from './CotizadorUnidadInfo';
+import UnidadImagenes from './CotizadorUnidadImagenes';
+import SelectorPlanPago, { CustomPayment } from './CotizadorUnidadSelectorPlant';
+
+import { pdf } from '@react-pdf/renderer';
+import { blobToDataURL, getSignedUrl } from '../../hooks/useUtilsFunctions';
 
 interface CotizadorModalProps {
   proyecto: Proyecto;
@@ -20,73 +26,49 @@ interface CotizadorModalProps {
 }
 
 const CotizadorModal: React.FC<CotizadorModalProps> = ({
-  proyecto,
-  unidad,
-  open,
-  onClose
+  proyecto, unidad, open, onClose
 }) => {
-  // --------- ESTADOS ---------
   const [selectedPlan, setSelectedPlan] = useState<PlanPago | null>(null);
   const [isCustomPlan, setIsCustomPlan] = useState(false);
-  const [customPayments, setCustomPayments] = useState<{ mes: string; monto: number }[]>([]);
-  const [customPrecioPlan, setCustomPrecioPlan] = useState<number>(() => {
-    // por default igual al precio de lista
-    const num = parseFloat(String(unidad.preciolista).replace(/[$,]/g, ''));
-    return isNaN(num) ? 0 : num;
-  });
+  const [customPayments, setCustomPayments] = useState<CustomPayment[]>([]);
+  const [customPrecioPlan, setCustomPrecioPlan] = useState<number>(parseFloat(String(unidad.preciolista).replace(/[$,]/g, '')) || 0);
   const [customPagoInicial, setCustomPagoInicial] = useState<number>(0);
   const [customContraEntrega, setCustomContraEntrega] = useState<number>(0);
 
-  // --------- MANEJADORES ---------
-  const handlePlanChange = (e: any) => {
-    const value = e.target.value;
-    if (value === 'custom') {
-      setIsCustomPlan(true);
-      setSelectedPlan(null);
-    } else {
-      const plan = proyecto.paymentPlans.find(p => p.name === value) || null;
-      setSelectedPlan(plan);
-      setIsCustomPlan(false);
-    }
-  };
+  // Handlers requeridos por SelectorPlanPago
+  const handleSelectedPlanChange = (plan: PlanPago | null) => setSelectedPlan(plan);
+  const handleIsCustomPlanChange = (val: boolean) => setIsCustomPlan(val);
 
-  const handleAddCustomPayment = () =>
-    setCustomPayments(payments => [...payments, { mes: '', monto: 0 }]);
-
-  const handleCustomPaymentChange = (
-    index: number,
-    field: 'mes' | 'monto',
-    value: string | number
-  ) => {
-    setCustomPayments(prev => {
-      const copy = [...prev];
-      copy[index] = { ...copy[index], [field]: value };
-      return copy;
-    });
-  };
-
-  const handleRemoveCustomPayment = (index: number) => {
-    setCustomPayments(prev => prev.filter((_, i) => i !== index));
-  };
-
-  // --------- UTILS ---------
   const precioLista = useMemo(() => {
     const num = parseFloat(String(unidad.preciolista).replace(/[$,]/g, ''));
     return isNaN(num) ? 0 : num;
   }, [unidad.preciolista]);
 
-  const maxInstallments = useMemo(() => {
-  if (!proyecto.paymentPlans?.length) return 0;
-  const lengths = proyecto.paymentPlans.map(
-    plan =>
-      (plan.mensualidades && plan.mensualidades > 0)
-        ? plan.mensualidades
-        : (Array.isArray(plan.parcialidades) ? plan.parcialidades.length : 0)
-  );
-  const max = Math.max(...lengths);
-  return Number.isFinite(max) && max > 0 ? max : 0;
-}, [proyecto.paymentPlans]);
+  const totalCustomMonthly = customPayments.reduce((sum, p) => sum + Number(p.monto), 0);
+  const totalProgramado = customPagoInicial + customContraEntrega + totalCustomMonthly;
+  const restante = customPrecioPlan - totalProgramado;
 
+  // Recibe todos los cambios del selector aquí
+  const handlePlanSelected = (
+    plan: PlanPago | null,
+    isCustom: boolean,
+    customPayments?: CustomPayment[],
+    customPrecioPlan?: number,
+    customPagoInicial?: number,
+    customContraEntrega?: number
+  ) => {
+    setSelectedPlan(plan);
+    setIsCustomPlan(isCustom);
+    setCustomPayments(customPayments || []);
+    setCustomPrecioPlan(customPrecioPlan ?? precioLista);
+    setCustomPagoInicial(customPagoInicial ?? 0);
+    setCustomContraEntrega(customContraEntrega ?? 0);
+  };
+
+  // ----------- PDF Lógica Completa -----------
+  const canDownload = isCustomPlan
+    ? (customPrecioPlan > 0 && restante === 0 && (customPagoInicial + customContraEntrega + customPayments.length > 0))
+    : !!selectedPlan;
 
   const calcularValoresPlan = (plan: PlanPago) => {
     const base = precioLista * ((100 - plan.descuento) / 100);
@@ -98,307 +80,199 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
     return { enganche, liquidacion, pagosMensuales };
   };
 
-  // Plan personalizado, suma totales
-  const totalCustomMonthly = customPayments.reduce((sum, p) => sum + Number(p.monto), 0);
-  const totalProgramado = customPagoInicial + customContraEntrega + totalCustomMonthly;
-  const restante = customPrecioPlan - totalProgramado;
-console.log(unidad)
-  // --------- RENDER ---------
+  function buildCustomPseudoPlan(
+    total: number,
+    pagoInicial: number,
+    contraEntrega: number,
+    pagos: { mes: string; monto: number }[]
+  ): PlanPago {
+    const restantePosible = Math.max(total, 0) || 1;
+    const pInicialPct = (pagoInicial / restantePosible) * 100;
+    const contraPct = (contraEntrega / restantePosible) * 100;
+    const parcialidades = pagos.map((p, i) => ({
+      month: i + 1,
+      value: (p.monto / restantePosible) * 100,
+    }));
+
+    return {
+      name: 'Personalizado',
+      descuento: 0,
+      pInicial: +pInicialPct.toFixed(2),
+      contraentrega: +contraPct.toFixed(2),
+      mensualidades: pagos.length,
+      months: pagos.length,
+      parcialidades,
+    } as PlanPago;
+  }
+
+  const handleDownloadPdf = async () => {
+    let planParaPdf: PlanPago | null = selectedPlan;
+    let enganche = 0;
+    let liquidacion = 0;
+    let pagosMensuales: number[] = [];
+
+    if (isCustomPlan) {
+      if (customPrecioPlan <= 0) {
+        alert('Define un precio total > 0 para el plan personalizado.');
+        return;
+      }
+      if (restante !== 0) {
+        alert('El total programado no coincide con el precio del plan.');
+        return;
+      }
+      const hayPagos =
+        (customPayments.length > 0) ||
+        (customContraEntrega > 0) ||
+        (customPagoInicial > 0);
+      if (!hayPagos) {
+        alert('Agrega al menos un pago al plan personalizado.');
+        return;
+      }
+      planParaPdf = buildCustomPseudoPlan(
+        customPrecioPlan,
+        customPagoInicial,
+        customContraEntrega,
+        customPayments
+      );
+      enganche = customPagoInicial;
+      liquidacion = customContraEntrega;
+      pagosMensuales = customPayments.map(p => p.monto);
+
+    } else {
+      if (!selectedPlan) {
+        alert('Selecciona un plan primero.');
+        return;
+      }
+      const { enganche: e, liquidacion: l, pagosMensuales: pm } = calcularValoresPlan(selectedPlan);
+      enganche = e;
+      liquidacion = l;
+      pagosMensuales = pm;
+    }
+
+    // 1) Firmar URLs (igual que antes)
+    const logoUrl = proyecto.logo?.path
+      ? await getSignedUrl(proyecto.logo.path, proyecto.logo.bucket!)
+      : undefined;
+    const renderUrl = unidad.render?.path
+      ? await getSignedUrl(unidad.render.path, unidad.render.bucket!)
+      : undefined;
+    const isoUrl = unidad.isometrico?.path
+      ? await getSignedUrl(unidad.isometrico.path, unidad.isometrico.bucket!)
+      : undefined;
+    const planoUrl = unidad.plano?.path
+      ? await getSignedUrl(unidad.plano.path, unidad.plano.bucket!)
+      : undefined;
+    const galeriaUrlsSigned = await Promise.all(
+      (unidad.imagenes || []).map(img => getSignedUrl(img.path!, img.bucket!))
+    );
+
+    // 2) Convertir a Base64
+    const bases = await Promise.all(
+      [logoUrl, renderUrl, isoUrl, planoUrl, ...galeriaUrlsSigned]
+        .filter(Boolean)
+        .map(async url => {
+          const resp = await fetch(url!);
+          const blob = await resp.blob();
+          return blobToDataURL(blob);
+        })
+    );
+    const [logoBase, renderBase, isoBase, planoBase, ...galeriaBases] = bases;
+
+    const planesParaPdf = isCustomPlan
+      ? [...proyecto.paymentPlans, planParaPdf!] // agregas el custom al final
+      : proyecto.paymentPlans;
+
+    // 3) Generar PDF
+    const blobPdf = await pdf(
+      <CotizacionPDF
+        proyecto={proyecto}
+        unidad={unidad}
+        planSeleccionado={planParaPdf!}
+        planes={planesParaPdf}
+        enganche={enganche}
+        liquidacion={liquidacion}
+        pagosMensuales={pagosMensuales}
+        logoUrl={logoBase}
+        renderUrl={renderBase}
+        isometricoUrl={isoBase}
+        planoUrl={planoBase}
+        galeriaUrls={galeriaBases}
+        esPersonalizado={isCustomPlan}
+      />
+    ).toBlob();
+
+    const blobUrl = URL.createObjectURL(blobPdf);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = `${proyecto.nombre.replace(/\s+/g, '_')}_cotizacion.pdf`;
+    a.click();
+    URL.revokeObjectURL(blobUrl);
+  };
+
+  // ------------------------------------------
+
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
-      {/* HEADER */}
       <DialogTitle
         sx={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          mb: 1,
-          color: 'white',
-          background: 'var(--secondary-color)'
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          mb: 1, color: 'white', background: 'var(--secondary-color)'
         }}
       >
-        <Typography variant="h6">
+        <Typography variant="h6" component="div">
           Cotización {proyecto.nombre}
         </Typography>
         <IconButton onClick={onClose} color="inherit">
           <CloseIcon />
         </IconButton>
       </DialogTitle>
-
       <DialogContent>
-        {/* LOGO & FACHADA */}
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, mb: 3 }}>
-          <SignedAvatar
-            value={proyecto.logo!}
-            alt="Logo del Proyecto"
-            sx={{ width: 90, height: 90, boxShadow: 2 }}
-          />
+          <SignedAvatar value={proyecto.logo!} alt="Logo del Proyecto" sx={{ width: 90, height: 90, boxShadow: 2 }} />
           {proyecto.render && (
             <SignedImage
               path={proyecto.render.path!}
               bucket={proyecto.render.bucket!}
               alt="Fachada del Proyecto"
               sx={{
-                width: 200,
-                height: 120,
-                borderRadius: 2,
-                boxShadow: '2px 2px 10px rgba(0,0,0,0.13)'
+                width: 200, height: 120,
+                borderRadius: 2, boxShadow: '2px 2px 10px rgba(0,0,0,0.13)'
               }}
             />
           )}
         </Box>
-        {/* DATOS UNIDAD */}
-        <Box sx={{
-          p: 2,
-          borderRadius: 2,
-          background: "#f5f5f5",
-          boxShadow: 1,
-          mb: 3,
-          display: 'flex',
-          flexDirection: { xs: 'column', md: 'row' },
-          gap: 2,
-          justifyContent: 'space-between'
-        }}>
-          <Stack spacing={1}>
-            <Typography variant="h6" sx={{ color: 'var(--primary-color)', fontWeight: 700 }}>
-              Unidad: {unidad.numerounidad}
-            </Typography>
-            <Typography>Privativa: {unidad.unidadprivativa}</Typography>
-            <Typography sx={{ color: 'var(--primary-color)', fontWeight: 500 }}>
-              Precio de lista: <b>{formatoMoneda(unidad.preciolista)}</b>
-            </Typography>
-            {unidad.extras && Object.keys(unidad.extras).length > 0 && (
-              <Box sx={{ mt: 2 }}>
-                <Typography variant="subtitle2" sx={{ color: 'var(--primary-color)', fontWeight: 700 }}>
-                  Características adicionales:
-                </Typography>
-                <Stack spacing={0.5} sx={{ ml: 1 }}>
-                  {Object.entries(unidad.extras).map(([label, value]) => (
-                    <Typography key={label}>
-                      <b>{label}: </b>{String(value)}
-                    </Typography>
-                  ))}
-                </Stack>
-              </Box>
-            )}
-          </Stack>
-        </Box>
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 3,
-            mb: 3,
-            flexWrap: 'wrap',
-            width: '100%',
-          }}
-        >
-          {unidad.isometrico && unidad.isometrico.path && (
-            <Box sx={{ textAlign: 'center' }}>
-              <SignedImage
-                path={unidad.isometrico.path}
-                bucket={unidad.isometrico.bucket!}
-                alt="Isométrico"
-              />
-              <Typography variant="caption">Isométrico</Typography>
-            </Box>
-          )}
-          {unidad.render && unidad.render.path && (
-            <Box sx={{ textAlign: 'center' }}>
-              <SignedImage
-                path={unidad.render.path}
-                bucket={unidad.render.bucket!}
-                alt="Render"
-              />
-              <Typography variant="caption">Render</Typography>
-            </Box>
-          )}
-          {unidad.plano && unidad.plano.path && (
-            <Box sx={{ textAlign: 'center' }}>
-              <SignedImage
-                path={unidad.plano.path}
-                bucket={unidad.plano.bucket!}
-                alt="Plano"
-              />
-              <Typography variant="caption">Plano</Typography>
-            </Box>
-          )}
-        </Box>
-
-        {unidad.imagenes && Array.isArray(unidad.imagenes) && unidad.imagenes.length > 0 && (
-          <Box sx={{ my: 2, width: '100%', maxWidth: 380, mx: 'auto', display: 'flex', justifyContent: 'center' }}>
-            <SignedImageCarousel
-              items={unidad.imagenes}
-              width="100%"
-              height={280}
-            />
-          </Box>
-        )}
-
-
-        {/* SELECCIÓN PLAN DE PAGO */}
-        <Box sx={{ mb: 3 }}>
-          <Typography variant="h6" sx={{ color: 'var(--primary-color)', fontWeight: 700 }}>
-            Selecciona un plan de pago
-          </Typography>
-          <Select
-            fullWidth
-            value={isCustomPlan ? "custom" : (selectedPlan?.name || "")}
-            onChange={handlePlanChange}
-            displayEmpty
-            sx={{ my: 2, bgcolor: '#fff' }}
-          >
-            <MenuItem value="" disabled>Selecciona un plan</MenuItem>
-            {proyecto.paymentPlans.map((plan, idx) =>
-              <MenuItem key={plan.name + idx} value={plan.name}>
-                {plan.name}
-              </MenuItem>
-            )}
-            <MenuItem value="custom"><b>Personalizado</b></MenuItem>
-          </Select>
-        </Box>
-
-        {/* TABLA DE PLANES */}
-        {!isCustomPlan && proyecto.paymentPlans && (
-          <TableContainer component={Paper} sx={{ mb: 4 }}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Plan</TableCell>
-                  <TableCell>% Desc.</TableCell>
-                  <TableCell>Enganche</TableCell>
-                  {Array.from({ length: maxInstallments }).map((_, i) => (
-                    <TableCell key={i} align="center">Mes {i + 2}</TableCell>
-                  ))}
-                  <TableCell>Contraentrega</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {proyecto.paymentPlans.map((plan, planIndex) => {
-                  const { enganche, liquidacion, pagosMensuales } = calcularValoresPlan(plan);
-                  const installmentsCount = plan.mensualidades && plan.mensualidades > 0
-                    ? plan.mensualidades
-                    : plan.parcialidades.length;
-                  return (
-                    <TableRow
-                      key={planIndex}
-                      hover
-                      sx={selectedPlan && selectedPlan.name === plan.name
-                        ? { backgroundColor: '#e9ffe1', cursor: 'pointer' }
-                        : { cursor: 'pointer' }
-                      }
-                      onClick={() => { setSelectedPlan(plan); setIsCustomPlan(false); }}
-                    >
-                      <TableCell>{plan.name}</TableCell>
-                      <TableCell>{plan.descuento}%</TableCell>
-                      <TableCell>{formatoMoneda(enganche)}</TableCell>
-                      {Array.from({ length: maxInstallments }).map((_, idx) => (
-                        <TableCell key={idx} align="center">
-                          {idx < installmentsCount
-                            ? formatoMoneda(pagosMensuales[idx] || 0)
-                            : ''}
-                        </TableCell>
-                      ))}
-                      <TableCell>{formatoMoneda(liquidacion)}</TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        )}
-
-        {/* PLAN PERSONALIZADO */}
-        {isCustomPlan && (
-          <Box sx={{ mt: 1 }}>
-            <Typography variant="h6" sx={{ color: 'var(--primary-color)', fontWeight: 700, mb: 2 }}>
-              Plan personalizado
-            </Typography>
-            <Stack direction="row" gap={2} mb={2} flexWrap="wrap">
-              <TextField
-                label="Precio total del plan"
-                variant="outlined"
-                type="number"
-                value={customPrecioPlan}
-                onChange={e => setCustomPrecioPlan(Number(e.target.value))}
-                sx={{ minWidth: 160 }}
-              />
-              <TextField
-                label="Pago inicial"
-                variant="outlined"
-                type="number"
-                value={customPagoInicial}
-                onChange={e => setCustomPagoInicial(Number(e.target.value))}
-                sx={{ minWidth: 140 }}
-              />
-              <TextField
-                label="Contra entrega"
-                variant="outlined"
-                type="number"
-                value={customContraEntrega}
-                onChange={e => setCustomContraEntrega(Number(e.target.value))}
-                sx={{ minWidth: 140 }}
-              />
-            </Stack>
-            <Button variant="outlined" onClick={handleAddCustomPayment} sx={{ mb: 1 }}>
-              + Agregar mes
-            </Button>
-            <TableContainer component={Paper}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Mes</TableCell>
-                    <TableCell>Monto</TableCell>
-                    <TableCell />
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {customPayments.map((pago, idx) => (
-                    <TableRow key={idx}>
-                      <TableCell>
-                        <TextField
-                          variant="outlined"
-                          size="small"
-                          value={pago.mes}
-                          onChange={e => handleCustomPaymentChange(idx, 'mes', e.target.value)}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <TextField
-                          variant="outlined"
-                          size="small"
-                          type="number"
-                          value={pago.monto}
-                          onChange={e => handleCustomPaymentChange(idx, 'monto', Number(e.target.value))}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <IconButton onClick={() => handleRemoveCustomPayment(idx)} color="error">
-                          <CloseIcon />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-            <Box sx={{ mt: 2 }}>
-              <Typography fontWeight={600} color={restante < 0 ? "error" : restante === 0 ? "primary" : "inherit"}>
-                {restante < 0
-                  ? `Te has excedido en ${formatoMoneda(Math.abs(restante))} del precio total`
-                  : restante === 0
-                  ? "¡El total programado coincide con el precio del plan!"
-                  : `Falta por programar: ${formatoMoneda(restante)}`
-                }
-              </Typography>
-            </Box>
-          </Box>
-        )}
+        <UnidadInfo unidad={unidad} />
+        <UnidadImagenes unidad={unidad} />
+        <SelectorPlanPago
+          paymentPlans={proyecto.paymentPlans}
+          precioLista={precioLista}
+          selectedPlan={selectedPlan}
+          isCustomPlan={isCustomPlan}
+          customPayments={customPayments}
+          customPrecioPlan={customPrecioPlan}
+          customPagoInicial={customPagoInicial}
+          customContraEntrega={customContraEntrega}
+          restante={restante}
+          onPlanSelected={handlePlanSelected}
+          onCustomPaymentsChange={setCustomPayments}
+          onCustomPrecioPlanChange={setCustomPrecioPlan}
+          onCustomPagoInicialChange={setCustomPagoInicial}
+          onCustomContraEntregaChange={setCustomContraEntrega}
+          onSelectedPlanChange={handleSelectedPlanChange}         // <-- Importante!
+          onIsCustomPlanChange={handleIsCustomPlanChange}         // <-- Importante!
+        />
       </DialogContent>
       <DialogActions>
+        <Button
+          variant="outlined"
+          startIcon={<PictureAsPdfIcon />}
+          onClick={handleDownloadPdf}
+          disabled={!canDownload}
+          sx={{ mr: 1, color: 'var(--primary-color)', borderColor: '#fff' }}
+        >
+          Descargar PDF
+        </Button>
         <Button onClick={onClose}>Cerrar</Button>
-        {/* Aquí puedes poner un botón para "Guardar Cotización" si lo requieres */}
       </DialogActions>
     </Dialog>
   );

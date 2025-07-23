@@ -1,23 +1,14 @@
-import React from 'react';
+import React, { useMemo, useEffect } from 'react';
 import {
-  Box,
-  Typography,
-  TextField,
-  IconButton,
-  Tooltip,
-  TableContainer,
-  Table,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableBody,
-  Paper,
+  Box, Typography, TextField, IconButton, Tooltip,
+  TableContainer, Table, TableHead, TableRow,
+  TableCell, TableBody, Paper,
 } from '@mui/material';
 import AddCircleIcon from '@mui/icons-material/AddCircle';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { Proyecto, PlanPago } from '../../config/types';
 
-interface ProyectoPlanesPagoTabProps {
+interface Props {
   proyecto: Proyecto;
   handleDeliveryDateChange: (newDate: string) => void;
   handleAddPaymentPlanRow: () => void;
@@ -34,7 +25,7 @@ interface ProyectoPlanesPagoTabProps {
   handleDeletePaymentPlanRow: (index: number) => void;
 }
 
-const ProyectoPlanesPagoTab: React.FC<ProyectoPlanesPagoTabProps> = ({
+const ProyectoPlanesPagoTab: React.FC<Props> = ({
   proyecto,
   handleDeliveryDateChange,
   handleAddPaymentPlanRow,
@@ -42,15 +33,74 @@ const ProyectoPlanesPagoTab: React.FC<ProyectoPlanesPagoTabProps> = ({
   handleParcialidadChange,
   handleDeletePaymentPlanRow,
 }) => {
-  const plans = proyecto.paymentPlans || [];
-  const maxInstallments = plans.length
-    ? Math.max(
-        ...plans.map((plan) =>
-          plan.mensualidades && plan.mensualidades > 0
-            ? plan.mensualidades
-            : plan.parcialidades.length
-        )
-      )
+  // 1) HeaderMonths: de hoy hasta fechaEntrega
+  const headerMonths = useMemo(() => {
+    const today = new Date();
+    const entrega = proyecto.fechaEntrega
+      ? new Date(proyecto.fechaEntrega)
+      : today;
+    const diff =
+      (entrega.getFullYear() - today.getFullYear()) * 12 +
+      (entrega.getMonth() - today.getMonth()) +
+      1;
+    const totalMonths = Math.max(0, diff);
+    return Array.from({ length: totalMonths }).map((_, idx) => {
+      const d = new Date(today.getFullYear(), today.getMonth() + idx, 1);
+      return d.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
+    });
+  }, [proyecto.fechaEntrega]);
+
+  // 2) Generamos dynamicPlans con los porcentajes deseados
+  const dynamicPlans = useMemo<PlanPago[]>(() => {
+    return proyecto.paymentPlans.map(plan => {
+       if (plan.name === 'Crédito') {
+        const n = headerMonths.length;                // número de meses
+        const base = 100 - plan.pInicial - plan.contraentrega; // ej. 100 - 20 - 30 = 50
+        const cada = n > 0 ? parseFloat((base / n).toFixed(2)) : 0;
+        return {
+          ...plan,
+          months: n,
+          parcialidades: Array.from({ length: n }).map((_, i) => ({
+            month: i + 1,        // <= asegúrate de incluir siempre `month`
+            value: cada,
+          })),
+        };
+      }
+      if (plan.name === 'ContadoComercial') {
+        const primera = parseFloat(plan.pInicial.toFixed(2));        // 33.33
+        const restante = parseFloat((100 - primera * 2).toFixed(2)); // 33.34
+        return {
+          ...plan,
+          months: 1,
+          parcialidades: [{ month: 1, value: primera }],
+          contraentrega: restante,
+        };
+      }
+      // Contado u otros planes
+      return {
+        ...plan,
+        months: plan.months,
+        parcialidades: plan.parcialidades.map(p => ({
+          ...p,
+          // en Contado los values serán 0, así que lo dejamos
+          value: plan.name === 'Contado' ? 0 : p.value,
+        })),
+      };
+    });
+  }, [proyecto.paymentPlans, headerMonths]);
+
+  // 3) Cuando dynamicPlans cambie, “sincroniza” al estado de proyecto
+  useEffect(() => {
+  dynamicPlans.forEach((plan, pi) => {
+    // Sobrescribe la lista completa de parcialidades:
+    handlePaymentPlanChange(pi, 'parcialidades', plan.parcialidades);
+    // Y el contraentrega:
+    handlePaymentPlanChange(pi, 'contraentrega', plan.contraentrega);
+  });
+}, [dynamicPlans, handlePaymentPlanChange]);
+
+  const maxInstallments = dynamicPlans.length
+    ? Math.max(...dynamicPlans.map(p => p.months || p.parcialidades.length))
     : 0;
 
   return (
@@ -58,11 +108,10 @@ const ProyectoPlanesPagoTab: React.FC<ProyectoPlanesPagoTabProps> = ({
       <Typography variant="h6" gutterBottom>
         Fecha de Entrega
       </Typography>
-
       <TextField
         type="date"
         value={proyecto.fechaEntrega || ''}
-        onChange={(e) => handleDeliveryDateChange(e.target.value)}
+        onChange={e => handleDeliveryDateChange(e.target.value)}
         fullWidth
         sx={{ mb: 2 }}
       />
@@ -78,45 +127,51 @@ const ProyectoPlanesPagoTab: React.FC<ProyectoPlanesPagoTabProps> = ({
         </Typography>
       </Box>
 
-      {plans.length > 0 && (
+      {dynamicPlans.length > 0 && (
         <Box sx={{ overflowX: 'auto', mt: 3 }}>
           <TableContainer component={Paper}>
             <Table sx={{ minWidth: 800 }}>
               <TableHead>
                 <TableRow>
-                  <TableCell rowSpan={2} sx={{minWidth:220}}>Nombre del Plan</TableCell>
-                  <TableCell rowSpan={2} sx={{minWidth:120}}>% Descuento</TableCell>
-                  <TableCell rowSpan={2} sx={{minWidth:120}}>Enganche</TableCell>
-                  {Array.from({ length: maxInstallments }).map((_, idx) => (
-                    <TableCell key={`header-month-${idx}`} align="center" sx={{minWidth:120}}>
-                      Mes {idx + 2}
+                  <TableCell rowSpan={2} sx={{ minWidth: 220 }}>
+                    Nombre del Plan
+                  </TableCell>
+                  <TableCell rowSpan={2} sx={{ minWidth: 120 }}>
+                    % Descuento
+                  </TableCell>
+                  <TableCell rowSpan={2} sx={{ minWidth: 120 }}>
+                    Enganche
+                  </TableCell>
+
+                  {headerMonths.map((label, i) => (
+                    <TableCell key={i} align="center" sx={{ minWidth: 120 }}>
+                      {label}
                     </TableCell>
                   ))}
+
                   <TableCell rowSpan={2}>Liquidación / Contraentrega</TableCell>
                   <TableCell rowSpan={2}>Acciones</TableCell>
                 </TableRow>
                 <TableRow>
-                  {Array.from({ length: maxInstallments }).map((_, idx) => (
-                    <TableCell key={`sub-header-${idx}`} align="center">
-                      % P
+                  {headerMonths.map((_, i) => (
+                    <TableCell key={i} align="center">
+                      % P
                     </TableCell>
                   ))}
                 </TableRow>
               </TableHead>
+
               <TableBody>
-                {plans.map((plan, planIndex) => {
-                  const installmentsCount =
-                    plan.mensualidades && plan.mensualidades > 0
-                      ? plan.mensualidades
-                      : plan.parcialidades.length;
+                {dynamicPlans.map((plan, pi) => {
+                  const count = plan.months || plan.parcialidades.length;
                   return (
-                    <TableRow key={planIndex}>
+                    <TableRow key={pi}>
                       <TableCell>
                         <TextField
                           value={plan.name}
-                          onChange={(e) =>
+                          onChange={e =>
                             handlePaymentPlanChange(
-                              planIndex,
+                              pi,
                               'name',
                               e.target.value
                             )
@@ -128,9 +183,9 @@ const ProyectoPlanesPagoTab: React.FC<ProyectoPlanesPagoTabProps> = ({
                         <TextField
                           type="number"
                           value={plan.descuento}
-                          onChange={(e) =>
+                          onChange={e =>
                             handlePaymentPlanChange(
-                              planIndex,
+                              pi,
                               'descuento',
                               parseFloat(e.target.value)
                             )
@@ -142,9 +197,9 @@ const ProyectoPlanesPagoTab: React.FC<ProyectoPlanesPagoTabProps> = ({
                         <TextField
                           type="number"
                           value={plan.pInicial}
-                          onChange={(e) =>
+                          onChange={e =>
                             handlePaymentPlanChange(
-                              planIndex,
+                              pi,
                               'pInicial',
                               parseFloat(e.target.value)
                             )
@@ -153,24 +208,24 @@ const ProyectoPlanesPagoTab: React.FC<ProyectoPlanesPagoTabProps> = ({
                         />
                       </TableCell>
 
-                      {Array.from({ length: maxInstallments }).map((_, monthIndex) =>
-                        monthIndex < installmentsCount ? (
-                            <TableCell key={`plan_${planIndex}_month_${monthIndex}`}>  {/* quité la llave extra */}
+                      {Array.from({ length: maxInstallments }).map((_, mi) =>
+                        mi < count ? (
+                          <TableCell key={mi}>
                             <TextField
-                                type="number"
-                                value={plan.parcialidades[monthIndex]?.value ?? 0}
-                                onChange={(e) =>
+                              type="number"
+                              value={plan.parcialidades[mi]?.value ?? 0}
+                              onChange={e =>
                                 handleParcialidadChange(
-                                    planIndex,
-                                    monthIndex,
-                                    parseFloat(e.target.value)
+                                  pi,
+                                  mi,
+                                  parseFloat(e.target.value)
                                 )
-                                }
-                                fullWidth
+                              }
+                              fullWidth
                             />
-                            </TableCell>
+                          </TableCell>
                         ) : (
-                          <TableCell key={`empty_${planIndex}_${monthIndex}`} />
+                          <TableCell key={mi} />
                         )
                       )}
 
@@ -178,9 +233,9 @@ const ProyectoPlanesPagoTab: React.FC<ProyectoPlanesPagoTabProps> = ({
                         <TextField
                           type="number"
                           value={plan.contraentrega}
-                          onChange={(e) =>
+                          onChange={e =>
                             handlePaymentPlanChange(
-                              planIndex,
+                              pi,
                               'contraentrega',
                               parseFloat(e.target.value)
                             )
@@ -190,7 +245,7 @@ const ProyectoPlanesPagoTab: React.FC<ProyectoPlanesPagoTabProps> = ({
                       </TableCell>
 
                       <TableCell>
-                        <IconButton onClick={() => handleDeletePaymentPlanRow(planIndex)}>
+                        <IconButton onClick={() => handleDeletePaymentPlanRow(pi)}>
                           <DeleteIcon />
                         </IconButton>
                       </TableCell>

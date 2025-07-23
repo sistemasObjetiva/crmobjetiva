@@ -37,9 +37,9 @@ export const makeInitialProyecto = (userId: string): Proyecto => ({
           descuento: 4.0,
           pInicial: 33.33,
           mensualidades: 66.67,
-          months: 3,
+          months: 1,
           parcialidades: [
-            { month: 2, value: 33.33 }
+            { month: 1, value: 33.33 }
           ],
           contraentrega: 33.33,
         },
@@ -48,9 +48,9 @@ export const makeInitialProyecto = (userId: string): Proyecto => ({
           descuento: 0.0,
           pInicial: 20.0,
           mensualidades: 50.0,
-          months: 0,
+          months: 1,
           parcialidades: [
-            { month: 1, value: -50.0 }
+            { month: 1, value: 50.0 }
           ],
           contraentrega: 30.0,
         },
@@ -79,13 +79,13 @@ const ContainerProyectos: React.FC<Props> = ({ userId }) => {
       setLoading(true)
       try {
         await actualizarProyecto(nuevo)
-        showStatus('Empresa guardada exitosamente', 'success')
+        showStatus('Proyecto guardado exitosamente', 'success')
       } catch (err: any) {
         console.error(err)
         showStatus(
           err?.message
-            ? `Error al guardar empresa: ${err.message}`
-            : 'Error al guardar empresa',
+            ? `Error al guardar Proyecto: ${err.message}`
+            : 'Error al guardar Proyecto',
           'error'
         )
       } finally {

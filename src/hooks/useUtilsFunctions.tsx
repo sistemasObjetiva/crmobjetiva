@@ -77,7 +77,14 @@ export async function getSignedUrl(
 export const eliminarLetras = (valor: string): string => {
   return valor.replace(/\D/g, ""); // Elimina todo lo que no sea dígito (0–9)
 };
-
+export async function blobToDataURL(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
 
 export function useSignedUrl(path?: string, bucket?: string) {
   const [url, setUrl] = useState<string|null>(null);

@@ -17,6 +17,7 @@ import {
   InputLabel,
   MenuItem,
   Select,
+  Chip,
 } from '@mui/material';
 import AddCircleIcon from '@mui/icons-material/AddCircle';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -79,9 +80,10 @@ const ProyectoUnidadesTab: React.FC<ProyectoUnidadesTabProps> = ({
         'numerounidad',
         'unidadprivativa',
         'preciolista',
+        'estatus'
         // El usuario puede agregar columnas extra aquí manualmente.
         ],
-        ['Ej: 101', 'Ej: Torre A', '1000000'],
+        ['Ej: 101', 'Ej: Torre A', '1000000','disponible'],
     ];
     const ws = XLSX.utils.aoa_to_sheet(wsData);
     const wb = XLSX.utils.book_new();
@@ -335,6 +337,7 @@ const ProyectoUnidadesTab: React.FC<ProyectoUnidadesTabProps> = ({
               <TableCell>Número Unidad</TableCell>
               <TableCell>Unidad Privativa</TableCell>
               <TableCell>Precio Lista</TableCell>
+              <TableCell>Estatus</TableCell>
               {extrasKeys.map((key) => (
                 <TableCell key={key}>{key}</TableCell>
               ))}
@@ -351,6 +354,19 @@ const ProyectoUnidadesTab: React.FC<ProyectoUnidadesTabProps> = ({
                     <TableCell>{uni.numerounidad}</TableCell>
                     <TableCell>{uni.unidadprivativa}</TableCell>
                     <TableCell>{formatoMoneda(uni.preciolista)}</TableCell>
+                    <TableCell>
+                      <Chip
+                        label={uni.estatus.charAt(0).toUpperCase() + uni.estatus.slice(1)}
+                        variant="outlined"
+                        color={
+                          uni.estatus === 'disponible'   ? 'success' :
+                          uni.estatus === 'apartado'     ? 'warning' :
+                          uni.estatus === 'vendido'      ? 'error' :
+                          'default'
+                        }
+                        size="small"
+                      />
+                    </TableCell>
                     {extrasKeys.map((key, i) => (
                     <TableCell key={`${idx}_${i}`}>{uni.extras[key] || ''}</TableCell>
                     ))}

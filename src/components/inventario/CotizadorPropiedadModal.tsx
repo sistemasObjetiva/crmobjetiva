@@ -6,7 +6,10 @@ import {
 import CloseIcon from '@mui/icons-material/Close'
 import SignedImageCarousel from '../general/SinedImageCarousel'
 import { Propiedad } from '../../config/types'
-
+import { pdf } from '@react-pdf/renderer';
+import { getSignedUrl, blobToDataURL } from '../../hooks/useUtilsFunctions';
+import CotizacionPropiedadPDF from './CotizadorPropiedadPDF'
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 interface CotizadorPropiedadModalProps {
   propiedad: Propiedad
   open: boolean
@@ -23,6 +26,43 @@ const CotizadorPropiedadModal: React.FC<CotizadorPropiedadModalProps> = ({
   const renta = propiedad.renta && propiedad.precioRenta ? Number(propiedad.precioRenta) : null
   const comisionVenta = venta && propiedad.comisionVenta ? venta * (Number(propiedad.comisionVenta) / 100) : null
   const comisionRenta = renta && propiedad.comisionRenta ? renta * (Number(propiedad.comisionRenta) / 100) : null
+const handleDownloadPdf = async () => {
+  // 1️⃣ Firmar URLs de Supabase para cada imagen de la propiedad
+  const imagenesSigned = await Promise.all(
+    (propiedad.imagenes || []).map(img =>
+      img.path
+        ? getSignedUrl(img.path, img.bucket!)
+        : Promise.resolve(null)
+    )
+  );
+
+  // 2️⃣ Filtrar sólo las URLs no nulas y traer blobs → Base64
+  const imagenesBase = await Promise.all(
+    imagenesSigned
+      .filter((url): url is string => Boolean(url))
+      .map(async url => {
+        const resp = await fetch(url);
+        const blob = await resp.blob();
+        return blobToDataURL(blob);
+      })
+  );
+
+  // 3️⃣ Renderizar el PDF y descargarlo
+  const blobPdf = await pdf(
+    <CotizacionPropiedadPDF
+      propiedad={propiedad}
+      imagenesBase={imagenesBase}
+    />
+  ).toBlob();
+
+  const pdfUrl = URL.createObjectURL(blobPdf);
+  const a = document.createElement('a');
+  a.href = pdfUrl;
+  a.download = `${propiedad.tituloPropiedad.replace(/\s+/g, '_')}_cotizacion.pdf`;
+  a.click();
+  URL.revokeObjectURL(pdfUrl);
+};
+
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
@@ -138,6 +178,14 @@ const CotizadorPropiedadModal: React.FC<CotizadorPropiedadModalProps> = ({
         </Box>
       </DialogContent>
       <DialogActions>
+          <Button
+              variant="outlined"
+              startIcon={<PictureAsPdfIcon />}
+              onClick={handleDownloadPdf}
+              sx={{ color: 'var(--primary-color)', borderColor: 'var(--secondary-color)' }}
+            >
+              Descargar PDF
+            </Button>
         <Button onClick={onClose}>Cerrar</Button>
         {/* Aquí podrías agregar "Descargar PDF", "Enviar cotización", etc. */}
       </DialogActions>
