@@ -7,5 +7,9 @@
     
     server: {
       port: 3030, 
+       watch: {
+        usePolling: true,
+        interval: 150
+      }
     },
   })

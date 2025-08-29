@@ -1,32 +1,53 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { Box, Typography, Paper, Tabs, Tab } from '@mui/material'
 import ProspectosTab from './ProspectosTab'
 import ProspectosGeneralTab from './ProspectosGeneralTab'
 
 interface ContainerProspectosProps {
   userid: string
+  /** Rol del usuario actual. Ejemplos: 'admin' | 'gerencia' | 'operacion' | 'usuario' */
+  userRole?: string
 }
 
-const ContainerProspectos: React.FC<ContainerProspectosProps> = ({ userid }) => {
-  const [tab, setTab] = useState(0)
+type TabKey = 'pros' | 'pros_gen'
+
+const ContainerProspectos: React.FC<ContainerProspectosProps> = ({ userid, userRole }) => {
+  // Si no te pasan el rol, asume que NO es "usuario" para no bloquear por defecto
+  console.log(userRole)
+  const canViewGeneral = (userRole ?? '').toLowerCase() !== 'usuario'
+
+  const tabs = useMemo(
+    () =>
+      [
+        { key: 'pros' as TabKey, label: 'Prospectos' },
+        ...(canViewGeneral
+          ? [{ key: 'pros_gen' as TabKey, label: 'Prospectos general' }]
+          : []),
+      ],
+    [canViewGeneral]
+  )
+
+  const [active, setActive] = useState<TabKey>(tabs[0].key)
+
+  // Si cambia el permiso y la pestaña activa ya no existe, regresa a la primera
+  React.useEffect(() => {
+    if (!tabs.find(t => t.key === active)) setActive(tabs[0].key)
+  }, [tabs, active])
 
   return (
     <Box sx={{ width: '100%', maxWidth: 1200, mx: 'auto', py: 3 }}>
       <Typography
         variant="h5"
-        sx={{
-          mb: 2,
-          color: 'var(--primary-color)',
-          fontWeight: 700,
-        }}
+        sx={{ mb: 2, color: 'var(--primary-color)', fontWeight: 700 }}
       >
         Prospectos
       </Typography>
+
       <Paper sx={{ borderRadius: 4, boxShadow: 2, p: 0 }}>
         <Box sx={{ px: { xs: 1, sm: 3 }, pt: 2 }}>
           <Tabs
-            value={tab}
-            onChange={(_, v) => setTab(v)}
+            value={tabs.findIndex(t => t.key === active)}
+            onChange={(_, idx) => setActive(tabs[idx].key)}
             textColor="primary"
             indicatorColor="primary"
             sx={{
@@ -37,19 +58,17 @@ const ContainerProspectos: React.FC<ContainerProspectosProps> = ({ userid }) => 
             }}
             variant="fullWidth"
           >
-            <Tab label="Prospectos" />
-            <Tab label="Prospectos general" />
+            {tabs.map(t => (
+              <Tab key={t.key} label={t.label} />
+            ))}
           </Tabs>
         </Box>
 
         <Box sx={{ p: 3 }}>
-          {tab === 0 && (
-            <ProspectosTab userid={userid!} />
-          )}
-          {tab === 1 && (
-            <Typography color="text.secondary">
-              <ProspectosGeneralTab userid={userid!} />
-            </Typography>
+          {active === 'pros' && <ProspectosTab userid={userid} />}
+
+          {active === 'pros_gen' && canViewGeneral && (
+            <ProspectosGeneralTab userid={userid} />
           )}
         </Box>
       </Paper>

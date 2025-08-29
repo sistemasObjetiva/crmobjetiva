@@ -1,0 +1,30 @@
+"use client";
+import {
+  require_createSvgIcon
+} from "./chunk-NYHD56NI.js";
+import {
+  require_interopRequireDefault,
+  require_jsx_runtime
+} from "./chunk-EXRCS52B.js";
+import "./chunk-65KY755N.js";
+import {
+  __commonJS
+} from "./chunk-V4OQ3NZ2.js";
+
+// node_modules/@mui/icons-material/LocalParking.js
+var require_LocalParking = __commonJS({
+  "node_modules/@mui/icons-material/LocalParking.js"(exports) {
+    var _interopRequireDefault = require_interopRequireDefault();
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var _createSvgIcon = _interopRequireDefault(require_createSvgIcon());
+    var _jsxRuntime = require_jsx_runtime();
+    var _default = exports.default = (0, _createSvgIcon.default)((0, _jsxRuntime.jsx)("path", {
+      d: "M13 3H6v18h4v-6h3c3.31 0 6-2.69 6-6s-2.69-6-6-6m.2 8H10V7h3.2c1.1 0 2 .9 2 2s-.9 2-2 2"
+    }), "LocalParking");
+  }
+});
+export default require_LocalParking();
+//# sourceMappingURL=@mui_icons-material_LocalParking.js.map

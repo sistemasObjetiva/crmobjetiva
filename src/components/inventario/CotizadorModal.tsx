@@ -6,7 +6,7 @@ import {
 import CloseIcon from '@mui/icons-material/Close';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 
-import { Proyecto, Unidad, PlanPago } from '../../config/types';
+import { Proyecto, Unidad, PlanPago, Seguimiento ,Document} from '../../config/types';
 import SignedAvatar from '../general/SignedAvatar';
 import SignedImage from '../general/SignedImage';
 import CotizacionPDF from './CotizacionUnidadPDF';
@@ -17,16 +17,17 @@ import SelectorPlanPago, { CustomPayment } from './CotizadorUnidadSelectorPlant'
 
 import { pdf } from '@react-pdf/renderer';
 import { blobToDataURL, getSignedUrl } from '../../hooks/useUtilsFunctions';
-
 interface CotizadorModalProps {
   proyecto: Proyecto;
   unidad: Unidad;
   open: boolean;
   onClose: () => void;
+  onAsignarCotizacion?: (doc: Document) => void
+  seguimiento?: Seguimiento
 }
 
 const CotizadorModal: React.FC<CotizadorModalProps> = ({
-  proyecto, unidad, open, onClose
+  proyecto, unidad, open, onClose,onAsignarCotizacion,
 }) => {
   const [selectedPlan, setSelectedPlan] = useState<PlanPago | null>(null);
   const [isCustomPlan, setIsCustomPlan] = useState(false);
@@ -35,6 +36,7 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
   const [customPagoInicial, setCustomPagoInicial] = useState<number>(0);
   const [customContraEntrega, setCustomContraEntrega] = useState<number>(0);
 
+    
   // Handlers requeridos por SelectorPlanPago
   const handleSelectedPlanChange = (plan: PlanPago | null) => setSelectedPlan(plan);
   const handleIsCustomPlanChange = (val: boolean) => setIsCustomPlan(val);
@@ -210,6 +212,99 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
   };
 
   // ------------------------------------------
+const handleAsignarPdf = async () => {
+  // 1. Prepara los datos igual que en handleDownloadPdf
+
+  let planParaPdf: PlanPago | null = selectedPlan;
+  let enganche = 0;
+  let liquidacion = 0;
+  let pagosMensuales: number[] = [];
+
+  if (isCustomPlan) {
+    planParaPdf = buildCustomPseudoPlan(
+      customPrecioPlan,
+      customPagoInicial,
+      customContraEntrega,
+      customPayments
+    );
+    enganche = customPagoInicial;
+    liquidacion = customContraEntrega;
+    pagosMensuales = customPayments.map(p => p.monto);
+  } else if (selectedPlan) {
+    const { enganche: e, liquidacion: l, pagosMensuales: pm } = calcularValoresPlan(selectedPlan);
+    enganche = e;
+    liquidacion = l;
+    pagosMensuales = pm;
+  }
+
+  // 2. URLs firmadas y base64 (igual que handleDownloadPdf)
+  const logoUrl = proyecto.logo?.path
+    ? await getSignedUrl(proyecto.logo.path, proyecto.logo.bucket!)
+    : undefined;
+  const renderUrl = unidad.render?.path
+    ? await getSignedUrl(unidad.render.path, unidad.render.bucket!)
+    : undefined;
+  const isoUrl = unidad.isometrico?.path
+    ? await getSignedUrl(unidad.isometrico.path, unidad.isometrico.bucket!)
+    : undefined;
+  const planoUrl = unidad.plano?.path
+    ? await getSignedUrl(unidad.plano.path, unidad.plano.bucket!)
+    : undefined;
+  const galeriaUrlsSigned = await Promise.all(
+    (unidad.imagenes || []).map(img => getSignedUrl(img.path!, img.bucket!))
+  );
+  const bases = await Promise.all(
+    [logoUrl, renderUrl, isoUrl, planoUrl, ...galeriaUrlsSigned]
+      .filter(Boolean)
+      .map(async url => {
+        const resp = await fetch(url!);
+        const blob = await resp.blob();
+        return blobToDataURL(blob);
+      })
+  );
+  const [logoBase, renderBase, isoBase, planoBase, ...galeriaBases] = bases;
+
+  const planesParaPdf = isCustomPlan
+    ? [...proyecto.paymentPlans, planParaPdf!] // agregas el custom al final
+    : proyecto.paymentPlans;
+
+  // 3. Genera el PDF
+  const blobPdf = await pdf(
+    <CotizacionPDF
+      proyecto={proyecto}
+      unidad={unidad}
+      planSeleccionado={planParaPdf!}
+      planes={planesParaPdf}
+      enganche={enganche}
+      liquidacion={liquidacion}
+      pagosMensuales={pagosMensuales}
+      logoUrl={logoBase}
+      renderUrl={renderBase}
+      isometricoUrl={isoBase}
+      planoUrl={planoBase}
+      galeriaUrls={galeriaBases}
+      esPersonalizado={isCustomPlan}
+    />
+  ).toBlob();
+
+  // 4. Prepara el archivo y el Document
+  const archivoNombre = `${proyecto.nombre.replace(/\s+/g, '_')}_cotizacion.pdf`;
+  const filePdf = new File([blobPdf], archivoNombre, { type: 'application/pdf' });
+
+  const documento: Document = {
+    id: crypto.randomUUID(),   // O usa uuidv4()
+    nombre: archivoNombre,
+    file: filePdf
+  };
+
+  // 5. Llama al callback para que lo maneje el padre
+  if (onAsignarCotizacion) {
+    onAsignarCotizacion(documento);
+  }
+  onClose()
+};
+
+
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
@@ -263,17 +358,28 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
         />
       </DialogContent>
       <DialogActions>
+      <Button
+        variant="outlined"
+        startIcon={<PictureAsPdfIcon />}
+        onClick={handleDownloadPdf}
+        disabled={!canDownload}
+        sx={{ mr: 1, color: 'var(--primary-color)', borderColor: '#fff' }}
+      >
+        Descargar PDF
+      </Button>
+      {onAsignarCotizacion && (
         <Button
-          variant="outlined"
-          startIcon={<PictureAsPdfIcon />}
-          onClick={handleDownloadPdf}
+          variant="contained"
+          color="primary"
+          onClick={handleAsignarPdf}
           disabled={!canDownload}
-          sx={{ mr: 1, color: 'var(--primary-color)', borderColor: '#fff' }}
         >
-          Descargar PDF
+          Asignar a seguimiento
         </Button>
-        <Button onClick={onClose}>Cerrar</Button>
-      </DialogActions>
+      )}
+      <Button onClick={onClose}>Cerrar</Button>
+    </DialogActions>
+
     </Dialog>
   );
 };

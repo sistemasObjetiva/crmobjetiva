@@ -1,7 +1,5 @@
 import React from 'react';
-import { Box, Typography, TextField, IconButton, Tooltip } from '@mui/material';
-import CloseIcon from '@mui/icons-material/Close';
-import AddCircleIcon from '@mui/icons-material/AddCircle';
+import { Box, Typography, TextField, Paper, Grid } from '@mui/material';
 import FileUploadPreview from '../general/FileUploadPreviewFiles';
 import { Proyecto, Document } from '../../config/types';
 
@@ -12,27 +10,27 @@ interface ProyectoGeneralTabProps {
 
 const ProyectoGeneralTab: React.FC<ProyectoGeneralTabProps> = ({ proyecto, setProyecto }) => {
   return (
-    <>
-      <Typography variant="body1" sx={{ mb: 2, color: 'var(--primary-color)' }}>
-        Nombre del proyecto:
+    <Paper sx={{ p: 2, borderRadius: 3 }}>
+      <Typography variant="h6" sx={{ fontWeight: 800, color: 'var(--primary-color)', mb: 2 }}>
+        Información general
       </Typography>
-      <TextField
-        fullWidth
-        value={proyecto.nombre}
-        onChange={(e) =>
-          setProyecto((prev) =>
-            prev ? { ...prev, nombre: e.target.value } : prev
-          )
-        }
-        placeholder="Nombre del proyecto"
-        sx={{ mb: 2 }}
-      />
 
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 4 }}>
-        {/* Logo del Proyecto */}
-        <Box sx={{ flex: 1, mb: 2 }}>
-          <Typography variant="body1" sx={{ color: 'var(--primary-color)', mb: 1 }}>
-            Logo del proyecto:
+      <Grid container spacing={2}>
+        <Grid item xs={12}>
+          <TextField
+            fullWidth
+            label="Nombre del proyecto"
+            value={proyecto.nombre}
+            onChange={(e) =>
+              setProyecto(prev => prev ? { ...prev, nombre: e.target.value } : prev)
+            }
+            placeholder="Ej. Torre Bosques"
+          />
+        </Grid>
+
+        <Grid item xs={12} md={6}>
+          <Typography variant="body2" sx={{ color: 'var(--primary-color)', mb: 1, fontWeight: 600 }}>
+            Logo del proyecto
           </Typography>
           <FileUploadPreview
             value={proyecto.logo ? [proyecto.logo] : []}
@@ -47,17 +45,14 @@ const ProyectoGeneralTab: React.FC<ProyectoGeneralTabProps> = ({ proyecto, setPr
                 file,
                 url: URL.createObjectURL(file),
               };
-              setProyecto((prev) =>
-                prev ? { ...prev, logo: newLogoDoc } : prev
-              );
+              setProyecto(prev => prev ? { ...prev, logo: newLogoDoc } : prev);
             }}
           />
-        </Box>
+        </Grid>
 
-        {/* Render del Proyecto */}
-        <Box sx={{ flex: 1, mb: 2 }}>
-          <Typography variant="body1" sx={{ color: 'var(--primary-color)', mb: 1 }}>
-            Render del proyecto:
+        <Grid item xs={12} md={6}>
+          <Typography variant="body2" sx={{ color: 'var(--primary-color)', mb: 1, fontWeight: 600 }}>
+            Render del proyecto
           </Typography>
           <FileUploadPreview
             value={proyecto.render ? [proyecto.render] : []}
@@ -72,75 +67,73 @@ const ProyectoGeneralTab: React.FC<ProyectoGeneralTabProps> = ({ proyecto, setPr
                 file,
                 url: URL.createObjectURL(file),
               };
-              setProyecto((prev) =>
-                prev ? { ...prev, render: newRenderDoc } : prev
-              );
+              setProyecto(prev => prev ? { ...prev, render: newRenderDoc } : prev);
             }}
           />
-        </Box>
-      </Box>
+        </Grid>
 
-      <Typography variant="body1" sx={{ mb: 2, color: 'var(--primary-color)' }}>
-        Amenidades:
-      </Typography>
-      {proyecto.amenidades.length > 0 ? (
-        proyecto.amenidades.map((amenidad, index) => (
-          <Box key={index} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-            <TextField
-              fullWidth
-              value={amenidad}
-              onChange={(e) => {
-                const value = e.target.value;
-                setProyecto((prev) => {
-                  if (!prev) return prev;
-                  const updated = [...prev.amenidades];
-                  updated[index] = value;
-                  return { ...prev, amenidades: updated };
-                });
-              }}
-              placeholder="Nueva amenidad"
-            />
-            <IconButton
-              onClick={() => {
-                setProyecto((prev) => {
-                  if (!prev) return prev;
-                  return {
+        <Grid item xs={12} mt={1}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+            Amenidades
+          </Typography>
+
+          {proyecto.amenidades.length === 0 && (
+            <Typography variant="body2" sx={{ color: 'gray', mb: 2 }}>
+              No hay amenidades agregadas.
+            </Typography>
+          )}
+
+          {proyecto.amenidades.map((amenidad, index) => (
+            <Box key={index} sx={{ display: 'flex', alignItems: 'center', mb: 1, gap: 1 }}>
+              <TextField
+                fullWidth
+                value={amenidad}
+                placeholder="Ej. Gimnasio / Alberca / Cowork / Roof Garden"
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setProyecto(prev => {
+                    if (!prev) return prev;
+                    const updated = [...prev.amenidades];
+                    updated[index] = value;
+                    return { ...prev, amenidades: updated };
+                  });
+                }}
+              />
+              <TextField
+                value="Eliminar"
+                onClick={() =>
+                  setProyecto(prev => prev ? {
                     ...prev,
-                    amenidades: prev.amenidades.filter((_, i) => i !== index),
-                  };
-                });
-              }}
-            >
-              <CloseIcon />
-            </IconButton>
-          </Box>
-        ))
-      ) : (
-        <Typography variant="body2" sx={{ color: 'gray', mb: 2 }}>
-          No hay amenidades agregadas.
-        </Typography>
-      )}
+                    amenidades: prev.amenidades.filter((_, i) => i !== index)
+                  } : prev)
+                }
+                sx={{ width: 1, display: 'none' }}
+              />
+            </Box>
+          ))}
 
-      <Box display="flex" alignItems="center" mt={1}>
-        <Tooltip title="Agregar Amenidad">
-          <IconButton
-            color="primary"
-            onClick={() =>
-              setProyecto((prev) =>
-                prev
-                  ? { ...prev, amenidades: [...prev.amenidades, ''] }
-                  : prev
-              )
-            }
-          >
-            <AddCircleIcon />
-          </IconButton>
-        </Tooltip>
-        <Typography variant="button" sx={{ ml: 1 }}>
-          Agregar Amenidad
-        </Typography>
-      </Box>
-    </>
+          <Box>
+            <Typography
+              variant="button"
+              sx={{
+                mt: 1,
+                display: 'inline-block',
+                px: 1.5,
+                py: 0.75,
+                borderRadius: 1,
+                bgcolor: 'action.hover',
+                cursor: 'pointer'
+              }}
+              onClick={() =>
+                setProyecto(prev => prev ? { ...prev, amenidades: [...prev.amenidades, ''] } : prev)
+              }
+            >
+              + Agregar amenidad
+            </Typography>
+          </Box>
+        </Grid>
+      </Grid>
+    </Paper>
   );
 };
 

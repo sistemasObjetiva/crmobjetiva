@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../config/supabase";
-import {  Document, Empresa,   } from "../config/types";
+import {  Document, Empresa, ESTATUS_OPCIONES,   } from "../config/types";
+import { Chip } from "@mui/material";
 
 
 export const getRandomInt = (max: number): number => {
@@ -139,71 +140,25 @@ export function findEmpresaIdByName(
 
 export const getEmpresa = (companyId: string,contratistas:Empresa[]) =>
     contratistas.find(c => c.id === companyId)?.nombre || '—';
-/**
- * Mapea la estructura anidada de la respuesta del endpoint a un Partial<Contrato>.
- * Incluye fianzas, montos e importes.
- */
-/*export function mapApiToContrato(
-  data: any,
-  contratistas: { id: string; nombreLegal: string }[]
-): Partial<Contrato> {
-  // Desestructurar con valores por defecto
-  const {
-    contratista = '',
-    concepto = '',
-    iva: { tipo: tipoiva = '', monto: ivainicial = 0 } = {},
-    montos: { f: subtotalinicial = 0, totalConIva: totalinicial = 0 } = {},
-    porcentajes: { anticipo: pctAnt = 0, fondoGarantia: pctFondo = 0, retenciones: pctRet = 0 } = {},
-    importes: { anticipo: importeanticipo = 0, fondoGarantia: importefondogarantia = 0, retenciones: importeretenciones = 0 } = {},
-    fechas: { inicio = '', fin = '' } = {},
-    fianzas: {
-      cumplimiento: { numero: numCum = '', fecha: fecCum = '' } = {},
-      anticipo:     { numero: numAnt = '', fecha: fecAnt = '' } = {},
-      viciosOcultos:{ numero: numVic = '', fecha: fecVic = '' } = {},
-      pasivosContingentes:{ numero: numPas = '', fecha: fecPas = '' } = {}
-    } = {},
-    nuevosMontos: { subtotal: newSub = 0, iva: newIva = 0, total: newTot = 0, anticipo: newAnt = 0, fondo: newFondo = 0 } = {}
-  } = data;
-
-  // Construir fianzas
-  const fianzaCum: Fianza = { numero: numCum, fecha: parseDateDMY(fecCum), file: [] };
-  const fianzaAnt: Fianza = { numero: numAnt, fecha: parseDateDMY(fecAnt), file: [] };
-  const fianzaVic: Fianza = { numero: numVic, fecha: parseDateDMY(fecVic), file: [] };
-  const fianzaPas: Fianza = { numero: numPas, fecha: parseDateDMY(fecPas), file: [] };
-
-  return {
-    // IDs y metadatos
-    empresaid: findEmpresaIdByName(contratista, contratistas),
-    concepto,
-    // Fechas principales
-    fechainicio: parseDateDMY(inicio),
-    fechafin:   parseDateDMY(fin),
-    fechaactualizacion: new Date().toISOString(),
-    // IVA y montos iniciales
-    tipoiva,
-    subtotalinicial,
-    ivainicial,
-    totalinicial,
-    // Porcentajes (convertidos a decimal)
-    poranticipo: pctAnt / 100,
-    porfondogarantia: pctFondo / 100,
-    porretenciones: pctRet / 100,
-    // Importes fijos
-    importeanticipo,
-    importefondogarantia,
-    importeretenciones,
-    // Montos nuevos después de aditivas/deductivas
-    subtotal: newSub,
-    iva: newIva,
-    total: newTot,
-    // Fianzas
-    fianzacomplimiento: fianzaCum,
-    fianzaanticipo:     fianzaAnt,
-    fianzavicios:       fianzaVic,
-    fianzapasivos:      fianzaPas,
-    // Inicializar arrays vacíos
-    referencias: [],
-    cambioscontrato: [] as CambioContrato[],
-    presupuestocontrato: [] as PresupuestoContrato[],
-  };
-}*/
+export const getEstatusChip = (estatus: string) => {
+  const found = ESTATUS_OPCIONES.find(e => e.value === estatus);
+  return found ? (
+    <Chip
+      label={found.label}
+      size="small"
+      sx={{
+        bgcolor: found.color,
+        color: "#fff",
+        fontWeight: 700,
+        fontSize: 13,
+        px: 1.5,
+        height: 26,
+        borderRadius: 1.5,
+        letterSpacing: 1,
+        border: 'none',
+      }}
+    />
+  ) : (
+    <Chip label={estatus} size="small"/>
+  );
+};

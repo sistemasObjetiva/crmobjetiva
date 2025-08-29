@@ -23,7 +23,7 @@ export interface Document {
 export const ROLES = {
   Usuario:   { tipo: 'Usuario', jerarquia: 3 },
   Gerente:      { tipo: 'Gerente', jerarquia: 2 },
-  GerenteGeneral:   { tipo: 'GerenteGeneral', jerarquia: 1 },
+  GerenteGeneral:   { tipo: 'GerenteGeneral', jerarquia: 0 },
   Plataforma:    { tipo: 'Plataforma', jerarquia: 0 }, 
 } as const;
 
@@ -48,6 +48,18 @@ export interface Empresa {
   correocontacto?: string;  
   telefono?: string;
 }
+export type StackingNode = {
+  id: string; // unidad.id
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+};
+
+export type StackingState = {
+  zoom: number;
+  nodes: StackingNode[];
+};
 
 export interface Proyecto {
   id: string;
@@ -62,6 +74,7 @@ export interface Proyecto {
   paymentPlans: PlanPago[];
   fechaEntrega:string;
   estatus?: 'activo' | 'inactivo';
+  stacking?: StackingState;
 }
 export interface Unidad {
   id:string;
@@ -159,9 +172,38 @@ export const ESTATUS_LIST = [
   'visita',
   'posible',
   'apartado',
-  'vendido'
+  'vendido',
+  'descartado'
 ] as const;
-
+// NUEVOS ESTATUS EN ESPAÑOL Y SUS COLORES
+export const ESTATUS_OPCIONES = [
+  { value: 'contactado', label: 'Contactado', color: 'info.main' },
+  { value: 'interaccion', label: 'Interacción', color: 'primary.main' },
+  { value: 'cotizacion', label: 'Cotización', color: 'secondary.main' },
+  { value: 'visita', label: 'Visita', color: 'success.main' },
+  { value: 'posible', label: 'Posible', color: 'warning.main' },
+  { value: 'apartado', label: 'Apartado', color: 'purple.main' },
+  { value: 'vendido', label: 'Vendido', color: 'grey.500' },
+  { value: 'descartado', label: 'Descartado', color: 'grey.900' },
+];
+export const MOTIVOS_DESCARTE = [
+  "Compra otro lugar",
+  "Entrega Inmediata",
+  "Etapa",
+  "Giro",
+  "Mystery Shopper",
+  "No contesta",
+  "Ofrece Servicios",
+  "Precio",
+  "Renta",
+  "Spam",
+  "Tamaño",
+  "Zona"
+]
+export const MOTIVOS_INTERACCION = [
+  "Asesor",
+  "Seguimiento",
+]
 // Ahora, extrae el tipo union de ese array:
 export type EstatusSeguimiento = typeof ESTATUS_LIST[number];
 
@@ -180,7 +222,9 @@ export interface Seguimiento {
   proyectoInteres: string;
   capacidadDePago: string;
   estatusSeguimiento: EstatusSeguimiento;
+  motivo?: string[];
   historialSeguimiento: SeguimientoHistorial[];
+  pdfCotizaciones?:Document[]
 }
 
    export interface SeguimientoHistorial {
@@ -197,4 +241,12 @@ export interface Seguimiento {
     proyectoInteres: string;
     capacidadDePago: string;
     estatusSeguimiento: EstatusSeguimiento;
+    pdfCotizaciones?:Document[]
+
   }
+
+
+  export  type CotizadorOption =
+  | (Propiedad & { tipo: 'propiedad' })
+  | (Unidad & { proyectoObj: Proyecto; tipo: 'unidad' })
+  | (Proyecto & { proyectoObj: Proyecto; tipo: 'proyecto' });

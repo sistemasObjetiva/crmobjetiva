@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../node_modules/@mui/icons-material/GavelOutlined.js"],
+  "sourcesContent": ["\"use strict\";\n\"use client\";\n\nvar _interopRequireDefault = require(\"@babel/runtime/helpers/interopRequireDefault\");\nObject.defineProperty(exports, \"__esModule\", {\n  value: true\n});\nexports.default = void 0;\nvar _createSvgIcon = _interopRequireDefault(require(\"./utils/createSvgIcon\"));\nvar _jsxRuntime = require(\"react/jsx-runtime\");\nvar _default = exports.default = (0, _createSvgIcon.default)( /*#__PURE__*/(0, _jsxRuntime.jsx)(\"path\", {\n  d: \"M1 21h12v2H1zM5.24 8.07l2.83-2.83 14.14 14.14-2.83 2.83zM12.32 1l5.66 5.66-2.83 2.83-5.66-5.66zM3.83 9.48l5.66 5.66-2.83 2.83L1 12.31z\"\n}), 'GavelOutlined');"],
+  "mappings": ";;;;;;;;;;;;;;AAAA;AAAA;AAGA,QAAI,yBAAyB;AAC7B,WAAO,eAAe,SAAS,cAAc;AAAA,MAC3C,OAAO;AAAA,IACT,CAAC;AACD,YAAQ,UAAU;AAClB,QAAI,iBAAiB,uBAAuB,uBAAgC;AAC5E,QAAI,cAAc;AAClB,QAAI,WAAW,QAAQ,WAAW,GAAG,eAAe,UAAwB,GAAG,YAAY,KAAK,QAAQ;AAAA,MACtG,GAAG;AAAA,IACL,CAAC,GAAG,eAAe;AAAA;AAAA;",
+  "names": []
+}

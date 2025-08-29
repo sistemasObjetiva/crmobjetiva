@@ -21,7 +21,8 @@ import { Proyecto, Unidad } from '../../config/types'
 import SignedAvatar from '../general/SignedAvatar'
 import SignedImage from '../general/SignedImage'
 import SignedImageCarousel from '../general/SinedImageCarousel'
-import VisibilityIcon from '@mui/icons-material/Visibility';
+import VisibilityIcon from '@mui/icons-material/Visibility'
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
 import { formatoMoneda } from '../../hooks/useUtilsFunctions'
 
 interface ProyectoViewModalProps {
@@ -29,7 +30,18 @@ interface ProyectoViewModalProps {
   onClose: () => void
   proyecto: Proyecto | null
   onCotizarUnidad: (unidad: Unidad, proyecto: Proyecto) => void
+}
 
+/** Mismas reglas/colores que en la Card */
+function unidadChipProps(raw?: string): { label: 'Disponible' | 'Apartado' | 'Vendido'; color: 'success' | 'info' | 'warning' } {
+  const s = (raw ?? '').trim().toLowerCase()
+  if (s === 'disponible') return { label: 'Disponible', color: 'success' }
+  if (s === 'apartado')   return { label: 'Apartado',   color: 'info' }
+  return { label: 'Vendido', color: 'warning' }
+}
+function ocultarPrecioPorEstatus(raw?: string): boolean {
+  const { label } = unidadChipProps(raw)
+  return label === 'Vendido' || label === 'Apartado'
 }
 
 const ProyectoViewModal: React.FC<ProyectoViewModalProps> = ({
@@ -48,14 +60,11 @@ const ProyectoViewModal: React.FC<ProyectoViewModalProps> = ({
     { label: 'Unidades', value: proyecto.unidades?.length ?? 0 },
     { label: 'Planes de pago', value: proyecto.paymentPlans?.length ?? 0 },
   ]
-const maxMeses = Math.max(...proyecto.paymentPlans.map(p => p.months));
+
+  const maxMeses = Math.max(0, ...proyecto.paymentPlans.map(p => p.months || 0))
+
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      aria-labelledby="modal-proyecto-view"
-      aria-describedby="modal-proyecto-view-content"
-    >
+    <Modal open={open} onClose={onClose} aria-labelledby="modal-proyecto-view" aria-describedby="modal-proyecto-view-content">
       <Box
         sx={{
           position: 'absolute',
@@ -72,57 +81,53 @@ const maxMeses = Math.max(...proyecto.paymentPlans.map(p => p.months));
           overflow: 'auto',
         }}
       >
-        <IconButton
-          onClick={onClose}
-          sx={{ position: 'absolute', top: 12, right: 12 }}
-        >
+        <IconButton onClick={onClose} sx={{ position: 'absolute', top: 12, right: 12 }}>
           <CloseIcon />
         </IconButton>
 
-        {/* Logo y/o Render arriba, si existen */}
+        {/* Encabezado con logo/render */}
         <Box
-            sx={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 3,
-                mb: 2,
-                flexWrap: 'wrap', // Si tienes poco espacio se apilan vertical
-                minHeight: 88
-            }}
-            >
-            {proyecto.logo && (
-                <SignedAvatar
-                value={proyecto.logo}
-                alt="logo"
-                sx={{
-                    width: { xs: 60, sm: 70, md: 80 },
-                    height: { xs: 60, sm: 70, md: 80 },
-                    border: '2px solid #eee',
-                    boxShadow: 1,
-                    background: '#fff'
-                }}
-                />
-            )}
-            {proyecto.render && (
-                <SignedImage
-                path={proyecto.render.path!}
-                bucket={proyecto.render.bucket!}
-                alt="render"
-                sx={{
-                    width: { xs: 110, sm: 140, md: 180 },
-                    height: { xs: 74, sm: 90, md: 110 },
-                    borderRadius: 3,
-                    border: '2px solid #eee',
-                    boxShadow: 1,
-                    objectFit: 'cover',
-                    background: '#fff',
-                    ml: proyecto.logo ? 2 : 0
-                }}
-                />
-            )}
-            </Box>
-
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 3,
+            mb: 2,
+            flexWrap: 'wrap',
+            minHeight: 88
+          }}
+        >
+          {proyecto.logo && (
+            <SignedAvatar
+              value={proyecto.logo}
+              alt="logo"
+              sx={{
+                width: { xs: 60, sm: 70, md: 80 },
+                height: { xs: 60, sm: 70, md: 80 },
+                border: '2px solid #eee',
+                boxShadow: 1,
+                background: '#fff'
+              }}
+            />
+          )}
+          {proyecto.render && (
+            <SignedImage
+              path={proyecto.render.path!}
+              bucket={proyecto.render.bucket!}
+              alt="render"
+              sx={{
+                width: { xs: 110, sm: 140, md: 180 },
+                height: { xs: 74, sm: 90, md: 110 },
+                borderRadius: 3,
+                border: '2px solid #eee',
+                boxShadow: 1,
+                objectFit: 'cover',
+                background: '#fff',
+                ml: proyecto.logo ? 2 : 0
+              }}
+            />
+          )}
+        </Box>
 
         <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'var(--primary-color)', mb: 2, textAlign: 'center' }}>
           {proyecto.nombre}
@@ -152,7 +157,6 @@ const maxMeses = Math.max(...proyecto.paymentPlans.map(p => p.months));
           )}
         </Grid>
 
-        {/* Descripción larga */}
         {proyecto.descripcion && (
           <>
             <Divider sx={{ my: 2 }} />
@@ -165,34 +169,19 @@ const maxMeses = Math.max(...proyecto.paymentPlans.map(p => p.months));
           </>
         )}
 
+        {proyecto.imagenesProyecto && proyecto.imagenesProyecto.length > 0 && (
+          <>
+            <Divider sx={{ my: 2 }} />
+            <Typography variant="subtitle1" sx={{ color: 'var(--primary-color)', fontWeight: 500, mb: 1 }}>
+              Imágenes del Proyecto
+            </Typography>
+            <Box sx={{ mb: 2, width: '100%', maxWidth: 380, mx: 'auto', display: 'flex', justifyContent: 'center' }}>
+              <SignedImageCarousel items={Array.isArray(proyecto.imagenesProyecto) ? proyecto.imagenesProyecto : []} width="100%" height={180} />
+            </Box>
+          </>
+        )}
 
-          {proyecto.imagenesProyecto && proyecto.imagenesProyecto.length > 0 && (
-            <>
-              <Divider sx={{ my: 2 }} />
-              <Typography variant="subtitle1" sx={{ color: 'var(--primary-color)', fontWeight: 500, mb: 1 }}>
-                Imágenes del Proyecto
-              </Typography>
-              <Box
-                sx={{
-                  mb: 2,
-                  width: '100%',
-                  maxWidth: 380,
-                  mx: 'auto',
-                  display: 'flex',
-                  justifyContent: 'center',
-                }}
-              >
-                <SignedImageCarousel
-                  items={Array.isArray(proyecto.imagenesProyecto) ? proyecto.imagenesProyecto : []}
-                  width="100%"
-                  height={180}
-                />
-              </Box>
-            </>
-          )}
-
-
-        {/* Unidades resumen */}
+        {/* Unidades */}
         {proyecto.unidades && proyecto.unidades.length > 0 && (
           <>
             <Divider sx={{ my: 2 }} />
@@ -206,47 +195,50 @@ const maxMeses = Math.max(...proyecto.paymentPlans.map(p => p.months));
                   <TableCell>Privativa</TableCell>
                   <TableCell>Precio lista</TableCell>
                   <TableCell>Estatus</TableCell>
-                   <TableCell align="center"></TableCell> 
+                  <TableCell align="center"></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {proyecto.unidades.map((u, idx) => (
-                  <TableRow key={u.id || idx}>
-                    <TableCell>{u.numerounidad}</TableCell>
-                    <TableCell>{u.unidadprivativa}</TableCell>
-                    <TableCell>{formatoMoneda(u.preciolista)}</TableCell>
-                    <TableCell>
-                      <Chip
-                        size="small"
-                        label={u.estatus}
-                        color={
-                          u.estatus === 'vendido'
-                            ? 'error'
-                            : u.estatus === 'apartado'
-                            ? 'warning'
-                            : 'success'
-                        }
-                      />
-                    </TableCell>
-                    <TableCell align="center">
-                      <IconButton
-                        color="info"
-                        onClick={() => onCotizarUnidad(u, proyecto)}
-                      >
-                        <VisibilityIcon />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {proyecto.unidades.map((u, idx) => {
+                  const chip = unidadChipProps(u.estatus)
+                  const hidePrice = ocultarPrecioPorEstatus(u.estatus)
+                  return (
+                    <TableRow key={u.id || idx}>
+                      <TableCell>{u.numerounidad}</TableCell>
+                      <TableCell>{u.unidadprivativa}</TableCell>
+                      <TableCell>
+                        {hidePrice ? (
+                          <Typography variant="caption" color="text.secondary">-</Typography>
+                        ) : (
+                          formatoMoneda(u.preciolista)
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Chip size="small" label={chip.label} color={chip.color} />
+                      </TableCell>
+                      <TableCell align="center">
+                        <IconButton
+                          color="info"
+                          onClick={() => chip.label !== 'Vendido' && onCotizarUnidad(u, proyecto)}
+                          disabled={chip.label === 'Vendido'}
+                        >
+                          {chip.label === 'Vendido' ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
           </>
         )}
+
         <Divider sx={{ my: 2 }} />
-            <Typography variant="h6" sx={{ color: 'var(--primary-color)', fontWeight: 600, mb: 2 }}>
-              Planes de Pago
-            </Typography>
-         <TableContainer component={Paper} sx={{ mb: 2 }}>
+        <Typography variant="h6" sx={{ color: 'var(--primary-color)', fontWeight: 600, mb: 2 }}>
+          Planes de Pago
+        </Typography>
+
+        <TableContainer component={Paper} sx={{ mb: 2 }}>
           <Table size="small">
             <TableHead>
               <TableRow>
@@ -257,7 +249,6 @@ const maxMeses = Math.max(...proyecto.paymentPlans.map(p => p.months));
               </TableRow>
             </TableHead>
             <TableBody>
-              {/* Fila de pago inicial */}
               <TableRow>
                 <TableCell sx={{ fontWeight: 600 }}>Pago inicial</TableCell>
                 {proyecto.paymentPlans.map((plan, idx) => (
@@ -267,22 +258,20 @@ const maxMeses = Math.max(...proyecto.paymentPlans.map(p => p.months));
                 ))}
               </TableRow>
 
-              {/* Renglones para cada mes */}
               {Array.from({ length: maxMeses }).map((_, rowIdx) => (
                 <TableRow key={rowIdx}>
                   <TableCell sx={{ fontWeight: 600 }}>{`Mes ${rowIdx + 1}`}</TableCell>
                   {proyecto.paymentPlans.map((plan, colIdx) => {
-                    const parcialidad = plan.parcialidades.find(p => p.month === rowIdx + 1);
+                    const parcialidad = plan.parcialidades.find(p => p.month === rowIdx + 1)
                     return (
                       <TableCell key={colIdx} align="right">
                         {parcialidad ? `%${parcialidad.value.toLocaleString()}` : '-'}
                       </TableCell>
-                    );
+                    )
                   })}
                 </TableRow>
               ))}
 
-              {/* Fila de contraentrega */}
               <TableRow>
                 <TableCell sx={{ fontWeight: 600 }}>Contraentrega</TableCell>
                 {proyecto.paymentPlans.map((plan, idx) => (
@@ -294,10 +283,6 @@ const maxMeses = Math.max(...proyecto.paymentPlans.map(p => p.months));
             </TableBody>
           </Table>
         </TableContainer>
-
-        {/* Planes de pago */}
-        {/* Puedes agregar aquí una tabla o resumen para paymentPlans si quieres */}
-
       </Box>
     </Modal>
   )

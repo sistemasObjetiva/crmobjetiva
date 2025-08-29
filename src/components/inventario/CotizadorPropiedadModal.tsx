@@ -5,65 +5,107 @@ import {
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import SignedImageCarousel from '../general/SinedImageCarousel'
-import { Propiedad } from '../../config/types'
+import { Propiedad, Document } from '../../config/types'
 import { pdf } from '@react-pdf/renderer';
 import { getSignedUrl, blobToDataURL } from '../../hooks/useUtilsFunctions';
 import CotizacionPropiedadPDF from './CotizadorPropiedadPDF'
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
+
 interface CotizadorPropiedadModalProps {
   propiedad: Propiedad
   open: boolean
   onClose: () => void
+  onAsignarCotizacion?: (doc: Document) => void
 }
 
 const CotizadorPropiedadModal: React.FC<CotizadorPropiedadModalProps> = ({
   propiedad,
   open,
   onClose,
+  onAsignarCotizacion,
 }) => {
   // Cálculo de comisiones
   const venta = propiedad.venta && propiedad.precioVenta ? Number(propiedad.precioVenta) : null
   const renta = propiedad.renta && propiedad.precioRenta ? Number(propiedad.precioRenta) : null
   const comisionVenta = venta && propiedad.comisionVenta ? venta * (Number(propiedad.comisionVenta) / 100) : null
   const comisionRenta = renta && propiedad.comisionRenta ? renta * (Number(propiedad.comisionRenta) / 100) : null
-const handleDownloadPdf = async () => {
-  // 1️⃣ Firmar URLs de Supabase para cada imagen de la propiedad
-  const imagenesSigned = await Promise.all(
-    (propiedad.imagenes || []).map(img =>
-      img.path
-        ? getSignedUrl(img.path, img.bucket!)
-        : Promise.resolve(null)
-    )
-  );
 
-  // 2️⃣ Filtrar sólo las URLs no nulas y traer blobs → Base64
-  const imagenesBase = await Promise.all(
-    imagenesSigned
-      .filter((url): url is string => Boolean(url))
-      .map(async url => {
-        const resp = await fetch(url);
-        const blob = await resp.blob();
-        return blobToDataURL(blob);
-      })
-  );
+  // Descargar PDF
+  const handleDownloadPdf = async () => {
+    const imagenesSigned = await Promise.all(
+      (propiedad.imagenes || []).map(img =>
+        img.path
+          ? getSignedUrl(img.path, img.bucket!)
+          : Promise.resolve(null)
+      )
+    );
 
-  // 3️⃣ Renderizar el PDF y descargarlo
-  const blobPdf = await pdf(
-    <CotizacionPropiedadPDF
-      propiedad={propiedad}
-      imagenesBase={imagenesBase}
-    />
-  ).toBlob();
+    const imagenesBase = await Promise.all(
+      imagenesSigned
+        .filter((url): url is string => Boolean(url))
+        .map(async url => {
+          const resp = await fetch(url);
+          const blob = await resp.blob();
+          return blobToDataURL(blob);
+        })
+    );
 
-  const pdfUrl = URL.createObjectURL(blobPdf);
-  const a = document.createElement('a');
-  a.href = pdfUrl;
-  a.download = `${propiedad.tituloPropiedad.replace(/\s+/g, '_')}_cotizacion.pdf`;
-  a.click();
-  URL.revokeObjectURL(pdfUrl);
-};
+    const blobPdf = await pdf(
+      <CotizacionPropiedadPDF
+        propiedad={propiedad}
+        imagenesBase={imagenesBase}
+      />
+    ).toBlob();
 
+    const pdfUrl = URL.createObjectURL(blobPdf);
+    const a = document.createElement('a');
+    a.href = pdfUrl;
+    a.download = `${propiedad.tituloPropiedad.replace(/\s+/g, '_')}_cotizacion.pdf`;
+    a.click();
+    URL.revokeObjectURL(pdfUrl);
+  };
 
+  // Asignar PDF a seguimiento como Document
+  const handleAsignarPdf = async () => {
+    const imagenesSigned = await Promise.all(
+      (propiedad.imagenes || []).map(img =>
+        img.path
+          ? getSignedUrl(img.path, img.bucket!)
+          : Promise.resolve(null)
+      )
+    );
+
+    const imagenesBase = await Promise.all(
+      imagenesSigned
+        .filter((url): url is string => Boolean(url))
+        .map(async url => {
+          const resp = await fetch(url);
+          const blob = await resp.blob();
+          return blobToDataURL(blob);
+        })
+    );
+
+    const blobPdf = await pdf(
+      <CotizacionPropiedadPDF
+        propiedad={propiedad}
+        imagenesBase={imagenesBase}
+      />
+    ).toBlob();
+
+    const archivoNombre = `${propiedad.tituloPropiedad.replace(/\s+/g, '_')}_cotizacion.pdf`;
+    const filePdf = new File([blobPdf], archivoNombre, { type: 'application/pdf' });
+
+    const documento: Document = {
+      id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
+      nombre: archivoNombre,
+      file: filePdf
+    };
+
+    if (onAsignarCotizacion) {
+      onAsignarCotizacion(documento);
+    }
+    onClose()
+  };
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
       {/* HEADER */}
@@ -98,13 +140,12 @@ const handleDownloadPdf = async () => {
         <Stack direction="row" spacing={1} mb={2} alignItems="center" justifyContent="center">
           <Chip label={propiedad.estatus.charAt(0).toUpperCase() + propiedad.estatus.slice(1)} color={
             propiedad.estatus === 'vendido' ? 'error' : propiedad.estatus === 'apartado' ? 'warning' : 'success'
-          }/>
+          } />
           {propiedad.venta && <Chip label="Venta" color="primary" />}
           {propiedad.renta && <Chip label="Renta" color="info" />}
           {propiedad.exclusividad && <Chip label="Exclusividad" color="secondary" />}
         </Stack>
 
-        {/* Datos principales */}
         <Box sx={{
           p: 2, borderRadius: 2, background: "#f5f5f5", boxShadow: 1, mb: 3
         }}>
@@ -178,16 +219,25 @@ const handleDownloadPdf = async () => {
         </Box>
       </DialogContent>
       <DialogActions>
+        <Button
+          variant="outlined"
+          startIcon={<PictureAsPdfIcon />}
+          onClick={handleDownloadPdf}
+          sx={{ color: 'var(--primary-color)', borderColor: 'var(--secondary-color)' }}
+        >
+          Descargar PDF
+        </Button>
+        {onAsignarCotizacion && (
           <Button
-              variant="outlined"
-              startIcon={<PictureAsPdfIcon />}
-              onClick={handleDownloadPdf}
-              sx={{ color: 'var(--primary-color)', borderColor: 'var(--secondary-color)' }}
-            >
-              Descargar PDF
-            </Button>
+            variant="contained"
+            color="primary"
+            startIcon={<PictureAsPdfIcon />}
+            onClick={handleAsignarPdf}
+          >
+            Asignar a seguimiento
+          </Button>
+        )}
         <Button onClick={onClose}>Cerrar</Button>
-        {/* Aquí podrías agregar "Descargar PDF", "Enviar cotización", etc. */}
       </DialogActions>
     </Dialog>
   )

@@ -49,56 +49,50 @@ export function useFetchUsuarios() {
   return { usuarios, loading, error, fetchUsuarios };
 }
 
-
 export const actualizarUsuario = async (usuario: User): Promise<void> => {
-  const { id, email,  telefono, role,  nombre,empresaid,estatus} = usuario;
-  
+  const { id, email, telefono, role, nombre, empresaid, estatus } = usuario;
+  console.log(usuario,"se intenta subir usuario")
 
   try {
     let userId = id;
-    if (!userId) {
-      const res = await fetch(
-        `${API_BASE}/nupsert-user/${projectId}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email }),
-        }
-      );
+
+      const res = await fetch(`${API_BASE}/newupsert-user/${projectId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password: "Temp123!", nombre }),
+      });
 
       if (!res.ok) {
         let msg = `Error ${res.status}`;
-        try {
-          const err = await res.json();
-          msg = err.error || msg;
-        } catch {}
+        try { msg = (await res.json()).error || msg; } catch {}
         throw new Error(msg);
       }
 
-      const data: { userId: string; created: boolean } = await res.json();
-      console.log("Server respondió:", data);
-      userId = data.userId;
-    }
+      const data = await res.json(); // 👈 IMPORTANTE
+      userId = data.userId;          // 👈 Aquí viene el id de Auth
+      if (!userId) throw new Error("No se recibió userId desde el server");
+    
+
     const payload: User = {
-      id:          userId,
-      email,
+      id: userId,
+      email: email.toLowerCase().trim(),
       telefono,
-      role,
-      nombre,
+      role,            // si tu columna es TEXT, guarda 'Usuario' en lugar del objeto
+      nombre: nombre?.trim() ?? "",
       empresaid,
       estatus,
     };
 
-    const { error } = await supabase
-      .from("users")
-      .upsert([payload], { onConflict: "id" });
-
+    const { error } = await supabase.from("users").upsert([payload], { onConflict: "id" });
     if (error) throw error;
 
   } catch (err: any) {
     console.error("❌ Error en actualizarUsuario:", err.message);
+    throw err;
   }
 };
+
+
 export const eliminarUsuario = async (
   userId: string
 ): Promise<void> => {
@@ -174,53 +168,74 @@ export const useFetchProyects = () => {
 export async function actualizarProyecto(
   proyecto: Proyecto
 ): Promise<Proyecto> {
-  const storage = supabase.storage.from('proyectos')
-  const uploaded: string[] = []
+  const storage = supabase.storage.from('proyectos');
+  const uploaded: string[] = [];
 
   function normalizeFileName(name: string): string {
-    // Personaliza si quieres, pero así es seguro para storage
-    return name.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    return name
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
       .replace(/[^a-zA-Z0-9_.-]/g, '_')
       .replace(/_+/g, '_')
-      .toLowerCase()
+      .toLowerCase();
   }
 
-  async function uploadDoc(doc?: Document, carpeta: string = ''): Promise<Document | undefined> {
-    if (!doc) return undefined
+  async function uploadDoc(
+    doc?: Document,
+    carpeta: string = ''
+  ): Promise<Document | undefined> {
+    if (!doc) return undefined;
+
+    // Si el doc NO trae File, asumimos que ya está subido. Lo preservamos.
     if (!doc.file) {
-      const { file, ...rest } = doc
-      return Object.keys(rest).length ? (rest as Document) : undefined
+      const { file, ...rest } = doc as any;
+      return Object.keys(rest).length ? (rest as Document) : undefined;
     }
-    const safeName = normalizeFileName(doc.file.name)
-    const path = `${proyecto.id}/${carpeta}${carpeta ? '/' : ''}${safeName}`
 
-    // Elimina versión anterior y sube la nueva
-    await storage.remove([path]).catch(() => {})
-    const { error: upErr } = await storage.upload(path, doc.file, { upsert: true })
-    if (upErr) throw upErr
-    uploaded.push(path)
-    return { id: path, nombre: doc.file.name, url: path, path, bucket: 'proyectos' }
+    // Sube el archivo y devuelve un Document "persistible"
+    const safeName = normalizeFileName(doc.file.name);
+    const path = `${proyecto.id}/${carpeta}${carpeta ? '/' : ''}${safeName}`;
+
+    // Intento de limpieza de versión previa (por si re-suben el mismo nombre)
+    await storage.remove([path]).catch(() => {});
+    const { error: upErr } = await storage.upload(path, doc.file, { upsert: true });
+    if (upErr) throw upErr;
+
+    uploaded.push(path);
+    return {
+      id: path,
+      nombre: doc.file.name,
+      url: path,
+      path,
+      bucket: 'proyectos',
+    };
   }
 
-  // 1. Procesa imágenes de proyecto
-  const uploadedLogo = proyecto.logo ? await uploadDoc(proyecto.logo, 'logo') : null;
-  const uploadedRender = proyecto.render ? await uploadDoc(proyecto.render, 'render') : null;
+  // 1) Procesa imágenes de proyecto (logo/render)
+  const uploadedLogo = proyecto.logo ? await uploadDoc(proyecto.logo, 'logo') : undefined;
+  const uploadedRender = proyecto.render ? await uploadDoc(proyecto.render, 'render') : undefined;
 
-  // 2. Procesa las unidades
+  // 2) Procesa cada Unidad (render / isometrico / plano / imagenes[])
   async function processUnidad(uni: Unidad): Promise<Unidad> {
-    // Render, isometrico, plano
-    const render = uni.render ? await uploadDoc(uni.render, `unidades/${uni.id}/render`) : undefined
-    const isometrico = uni.isometrico ? await uploadDoc(uni.isometrico, `unidades/${uni.id}/isometrico`) : undefined
-    const plano = uni.plano ? await uploadDoc(uni.plano, `unidades/${uni.id}/plano`) : undefined
+    const render = uni.render
+      ? await uploadDoc(uni.render, `unidades/${uni.id}/render`)
+      : undefined;
 
-    // Imagenes (galería)
-    let imagenes: Document[] = []
+    const isometrico = uni.isometrico
+      ? await uploadDoc(uni.isometrico, `unidades/${uni.id}/isometrico`)
+      : undefined;
+
+    const plano = uni.plano
+      ? await uploadDoc(uni.plano, `unidades/${uni.id}/plano`)
+      : undefined;
+
+    let imagenes: Document[] = [];
     if (Array.isArray(uni.imagenes)) {
       imagenes = await Promise.all(
-        uni.imagenes.map(async (img, _) => 
+        uni.imagenes.map(async (img) =>
           img ? await uploadDoc(img, `unidades/${uni.id}/imagenes`) : null
         )
-      ).then(arr => arr.filter((d): d is Document => !!d))
+      ).then((arr) => arr.filter((d): d is Document => !!d));
     }
 
     return {
@@ -228,36 +243,47 @@ export async function actualizarProyecto(
       render,
       isometrico,
       plano,
-      imagenes
-    }
+      imagenes,
+    };
   }
 
   const unidadesProcesadas = await Promise.all(
     (proyecto.unidades || []).map(processUnidad)
-  )
+  );
 
-  // 3. Prepara el nuevo payload del proyecto
+  // 3) Arma el payload final, preservando el stacking recibido
   const payload: Proyecto = {
     ...proyecto,
-    logo: uploadedLogo as Document | undefined,
-    render: uploadedRender as Document | undefined,
-    unidades: unidadesProcesadas
-  }
+    logo: uploadedLogo,
+    render: uploadedRender,
+    unidades: unidadesProcesadas,
+    // Muy importante: incluir stacking para guardar {zoom, nodes}
+    stacking: proyecto.stacking ?? undefined,
+  };
 
-  // 4. Sube el proyecto
+  // 4) UPSERT en Supabase
   try {
     const { data, error } = await supabase
       .from('proyectos')
       .upsert(payload, { onConflict: 'id' })
       .select()
-    if (error) throw error
-    return data![0]
+      .single(); // devuelve un solo registro
+
+    if (error) throw error;
+    return data as Proyecto;
   } catch (err) {
-    // En caso de fallo, limpia todo lo subido
-    if (uploaded.length) await storage.remove(uploaded).catch(() => {})
-    throw err
+    // En caso de error, revertimos lo que alcanzó a subirse al storage
+    if (uploaded.length) {
+      try {
+        await storage.remove(uploaded);
+      } catch {
+        /* no-op */
+      }
+    }
+    throw err;
   }
 }
+
 
 export async function eliminarProyecto(proyecto: Proyecto): Promise<void> {
   const storage = supabase.storage.from('proyectos')
@@ -505,7 +531,7 @@ export const useFetchProspectos = () => {
 
   return { prospectos, loading, error, fetch };
 };
-export const useFetchProspectosUser = (userid: string) => {
+export const useFetchProspectosUser = (userid: string) => {console.log(userid)
   const [prospectos, setProspectos] = useState<Prospecto[]>([])
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<string | null>(null)

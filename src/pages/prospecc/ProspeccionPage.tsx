@@ -11,7 +11,7 @@ import ContainerSeguimientos from '../../components/prospecc/ContainerSeguimient
 import ResumenSeguimientosTab from '../../components/prospecc/ResumenSeguimientoTab'
 
 const ProspeccionPage: React.FC = () => {
-  const { user, loading } = useAuthRole()
+  const { user, loading,roleObject } = useAuthRole()
   const [tab, setTab] = useState(0)
 
   // Si aún está cargando o no hay usuario, muestra spinner (previene errores)
@@ -38,13 +38,13 @@ const ProspeccionPage: React.FC = () => {
 
       {/* Contenido de los tabs */}
       {tab === 0 && (
-        <ResumenSeguimientosTab userid={userid} />
+        <ResumenSeguimientosTab userid={userid} userRole={roleObject!.tipo!} />
       )}
       {tab === 1 && (
-        <ContainerProspectos userid={userid} />
+        <ContainerProspectos userid={userid} userRole={roleObject!.tipo!} />
       )}
       {tab === 2 && (
-        <ContainerSeguimientos userid={userid} />
+        <ContainerSeguimientos userid={userid}  userRole={roleObject!.tipo!}/>
       )}
     </Box>
   )

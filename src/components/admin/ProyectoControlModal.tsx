@@ -21,6 +21,7 @@ import ProyectoUnidadesTab from './ProyectoUnidadesTab';
 import ProyectoPlanesPagoTab from './ProyectoPlanesPAgoTabs';
 import { eliminarProyecto } from '../../hooks/useFetchFunctions';
 import { useStatusChip } from '../../config/context/useStatusChip';
+import ProyectoStackingTab from './ProyectoStackingTab';
 
 interface ProyectoModalProps {
   proyecto: Proyecto | null;
@@ -456,6 +457,7 @@ useEffect(() => {
           <Tab label="Información General" />
           <Tab label="Unidades" />
           <Tab label="Planes de Pago" />
+          <Tab label="Stacking Plan" />
         </Tabs>
 
           {selectedTab === 0 && (
@@ -498,6 +500,14 @@ useEffect(() => {
               handleDeletePaymentPlanRow={handleDeletePaymentPlanRow}
             />
           )}
+          {selectedTab === 3 && proyecto && (
+            <ProyectoStackingTab
+              proyecto={proyecto}
+              setProyecto={setProyecto}
+              readOnly={false} // en true lo muestra sin drag (modo cliente)
+            />
+          )}
+
           
 
        

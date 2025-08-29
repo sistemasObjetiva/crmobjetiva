@@ -77,12 +77,28 @@ const IndexPage: React.FC = () => {
   }, {} as Record<EstatusKey, number>);
 
   // Nombre del usuario (iniciales mayúsculas)
-  const username = user?.nombre
-    ? user.nombre
-        .split(' ')
-        .map((w: string) => w[0].toUpperCase() + w.slice(1))
-        .join(' ')
-    : user?.email?.split('@')[0];
+  const toTitleCase = (s: string) =>
+  s
+    .trim()
+    .replace(/\s+/g, ' ')
+    .split(' ')
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+
+// Prioriza distintas fuentes comunes de "nombre"
+const displayNameRaw =
+  user?.nombre ??
+  (user as any)?.profile?.nombre ??               // si tu hook mete profile
+  user?.user_metadata?.nombre ??
+  user?.user_metadata?.name ??
+  user?.user_metadata?.full_name ??
+  user?.app_metadata?.name ??
+  user?.email?.split('@')[0] ??
+  'Usuario';
+
+const username = toTitleCase(String(displayNameRaw));
+
+  
 
   // ---- CARRUSEL DE PROYECTOS Y PROPIEDADES ----
   type CardType = { tipo: 'proyecto' | 'propiedad'; data: Proyecto | Propiedad };

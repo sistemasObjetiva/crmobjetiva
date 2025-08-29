@@ -32,14 +32,20 @@ const estatusColor: Record<string, 'success' | 'warning' | 'error' | 'info'> = {
   terminado: 'info',
   cancelado: 'error'
 }
-const unidadEstatusColor: Record<string, 'success' | 'error' | 'warning' | 'info'> = {
-  disponible: 'success',
-  vendido: 'warning',
-  apartado: 'info'
+
+/** Mismas reglas/colores que en el modal */
+function unidadChipProps(raw?: string): { label: 'Disponible' | 'Apartado' | 'Vendido'; color: 'success' | 'info' | 'warning' } {
+  const s = (raw ?? '').trim().toLowerCase()
+  if (s === 'disponible') return { label: 'Disponible', color: 'success' }
+  if (s === 'apartado')   return { label: 'Apartado',   color: 'info' }
+  return { label: 'Vendido', color: 'warning' }
+}
+function ocultarPrecioPorEstatus(raw?: string): boolean {
+  const { label } = unidadChipProps(raw)
+  return label === 'Vendido' || label === 'Apartado'
 }
 
 const CardProyectoVisor: React.FC<CardProyectoVisorProps> = ({ proyecto, onView }) => {
-  // Logo del proyecto
   const logoDoc = proyecto.logo ?? null
 
   return (
@@ -54,7 +60,7 @@ const CardProyectoVisor: React.FC<CardProyectoVisorProps> = ({ proyecto, onView 
         '&:hover': { transform: 'scale(1.03)' }
       }}
     >
-      {/* Imagen principal con SignedImage */}
+      {/* Imagen principal */}
       {proyecto.render?.path && proyecto.render?.bucket ? (
         <SignedImage
           path={proyecto.render.path}
@@ -86,7 +92,7 @@ const CardProyectoVisor: React.FC<CardProyectoVisorProps> = ({ proyecto, onView 
 
       <CardContent sx={{ flexGrow: 1 }}>
         <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
-          {/* Logo con SignedAvatar */}
+          {/* Logo */}
           {logoDoc && logoDoc.path && logoDoc.bucket ? (
             <SignedAvatar
               value={logoDoc}
@@ -124,47 +130,51 @@ const CardProyectoVisor: React.FC<CardProyectoVisorProps> = ({ proyecto, onView 
         {proyecto.unidades && proyecto.unidades.length > 0 && (
           <Box
             sx={{
-                maxHeight: 180,
-                overflowY: 'auto',
-                mt: 1,
-                bgcolor: 'rgba(0,0,0,0.01)',
-                borderRadius: 1,
-                border: '1px solid #eee'
+              maxHeight: 180,
+              overflowY: 'auto',
+              mt: 1,
+              bgcolor: 'rgba(0,0,0,0.01)',
+              borderRadius: 1,
+              border: '1px solid #eee'
             }}
-            >
+          >
             <Table size="small" stickyHeader>
-                <TableHead>
+              <TableHead>
                 <TableRow>
-                    <TableCell sx={{ fontWeight: 700, fontSize: 13 }}>Unidad</TableCell>
-                    <TableCell sx={{ fontWeight: 700, fontSize: 13 }}>Precio</TableCell>
-                    <TableCell sx={{ fontWeight: 700, fontSize: 13 }}>Estatus</TableCell>
+                  <TableCell sx={{ fontWeight: 700, fontSize: 13 }}>Unidad</TableCell>
+                  <TableCell sx={{ fontWeight: 700, fontSize: 13 }}>Precio</TableCell>
+                  <TableCell sx={{ fontWeight: 700, fontSize: 13 }}>Estatus</TableCell>
                 </TableRow>
-                </TableHead>
-                <TableBody>
-                {proyecto.unidades.map((u) => (
+              </TableHead>
+              <TableBody>
+                {proyecto.unidades.map((u) => {
+                  const chip = unidadChipProps(u.estatus)
+                  const hidePrice = ocultarPrecioPorEstatus(u.estatus)
+                  return (
                     <TableRow key={u.id}>
-                    <TableCell sx={{ fontSize: 13 }}>{u.numerounidad}</TableCell>
-                    <TableCell sx={{ fontSize: 13 }}>
-                        {formatoMoneda(u.preciolista)}
-                    </TableCell>
-                    <TableCell sx={{ fontSize: 13 }}>
+                      <TableCell sx={{ fontSize: 13 }}>{u.numerounidad}</TableCell>
+                      <TableCell sx={{ fontSize: 13 }}>
+                        {hidePrice ? (
+                          <Typography variant="caption" color="text.secondary">-</Typography>
+                        ) : (
+                          formatoMoneda(u.preciolista)
+                        )}
+                      </TableCell>
+                      <TableCell sx={{ fontSize: 13 }}>
                         <Chip
-                        size="small"
-                        label={u.estatus.charAt(0).toUpperCase() + u.estatus.slice(1)}
-                        variant="filled"
-                        color={unidadEstatusColor[(u.estatus).toLocaleLowerCase()] || 'default'}
-                        sx={{
-                            fontWeight: 700,
-                            minWidth: 75,
-                            justifyContent: 'center'
-                        }}
+                          size="small"
+                          label={chip.label}
+                          color={chip.color}
+                          variant="filled"
+                          sx={{ fontWeight: 700, minWidth: 90, justifyContent: 'center' }}
                         />
-                        </TableCell>
+                      </TableCell>
                     </TableRow>
-                ))}
-                </TableBody>
+                  )
+                })}
+              </TableBody>
             </Table>
-            </Box>
+          </Box>
         )}
 
       </CardContent>

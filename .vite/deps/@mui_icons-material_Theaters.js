@@ -1,0 +1,30 @@
+"use client";
+import {
+  require_createSvgIcon
+} from "./chunk-NYHD56NI.js";
+import {
+  require_interopRequireDefault,
+  require_jsx_runtime
+} from "./chunk-EXRCS52B.js";
+import "./chunk-65KY755N.js";
+import {
+  __commonJS
+} from "./chunk-V4OQ3NZ2.js";
+
+// node_modules/@mui/icons-material/Theaters.js
+var require_Theaters = __commonJS({
+  "node_modules/@mui/icons-material/Theaters.js"(exports) {
+    var _interopRequireDefault = require_interopRequireDefault();
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var _createSvgIcon = _interopRequireDefault(require_createSvgIcon());
+    var _jsxRuntime = require_jsx_runtime();
+    var _default = exports.default = (0, _createSvgIcon.default)((0, _jsxRuntime.jsx)("path", {
+      d: "M18 3v2h-2V3H8v2H6V3H4v18h2v-2h2v2h8v-2h2v2h2V3zM8 17H6v-2h2zm0-4H6v-2h2zm0-4H6V7h2zm10 8h-2v-2h2zm0-4h-2v-2h2zm0-4h-2V7h2z"
+    }), "Theaters");
+  }
+});
+export default require_Theaters();
+//# sourceMappingURL=@mui_icons-material_Theaters.js.map
