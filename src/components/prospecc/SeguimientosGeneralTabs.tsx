@@ -1,9 +1,9 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   Box, Typography, IconButton, Paper, Tooltip, Table, TableBody, TableCell,
   TableHead, TableRow, CircularProgress, Button, Chip, FormControl, InputLabel,
   Select, MenuItem, TextField, TableSortLabel, Dialog, DialogTitle,
-  DialogContent, DialogActions, LinearProgress
+  DialogContent, DialogActions, LinearProgress, TablePagination
 } from '@mui/material'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import * as XLSX from 'xlsx'
@@ -33,16 +33,29 @@ import { fechaActual } from '../../hooks/useDateUtils'
 import { getEstatusChip } from '../../hooks/useUtilsFunctions'
 import SignedAvatar from '../general/SignedAvatar'
 
+// 👇 nuevo (gráficas)
+import SeguimientosCharts from './SeguimientosCharts'
+
 interface Props {
   userid: string
 }
 
-const fmtDate = (d?: string) => (d ? new Date(d).toLocaleDateString() : '')
+type Order = 'asc' | 'desc'
+type OrderByKey =
+  | 'usuario'
+  | 'nombre'
+  | 'correo'
+  | 'temperatura'
+  | 'unidad'
+  | 'fechaProximo'
+  | 'fechaActualizacion'
 
+const fmtDate = (d?: string) => (d ? new Date(d).toLocaleDateString() : '')
 const getUserId = (u: any) => u?.id ?? u?.uid ?? null
 const getUserEmail = (u: any) => u?.email ?? u?.correo ?? u?.correoElectronico ?? ''
 const getUserName = (u: any) => u?.nombre ?? u?.displayName ?? u?.name ?? ''
 
+/** Chips de proyectos/propiedades con avatar firmado */
 function ProyectosInteresChips({
   ids,
   proyectos,
@@ -98,16 +111,6 @@ function ProyectosInteresChips({
   )
 }
 
-type Order = 'asc' | 'desc'
-type OrderByKey =
-  | 'usuario'
-  | 'nombre'
-  | 'correo'
-  | 'temperatura'
-  | 'unidad'
-  | 'fechaProximo'
-  | 'fechaActualizacion'
-
 const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
   const { showStatus } = useStatusChip()
 
@@ -128,15 +131,61 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
   const [importOpen, setImportOpen] = useState(false)
   const [importFile, setImportFile] = useState<File | null>(null)
   const [importBusy, setImportBusy] = useState(false)
+  const [importProgress, setImportProgress] = useState(0) // 0..100
   const [fallbackUserId, setFallbackUserId] = useState<string>('') // si el correo de "usuario" no existe
 
+  // Orden + filtros en header
+  const [order, setOrder] = useState<Order>('asc')
+  const [orderBy, setOrderBy] = useState<OrderByKey>('fechaProximo')
+  const [filters, setFilters] = useState({
+    usuarioId: '', // sincronizable con filtro superior
+    nombre: '',
+    correo: '',
+    temperatura: '',
+    unidad: '',
+    proyectoTexto: '',
+    fechaProximo: '',
+    fechaActualizacion: '',
+    comentarios: '',
+  })
+
+  // 👇 Enfoque por estatus desde la gráfica de estatus (muestra solo ese estatus)
+  const [statusFocus, setStatusFocus] = useState<EstatusSeguimiento | ''>('')
+
+  // ========= util: fecha actual (compatible con tu helper) =========
+  const nowISO = (() => {
+    try {
+      return typeof fechaActual === 'function' ? fechaActual : String(fechaActual || new Date().toISOString())
+    } catch {
+      return new Date().toISOString()
+    }
+  })()
+
+  // ====== PAGINACIÓN por estatus ======
+  type PagingState = Record<string, { page: number; rowsPerPage: number }>
+  const DEFAULT_RPP = 25
+  const [paging, setPaging] = useState<PagingState>(() =>
+    Object.fromEntries(ESTATUS_OPCIONES.map(o => [o.value, { page: 0, rowsPerPage: DEFAULT_RPP }])) as PagingState
+  )
+  const onChangePage = (estatus: string, page: number) =>
+    setPaging(prev => ({ ...prev, [estatus]: { ...prev[estatus], page } }))
+  const onChangeRpp = (estatus: string, rpp: number) =>
+    setPaging(prev => ({ ...prev, [estatus]: { page: 0, rowsPerPage: rpp } }))
+
+  // resetear páginas si cambian filtros/orden/usuario/estatus enfocado
+  useEffect(() => {
+    setPaging(prev =>
+      Object.fromEntries(Object.keys(prev).map(k => [k, { ...prev[k], page: 0 }])) as PagingState
+    )
+  }, [filters, order, orderBy, filtroUsuarioId, statusFocus])
+
   const initialSeguimiento = (): Seguimiento => ({
-    id: crypto.randomUUID(),
+    id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
     userid,
     idprospecto: '',
-    fechaCreacion: fechaActual,
-    fechaActualizacion: fechaActual,
-    fechaProximoSeguimiento: fechaActual,
+    fechaCreacion: nowISO,
+    fechaActualizacion: nowISO,
+    fechaProximoSeguimiento: nowISO,
     unidadInteres: '',
     formaDePago: '',
     temperaturaInteres: '',
@@ -170,7 +219,7 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
     }
   }
 
-  // Usuarios y accesos rápidos
+  // ========= Mapas y normalizadores =========
   const usuariosById = useMemo(() => {
     const map = new Map<string, any>()
     ;(usuarios ?? []).forEach(u => {
@@ -190,19 +239,6 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
     return map
   }, [usuarios])
 
-  // Agrupo por estatus para las secciones
-  const seguimientosByEstatus: Record<string, Seguimiento[]> = useMemo(() => {
-    const groups: Record<string, Seguimiento[]> = {}
-    ESTATUS_OPCIONES.forEach(s => (groups[s.value] = []))
-    ;(seguimientos ?? []).forEach(s => {
-      if (groups[s.estatusSeguimiento] !== undefined) groups[s.estatusSeguimiento].push(s)
-    })
-    Object.values(groups).forEach(arr =>
-      arr.sort((a, b) => new Date(a.fechaCreacion).getTime() - new Date(b.fechaCreacion).getTime())
-    )
-    return groups
-  }, [seguimientos])
-
   const prospectosById = useMemo(() => {
     const map = new Map<string, Prospecto>()
     ;(prospectos ?? []).forEach(p => {
@@ -211,16 +247,20 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
     return map
   }, [prospectos])
 
-  // === NUEVO: índices de match por email, teléfono y nombre ===
+  // === normalizadores + similitud ===
   const normStr = (s?: string | null) =>
-    (s ?? '').normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/[^\p{L}\d\s@.]/gu, ' ').replace(/\s+/g, ' ').trim().toLowerCase()
+    (s ?? '')
+      .normalize('NFD').replace(/\p{Diacritic}/gu, '')
+      .replace(/[^\p{L}\d\s@.]/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase()
 
   const cleanPhone = (s?: string | null) => {
     if (!s) return ''
     const digits = String(s).replace(/\D+/g, '')
-    // usa los últimos 10 si hay país, si no los últimos 8
     if (digits.length >= 10) return digits.slice(-10)
-    if (digits.length >= 8) return digits.slice(-8)
+    if (digits.length >= 8)  return digits.slice(-8)
     return digits
   }
 
@@ -228,13 +268,11 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
     s.replace(/\b(ing|lic|arq|sr|sra|srta|dra|dr)\.?/gi, '').replace(/\s+/g, ' ').trim()
 
   const nameKey = (s?: string | null) => {
-    const base = stripNamePrefixes(normStr(s))
-    // clave por tokens ordenados (ignora tokens de 1 letra comunes)
+    const base = stripNamePrefixes(normStr(s || ''))
     const tokens = base.split(' ').filter(t => t.length > 1).sort()
     return tokens.join(' ')
   }
 
-  // Levenshtein simple + similitud
   const levenshtein = (a: string, b: string) => {
     if (a === b) return 0
     const an = a.length, bn = b.length
@@ -321,6 +359,7 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
     return getUserEmail(u)
   }
 
+  // -------- EXPORTAR EXCEL (original: respeta solo filtro de usuario topbar) --------
   const handleExportExcel = () => {
     const all = (seguimientos ?? [])
     const filtered = filtroUsuarioId ? all.filter(s => String(s.userid) === filtroUsuarioId) : all
@@ -341,21 +380,6 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
     const email = getUserEmail(u)
     return name && email ? `${name} (${email})` : (name || email || '—')
   }
-
-  // -------- ORDEN + FILTROS EN HEADER --------
-  const [order, setOrder] = useState<Order>('asc')
-  const [orderBy, setOrderBy] = useState<OrderByKey>('fechaProximo')
-  const [filters, setFilters] = useState({
-    usuarioId: '', // sincronizable con filtro superior
-    nombre: '',
-    correo: '',
-    temperatura: '',
-    unidad: '',
-    proyectoTexto: '',
-    fechaProximo: '',
-    fechaActualizacion: '',
-    comentarios: '',
-  })
 
   const setUsuarioId = (id: string) => {
     setFiltroUsuarioId(id)
@@ -451,8 +475,35 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
     return sorted
   }
 
-  // ============================ IMPORT CSV (con heurística de match mejorada) ============================
+  // ====== Agrupa por estatus y calcula filas filtradas/ordenadas/paginadas ======
+  const seguimientosByEstatus: Record<string, Seguimiento[]> = useMemo(() => {
+    const groups: Record<string, Seguimiento[]> = {}
+    ESTATUS_OPCIONES.forEach(s => (groups[s.value] = []))
+    ;(seguimientos ?? []).forEach(s => {
+      if (groups[s.estatusSeguimiento] !== undefined) groups[s.estatusSeguimiento].push(s)
+    })
+    return groups
+  }, [seguimientos])
 
+  // Cache de filas filtradas+ordenadas por estatus (y filtro de usuario)
+  const rowsByStatus: Record<string, Seguimiento[]> = useMemo(() => {
+    const out: Record<string, Seguimiento[]> = {}
+    for (const s of ESTATUS_OPCIONES) {
+      const base = seguimientosByEstatus[s.value] ?? []
+      out[s.value] = filterAndSort(
+        filtroUsuarioId ? base.filter(x => String(x.userid) === filtroUsuarioId) : base
+      )
+    }
+    return out
+  }, [seguimientosByEstatus, filtroUsuarioId, filters, order, orderBy, idToLabel, prospectosById])
+
+  // 👉 Filas que alimentan las GRÁFICAS (respetan filtros y, si hay, el estatus enfocado)
+  const rowsForCharts: Seguimiento[] = useMemo(() => {
+    if (statusFocus) return rowsByStatus[statusFocus] ?? []
+    return Object.values(rowsByStatus).flat()
+  }, [rowsByStatus, statusFocus])
+
+  // ============================ IMPORT CSV (robusto) ============================
   const quitarAcentos = (s = '') => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   const normEmailLoose = (s?: string | null) => {
     if (!s) return ''
@@ -504,28 +555,35 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
       a.download = filename
       a.click()
       URL.revokeObjectURL(url)
-    } catch (_) {}
+    } catch {}
   }
 
+  const sleep = (ms: number) => new Promise(res => setTimeout(res, ms))
+  const withRetry = async <T,>(fn: () => Promise<T>, tries = 3, baseMs = 500): Promise<T> => {
+    let lastErr: any
+    for (let i = 0; i < tries; i++) {
+      try { return await fn() } catch (e) {
+        lastErr = e; await sleep(baseMs * Math.pow(2, i))
+      }
+    }
+    throw lastErr
+  }
+
+  // Heurística de match de prospecto para una fila del CSV
   const findProspectForRow = (row: any) => {
-    // columnas frecuentes
     const emailCsv = normEmailLoose(row['correo_electronico'] ?? row['correo'] ?? row['correo_cliente'])
     const phoneCsv = cleanPhone(row['telefono_cliente'] ?? row['telefono'] ?? row['celular'])
     const nameCsv = row['nombre_cliente'] ?? row['nombre'] ?? ''
     const proyectoCsv = row['proyecto_de_interes'] ?? row['proyecto_interes'] ?? ''
 
-    // 1) por correo exacto
     if (emailCsv) {
       const p = prospectosByEmail.get(emailCsv)
       if (p) return p
     }
-
-    // 2) por teléfono
     if (phoneCsv) {
       const list = prospectosByPhone.get(phoneCsv)
       if (list?.length === 1) return list[0]
       if (list && list.length > 1) {
-        // desempata por nombre fuzzy
         const keyCsv = nameKey(nameCsv)
         let best: { p: Prospecto; score: number } | null = null
         for (const p of list) {
@@ -535,20 +593,16 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
         if (best && best.score >= 0.85) return best.p
       }
     }
-
-    // 3) por nombre exacto normalizado (único)
     const k = nameKey(nameCsv)
     if (k) {
       const list = prospectosByNameKey.get(k)
       if (list?.length === 1) return list[0]
       if (list && list.length > 1) {
-        // 3b) desempatar por proyecto de interés si coincide con alguno del prospecto
         if (proyectoCsv) {
           const pid = resolveProyectoId(proyectoCsv)
           const only = list.filter(p => (p.proyectosInteres ?? []).includes(pid))
           if (only.length === 1) return only[0]
         }
-        // 3c) fuzzy por similitud de nombre (por si hay espacios/pedacitos distintos)
         let best: { p: Prospecto; score: number } | null = null
         for (const p of list) {
           const s = similarity(nameKey(p.nombreCompleto), k)
@@ -559,8 +613,6 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
         }
       }
     }
-
-    // 4) fuzzy global por nombre (buscar mejor candidato general)
     if (k) {
       let best: { p: Prospecto; score: number } | null = null
       for (const [nk, list] of prospectosByNameKey.entries()) {
@@ -573,47 +625,39 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
       }
       if (best) return best.p
     }
-
     return null
   }
 
   const handleImportCSV = async () => {
-    if (!importFile) {
-      showStatus('Selecciona un CSV', 'warning')
-      return
-    }
-    if (!fallbackUserId) {
-      showStatus('Selecciona un usuario de respaldo', 'warning')
-      return
-    }
+    if (!importFile) { showStatus('Selecciona un CSV', 'warning'); return }
+    if (!fallbackUserId) { showStatus('Selecciona un usuario de respaldo', 'warning'); return }
 
     setImportBusy(true)
+    setImportProgress(0)
     try {
-      // 1) Parse CSV
-      const { data: rows } = await new Promise<{ data: any[] }>((resolve, reject) => {
+      // 1) Parse
+      const { data: rawRows } = await new Promise<{ data: any[] }>((resolve, reject) => {
         Papa.parse(importFile, {
           header: true,
-          skipEmptyLines: true,
+          skipEmptyLines: 'greedy',
+          dynamicTyping: true,
+          worker: true,
           complete: (res) => resolve({ data: res.data as any[] }),
           error: (err) => reject(err),
         })
       })
-
-      if (!rows?.length) {
-        showStatus('El CSV no contiene filas', 'warning')
-        return
-      }
+      if (!rawRows?.length) { showStatus('El CSV no contiene filas', 'warning'); return }
 
       // 2) Normaliza headers
       const normKey = (k = '') =>
         quitarAcentos(String(k).trim().toLowerCase()).replace(/[^\p{L}\d\s_]/gu, '_').replace(/\s+/g, '_')
-      const normRows = rows.map((r) => {
+      const rows = rawRows.map((r) => {
         const o: Record<string, any> = {}
         Object.keys(r || {}).forEach(k => (o[normKey(k)] = r[k]))
         return o
       })
 
-      // 3) Índices existentes de seguimientos (por idprospecto+userid)
+      // 3) Índice de seguimientos existentes (idprospecto|userid)
       const existingByKey = new Map<string, Seguimiento>()
       ;(seguimientos ?? []).forEach(s => {
         if (s?.idprospecto && s?.userid) {
@@ -621,30 +665,24 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
         }
       })
 
-      // 4) Agrupar por prospecto (encontrado) + usuario
-      type RowPack = {
-        key: string
-        userId: string
-        prospectoId: string
-        items: any[]
-      }
-
+      // 4) Arma packs (prospecto+usuario)
+      type RowPack = { key: string; userId: string; prospectoId: string; items: any[] }
       const packs = new Map<string, RowPack>()
       const notMatched: any[] = []
+      const unresolvedUsers: Set<string> = new Set()
 
-      for (const r of normRows) {
-        // usuario correo
-        const vendedorEmail = normEmailLoose(r['usuario'])
+      for (const r of rows) {
+        const vendedorEmail = normEmailLoose(r['usuario'] ?? r['usuario_correo'] ?? r['asesor'] ?? r['vendedor'])
         const userId = (vendedorEmail && usuariosByEmail.get(vendedorEmail)) || fallbackUserId
+        if (!userId) unresolvedUsers.add(vendedorEmail || '(vacío)')
 
-        // intenta encontrar el prospecto con heurística
         const p = findProspectForRow(r)
         if (!p?.id) {
           notMatched.push({
             motivo: 'No se encontró prospecto (email/teléfono/nombre)',
             usuarioCSV: r['usuario'] ?? '',
             nombreCSV: r['nombre_cliente'] ?? r['nombre'] ?? '',
-            telefonoCSV: r['telefono_cliente'] ?? r['telefono'] ?? '',
+            telefonoCSV: r['telefono_cliente'] ?? r['telefono'] ?? r['celular'] ?? '',
             correoCSV: r['correo_electronico'] ?? r['correo'] ?? '',
             proyectoCSV: r['proyecto_de_interes'] ?? r['proyecto_interes'] ?? '',
           })
@@ -652,69 +690,75 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
         }
 
         const key = `${p.id}|${userId}`
-        if (!packs.has(key)) {
-          packs.set(key, { key, userId, prospectoId: p.id, items: [] })
-        }
+        if (!packs.has(key)) packs.set(key, { key, userId, prospectoId: p.id, items: [] })
         packs.get(key)!.items.push(r)
       }
 
       if (packs.size === 0) {
         showStatus('No hay filas válidas para importar (ningún match con prospectos)', 'warning')
         if (notMatched.length) exportCSV(notMatched, 'seguimientos_no_emparejados.csv')
+        if (unresolvedUsers.size) exportCSV([...unresolvedUsers].map(x => ({ usuarioCSV: x })), 'usuarios_no_resueltos.csv')
         return
       }
 
-      // 5) Construcción de historial y upserts
+      // 5) Construcción de upserts (usa columna v para ordenar)
       const upserts: Seguimiento[] = []
 
       packs.forEach(pack => {
         const { userId, prospectoId, items } = pack
 
         const ordered = [...items].sort((a, b) => {
+          const va = Number(a['v'] ?? a['num_seguimiento'] ?? a['seguimiento'] ?? NaN)
+          const vb = Number(b['v'] ?? b['num_seguimiento'] ?? b['seguimiento'] ?? NaN)
+          const hasNum = !Number.isNaN(va) && !Number.isNaN(vb)
+          if (hasNum) return va - vb
           const da = parseFlexDate(a['fecha_registro'])?.getTime() ?? 0
           const db = parseFlexDate(b['fecha_registro'])?.getTime() ?? 0
           return da - db
         })
 
         const historial: SeguimientoHistorial[] = ordered.map((r) => {
+          const ordr = Number(r['v'] ?? r['num_seguimiento'] ?? r['seguimiento'] ?? NaN)
           const fechaReg = parseFlexDate(r['fecha_registro'])
-          const fechaSig = parseFlexDate(r['fecha_sig_contacto'])
-          const proyectoId = resolveProyectoId(r['proyecto_de_interes'] ?? r['proyecto_interes'])
+          const fechaSig = parseFlexDate(r['fecha_sig_contacto'] ?? r['fecha_siguiente_contacto'])
+
+          const proyectoTxt = r['proyecto_de_interes'] ?? r['proyecto_interes']
+          const proyectoId = resolveProyectoId(proyectoTxt)
           const temperatura = r['temperatura_de_interes'] ?? r['temperatura']
           const forma = r['forma_de_pago'] ?? ''
           const unidad = r['unidad_de_interes'] ?? r['unidad_interes'] ?? ''
           const capPago = r['capacidad_de_pago'] ?? r['capacidad_de_pago_'] ?? r['capacidad_de_pago__'] ?? ''
-          const comentarios = r['comentarios'] ?? ''
+          const comentarios = r['comentarios'] ?? r['observaciones'] ?? ''
           const est = mapEstatus(r['estatus_seguimiento'])
-          const proyectoInteres = proyectoId || (r['proyecto_de_interes'] ?? '')
 
           const h: SeguimientoHistorial = {
-            id: crypto.randomUUID(),
+            id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
             idprospecto: prospectoId,
             userid: userId,
-            fechaCreacion: toISO(fechaReg) || fechaActual,
-            fechaActualizacion: toISO(fechaReg) || fechaActual,
+            fechaCreacion: toISO(fechaReg) || nowISO,
+            fechaActualizacion: toISO(fechaReg) || nowISO,
             fechaProximoSeguimiento: toISO(fechaSig) || '',
-            unidadInteres: String(unidad),
-            formaDePago: String(forma),
+            unidadInteres: String(unidad || ''),
+            formaDePago: String(forma || ''),
             temperaturaInteres: String(temperatura || ''),
             comentarios: String(comentarios || ''),
-            proyectoInteres: String(proyectoInteres || ''),
+            proyectoInteres: String(proyectoId || proyectoTxt || ''),
             capacidadDePago: String(capPago || ''),
             estatusSeguimiento: est,
           }
+          ;(h as any).__orden = Number.isNaN(ordr) ? undefined : ordr
           return h
         })
 
         const last = ordered[ordered.length - 1] || {}
         const fechaRegLast = parseFlexDate(last['fecha_registro'])
-        const fechaSigLast = parseFlexDate(last['fecha_sig_contacto'])
+        const fechaSigLast = parseFlexDate(last['fecha_sig_contacto'] ?? last['fecha_siguiente_contacto'])
         const proyectoIdLast = resolveProyectoId(last['proyecto_de_interes'] ?? last['proyecto_interes'])
         const temperaturaLast = last['temperatura_de_interes'] ?? last['temperatura']
         const formaLast = last['forma_de_pago'] ?? ''
         const unidadLast = last['unidad_de_interes'] ?? last['unidad_interes'] ?? ''
         const capPagoLast = last['capacidad_de_pago'] ?? last['capacidad_de_pago_'] ?? last['capacidad_de_pago__'] ?? ''
-        const comentariosLast = last['comentarios'] ?? ''
+        const comentariosLast = last['comentarios'] ?? last['observaciones'] ?? ''
         const estLast = mapEstatus(last['estatus_seguimiento'])
         const motivos = splitMulti(last['razon'])
 
@@ -725,21 +769,29 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
           ...historial,
         ]
 
-        const seenHist = new Set<string>()
+        const seen = new Set<string>()
         mergedHistorial = mergedHistorial.filter(h => {
-          const k = `${h.fechaCreacion}|${h.comentarios}|${h.estatusSeguimiento}`
-          if (seenHist.has(k)) return false
-          seenHist.add(k)
+          const k =
+            (h as any).__orden != null
+              ? `N${(h as any).__orden}|${h.estatusSeguimiento}|${h.comentarios}`
+              : `${h.fechaCreacion}|${h.estatusSeguimiento}|${h.proyectoInteres}|${h.fechaProximoSeguimiento}|${h.comentarios}`
+          if (seen.has(k)) return false
+          seen.add(k)
           return true
         })
-        mergedHistorial.sort((a, b) => (new Date(a.fechaCreacion).getTime() - new Date(b.fechaCreacion).getTime()))
+
+        mergedHistorial.sort((a: any, b: any) => {
+          const oa = a.__orden, ob = b.__orden
+          if (oa != null && ob != null) return oa - ob
+          return new Date(a.fechaCreacion).getTime() - new Date(b.fechaCreacion).getTime()
+        })
 
         const seg: Seguimiento = {
-          id: existing?.id || crypto.randomUUID(),
+          id: existing?.id || ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`),
           idprospecto: prospectoId,
           userid: userId,
-          fechaCreacion: existing?.fechaCreacion || (toISO(parseFlexDate(ordered[0]?.['fecha_registro'])) || fechaActual),
-          fechaActualizacion: toISO(fechaRegLast) || fechaActual,
+          fechaCreacion: existing?.fechaCreacion || (toISO(parseFlexDate(ordered[0]?.['fecha_registro'])) || nowISO),
+          fechaActualizacion: toISO(fechaRegLast) || nowISO,
           fechaProximoSeguimiento: toISO(fechaSigLast) || '',
           unidadInteres: String(unidadLast || ''),
           formaDePago: String(formaLast || ''),
@@ -749,22 +801,56 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
           capacidadDePago: String(capPagoLast || ''),
           estatusSeguimiento: estLast,
           motivo: motivos.length ? motivos : undefined,
-          historialSeguimiento: mergedHistorial,
+          historialSeguimiento: mergedHistorial.map(h => {
+            const { __orden, ...rest } = h as any
+            return rest
+          }),
         }
 
         upserts.push(seg)
       })
 
-      const results = await Promise.allSettled(upserts.map(u => updateSeguimiento(u)))
-      const ok = results.filter(r => r.status === 'fulfilled').length
-      const fail = results.length - ok
+      // 6) Guarda por lotes con reintentos y progreso
+      const BATCH_SIZE = 100
+      let ok = 0
+      let fail = 0
+      const errors: { id: string; error: string }[] = []
 
-      if (notMatched.length) {
-        exportCSV(notMatched, 'seguimientos_no_emparejados.csv')
+      for (let i = 0; i < upserts.length; i += BATCH_SIZE) {
+        const batch = upserts.slice(i, i + BATCH_SIZE)
+
+        await Promise.allSettled(
+          batch.map(s =>
+            withRetry(() => updateSeguimiento(s), 3, 600)
+          )
+        ).then(results => {
+          for (let j = 0; j < results.length; j++) {
+            const r = results[j]
+            const seg = batch[j]
+            if (r.status === 'fulfilled') ok++
+            else {
+              fail++
+              errors.push({ id: seg.id, error: String((r as any).reason?.message || r) })
+            }
+          }
+        })
+
+        setImportProgress(Math.round(((i + batch.length) / upserts.length) * 100))
+        await sleep(300)
       }
 
-      const extras = notMatched.length ? `, ${notMatched.length} filas sin match (exportadas)` : ''
-      showStatus(`Importación de seguimientos: ${ok} ok, ${fail} con error${extras}`, fail ? 'warning' : 'success')
+      if (notMatched.length) exportCSV(notMatched, 'seguimientos_no_emparejados.csv')
+      if (unresolvedUsers.size) {
+        exportCSV([...unresolvedUsers].map(x => ({ usuarioCSV: x })), 'usuarios_no_resueltos.csv')
+      }
+      if (errors.length) exportCSV(errors, 'seguimientos_errores.csv')
+
+      showStatus(
+        `Importación de seguimientos: ${ok} ok, ${fail} con error` +
+        (notMatched.length ? `, ${notMatched.length} sin match (exportadas)` : '') +
+        (unresolvedUsers.size ? `, ${unresolvedUsers.size} usuarios sin resolver (exportados)` : ''),
+        fail ? 'warning' : 'success'
+      )
 
       setImportFile(null)
       setImportOpen(false)
@@ -773,6 +859,132 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
       showStatus(e?.message || 'Error al importar CSV de seguimientos', 'error')
     } finally {
       setImportBusy(false)
+      setImportProgress(0)
+    }
+  }
+
+  // ====== NUEVO: Exportar TODO lo filtrado (incluye filtros de gráfica y NO paginado) ======
+  const handleExportFilteredExcel = () => {
+    const rows = rowsForCharts.map((s) => {
+      const prospecto = prospectosById.get(s.idprospecto)
+      const usuario = usuariosById.get(String(s.userid))
+      const proyectosLabels = (prospecto?.proyectosInteres ?? [])
+        .map(id => idToLabel.get(id) ?? id)
+        .filter(Boolean)
+        .join(' | ')
+
+      return {
+        id: s.id,
+        usuarioEmail: getUserEmail(usuario),
+        usuarioNombre: getUserName(usuario),
+        prospectoNombre: prospecto?.nombreCompleto ?? '',
+        prospectoCorreo: prospecto?.correoElectronico ?? '',
+        estatus: s.estatusSeguimiento,
+        temperatura: s.temperaturaInteres ?? '',
+        proyectosInteres: proyectosLabels,
+        unidadInteres: s.unidadInteres ?? s.proyectoInteres ?? '',
+        formaDePago: s.formaDePago ?? '',
+        capacidadDePago: s.capacidadDePago ?? '',
+        comentarios: s.comentarios ?? '',
+        fechaProximoSeguimiento: s.fechaProximoSeguimiento ?? '',
+        fechaActualizacion: s.fechaActualizacion ?? '',
+        fechaCreacion: s.fechaCreacion ?? '',
+      }
+    })
+
+    if (!rows.length) {
+      showStatus('No hay filas con los filtros actuales', 'warning')
+      return
+    }
+
+    const ws = XLSX.utils.json_to_sheet(rows)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'SeguimientosFiltrados')
+    XLSX.writeFile(wb, 'seguimientos_filtrados.xlsx')
+  }
+
+  // ====== NUEVO: Exportar CSV con columnas específicas (respeta filtros/virtuales) ======
+  const handleExportFilteredCSV = () => {
+    // Helpers para campos opcionales en Prospecto
+    const getFromPros = (p: any, keys: string[]) =>
+      keys.map(k => (p as any)?.[k]).find(v => v != null && v !== '') ?? ''
+
+    const ocupacionKeys = ['ocupacion', 'ocupacionCliente', 'profesion', 'actividad', 'actividadEconomica']
+    const medioKeys     = ['medioDeCaptacion', 'medioCaptacion', 'medio', 'fuenteCaptacion', 'fuente', 'canal']
+
+    // Encabezados requeridos
+    const header = [
+      'Consecutivo',
+      'Fecha Registro',
+      'Nombre Completo Cliente',
+      'Celular Cliente',
+      'Correo Electrónico Cliente',
+      'Ocupación Cliente',
+      'Medio de Captación',
+      'Vendedor',
+      'Ultimo seguimiento',
+      'Razón',
+      'Estatus',
+    ]
+
+    // Construye filas en el orden actual (rowsForCharts ya respeta filtros + statusFocus)
+    const rowsAOA: (string | number)[][] = [header]
+
+    rowsForCharts.forEach((s, idx) => {
+      const prospecto = prospectosById.get(s.idprospecto)
+      const usuario   = usuariosById.get(String(s.userid))
+
+      // Fecha Registro: la más antigua entre seguimiento e historial
+      const times = [
+        s.fechaCreacion ? new Date(s.fechaCreacion).getTime() : undefined,
+        ...(s.historialSeguimiento ?? []).map(h => h.fechaCreacion ? new Date(h.fechaCreacion).getTime() : undefined),
+      ].filter((t): t is number => typeof t === 'number')
+      const minTime = times.length ? Math.min(...times) : undefined
+      const fechaRegistroStr = minTime ? new Date(minTime).toLocaleDateString() : fmtDate(s.fechaCreacion)
+
+      // Último seguimiento (comentario más reciente)
+      const lastHist = [...(s.historialSeguimiento ?? [])]
+        .sort((a, b) => new Date(a.fechaCreacion).getTime() - new Date(b.fechaCreacion).getTime())
+        .at(-1)
+      const ultimoSeguimiento = (lastHist?.comentarios || s.comentarios || '').toString()
+
+      // Vendedor: nombre si existe, si no email
+      const vendedor =
+        (getUserName(usuario) ? `${getUserName(usuario)}` : '') ||
+        (getUserEmail(usuario) || '')
+
+      rowsAOA.push([
+        idx + 1, // Consecutivo
+        fechaRegistroStr || '',
+        prospecto?.nombreCompleto ?? '',
+        prospecto?.celular ?? '',
+        prospecto?.correoElectronico ?? '',
+        getFromPros(prospecto, ocupacionKeys),
+        getFromPros(prospecto, medioKeys),
+        vendedor,
+        ultimoSeguimiento,
+        Array.isArray(s.motivo) ? s.motivo.join(' | ') : (s as any)?.razon ?? '',
+        s.estatusSeguimiento ?? '',
+      ])
+    })
+
+    if (rowsAOA.length === 1) {
+      showStatus('No hay filas con los filtros actuales', 'warning')
+      return
+    }
+
+    try {
+      const csv = Papa.unparse(rowsAOA) // AOA => respeta el orden de columnas tal cual header
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'seguimientos_filtrados.csv'
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      console.error(e)
+      showStatus('Error al generar el CSV', 'error')
     }
   }
 
@@ -780,6 +992,7 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
     <Box>
       {loading && <Spinner open={true} />}
 
+      {/* Toolbar superior */}
       <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
         <Typography variant="h6" fontWeight={700} color="primary">Seguimientos</Typography>
         <Box display="flex" gap={2} alignItems="center">
@@ -804,6 +1017,17 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
             </Select>
           </FormControl>
 
+          {/* NUEVO: exporta TODO lo filtrado (gráfica + filtros + sin paginación) */}
+          <Button variant="outlined" onClick={handleExportFilteredExcel}>
+            Descargar filtrado
+          </Button>
+
+          {/* NUEVO: Exporta TODO lo filtrado (CSV con columnas pedidas) */}
+          <Button variant="outlined" onClick={handleExportFilteredCSV}>
+            Descargar filtrado (CSV)
+          </Button>
+
+          {/* Original: exporta con filtro de usuario topbar */}
           <Button variant="outlined" color="primary" onClick={handleExportExcel}>
             Descargar Excel
           </Button>
@@ -820,6 +1044,29 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
         </Box>
       </Box>
 
+      {/* ======= GRÁFICAS (filtrables) ======= */}
+      <SeguimientosCharts
+        rows={rowsForCharts}
+        usuariosById={usuariosById}
+        idToLabel={idToLabel}
+        getUserEmailById={(id?: string) => getUsuarioEmailById(String(id))}
+        selectedUserId={filtroUsuarioId}
+        selectedProjectLabel={filters.proyectoTexto}
+        selectedStatus={statusFocus}
+        onSelectUser={(userId) => setUsuarioId(userId)}
+        onSelectProyecto={(label) => setFilters(f => ({ ...f, proyectoTexto: label }))}
+        onSelectStatus={(status) => setStatusFocus(status)}
+      />
+
+      {statusFocus && (
+        <Box display="flex" alignItems="center" gap={1} sx={{ mb: 2 }}>
+          <Typography variant="body2">
+            Enfoque por estatus: <b>{statusFocus}</b>
+          </Typography>
+          <Button size="small" onClick={() => setStatusFocus('')}>Quitar enfoque</Button>
+        </Box>
+      )}
+
       {loadingSeguimientos ? (
         <Paper variant="outlined">
           <Box p={4} display="flex" justifyContent="center">
@@ -827,13 +1074,16 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
           </Box>
         </Paper>
       ) : (
-        ESTATUS_OPCIONES.map(estatus => {
-          const grupo = seguimientosByEstatus[estatus.value] ?? []
-          const rows = filterAndSort(
-            filtroUsuarioId ? grupo.filter(s => String(s.userid) === filtroUsuarioId) : grupo
-          )
+        (statusFocus ? ESTATUS_OPCIONES.filter(e => e.value === statusFocus) : ESTATUS_OPCIONES).map(estatus => {
+          const estKey = estatus.value
+          const allRows = rowsByStatus[estKey] ?? []
+          const { page, rowsPerPage } = paging[estKey] ?? { page: 0, rowsPerPage: DEFAULT_RPP }
+          const start = page * rowsPerPage
+          const end = start + rowsPerPage
+          const pageRows = allRows.slice(start, end)
+
           return (
-            <Box key={estatus.value} mb={4}>
+            <Box key={estKey} mb={4}>
               <Box
                 display="flex"
                 alignItems="center"
@@ -841,14 +1091,14 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
                 mb={1}
                 sx={{ textTransform: 'uppercase', letterSpacing: 1, minHeight: 40 }}
               >
-                {getEstatusChip(estatus.value)}
+                {getEstatusChip(estKey)}
                 <Typography
                   variant="subtitle1"
                   fontWeight={700}
                   color="text.secondary"
                   sx={{ lineHeight: 1, mb: 0, fontSize: 17, letterSpacing: 1, textTransform: 'uppercase' }}
                 >
-                  ({rows.length})
+                  ({allRows.length})
                 </Typography>
               </Box>
 
@@ -894,15 +1144,6 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
                           onClick={() => handleRequestSort('temperatura')}
                         >
                           Temperatura
-                        </TableSortLabel>
-                      </TableCell>
-                      <TableCell sortDirection={orderBy === 'unidad' ? order : false}>
-                        <TableSortLabel
-                          active={orderBy === 'unidad'}
-                          direction={orderBy === 'unidad' ? order : 'asc'}
-                          onClick={() => handleRequestSort('unidad')}
-                        >
-                          Unidad/Proyecto interés
                         </TableSortLabel>
                       </TableCell>
                       <TableCell>Proyectos/Propiedades interés</TableCell>
@@ -973,13 +1214,6 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
                       </TableCell>
                       <TableCell>
                         <TextField
-                          size="small" fullWidth placeholder="Filtrar unidad/proyecto…"
-                          value={filters.unidad}
-                          onChange={e => setFilters(f => ({ ...f, unidad: e.target.value }))}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <TextField
                           size="small" fullWidth placeholder="Proyecto/Propiedad (chips)…"
                           value={filters.proyectoTexto}
                           onChange={e => setFilters(f => ({ ...f, proyectoTexto: e.target.value }))}
@@ -1027,16 +1261,16 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
                   </TableHead>
 
                   <TableBody>
-                    {rows.length === 0 ? (
+                    {pageRows.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={11}>
                           <Typography color="text.secondary" align="center" fontSize={14}>
-                            Sin seguimientos en este estatus
+                            {allRows.length ? 'Sin resultados en esta página/filtros' : 'Sin seguimientos en este estatus'}
                           </Typography>
                         </TableCell>
                       </TableRow>
                     ) : (
-                      rows.map((s) => {
+                      pageRows.map((s) => {
                         const prospecto = prospectosById.get(s.idprospecto)
                         const usuario = usuariosById.get(String(s.userid))
                         return (
@@ -1046,7 +1280,6 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
                             <TableCell>{prospecto?.correoElectronico ?? ''}</TableCell>
                             <TableCell>{getEstatusChip(s.estatusSeguimiento)}</TableCell>
                             <TableCell>{s.temperaturaInteres}</TableCell>
-                            <TableCell>{s.unidadInteres || s.proyectoInteres}</TableCell>
                             <TableCell>
                               <ProyectosInteresChips
                                 ids={prospecto?.proyectosInteres}
@@ -1070,6 +1303,20 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
                     )}
                   </TableBody>
                 </Table>
+
+                {/* Paginación por estatus */}
+                <Box sx={{ px: 1 }}>
+                  <TablePagination
+                    component="div"
+                    count={allRows.length}
+                    page={page}
+                    onPageChange={(_, newPage) => onChangePage(estKey, newPage)}
+                    rowsPerPage={rowsPerPage}
+                    onRowsPerPageChange={(e) => onChangeRpp(estKey, parseInt(e.target.value, 10))}
+                    rowsPerPageOptions={[10, 25, 50, 100]}
+                    labelRowsPerPage="Filas por página"
+                  />
+                </Box>
               </Paper>
             </Box>
           )
@@ -1097,7 +1344,7 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
               Encabezados aceptados (flexibles): <i>
                 Fecha Registro, usuario (correo asesor), Nombre Cliente, Teléfono Cliente, Correo Electrónico,
                 Clasificación cliente, Proyecto de Interés, Unidad de interés, Forma de pago, Capacidad de Pago,
-                Temperatura de interés, Fecha sig Contacto, Comentarios, Estatus seguimiento, Razon
+                Temperatura de interés, Fecha sig Contacto, Comentarios, Estatus seguimiento, Razón, v (número de seguimiento)
               </i>.
               Se intenta empatar por <b>correo</b>, <b>teléfono</b> y luego <b>nombre</b> (con tolerancia).
             </Typography>
@@ -1135,7 +1382,12 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
               </Typography>
             </FormControl>
 
-            {importBusy && <LinearProgress />}
+            {importBusy && (
+              <LinearProgress
+                variant={importProgress ? 'determinate' : 'indeterminate'}
+                value={importProgress || undefined}
+              />
+            )}
           </Box>
         </DialogContent>
         <DialogActions>

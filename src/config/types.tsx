@@ -59,7 +59,13 @@ export type StackingNode = {
 export type StackingState = {
   zoom: number;
   nodes: StackingNode[];
+  background: Document[] | null;            
+  backgroundFit?: 'contain' | 'cover' | 'none';
+  backgroundOpacity?: number; 
 };
+
+export type ProyectoLite = { id: string; nombre: string; logo?: string }
+
 
 export interface Proyecto {
   id: string;
@@ -100,7 +106,7 @@ export interface PlanPago {
     parcialidades: { month: number; value: number }[];
   }
 
-
+  export type PropiedadLite = { id: string; tituloPropiedad: string; imagenes?: string[] }
   export interface Propiedad {
     id: string; 
     userid: string; 
@@ -155,13 +161,14 @@ export interface PlanPago {
     nombreCompleto: string;
     correoElectronico?: string;
     celular?: string;
-    fechaCreacion?: string;
     ocupacionCliente?: string;
     edoCivilCliente?: string;
     clasificacionCliente?: string;
     medioCaptacion?: string;    
     comentarios?: string;
     proyectosInteres?: string[];
+    fechaCreacion?: string;
+    fechaActualizacion?: string;
   }
 
 // Define el tipo de estatus como un union type:

@@ -102,10 +102,11 @@ const ProyectoUnidadesTab: React.FC<ProyectoUnidadesTabProps> = ({
   const [openPrecioDialog, setOpenPrecioDialog] = React.useState(false);
   const [porcentajeAumento, setPorcentajeAumento] = React.useState(0);
 
-  // Importación por Excel
+  // Importación por Excel/CSV
   const [openImportDialog, setOpenImportDialog] = React.useState(false);
   const [importPreview, setImportPreview] = React.useState<Unidad[]>([]);
   const [importMode, setImportMode] = React.useState<ImportMode>('append');
+  const [importWarnings, setImportWarnings] = React.useState<string[]>([]);
 
   // ---- Helpers ----
   const requiredOk = (u?: Unidad | null) =>
@@ -145,11 +146,11 @@ const ProyectoUnidadesTab: React.FC<ProyectoUnidadesTabProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unidad, autoSave]);
 
-  // ---- Importación por Excel ----
+  // ---- Importación por Excel/CSV ----
   const downloadUnidadesTemplate = () => {
     const wsData = [
       ['numerounidad', 'unidadprivativa', 'preciolista', 'estatus'],
-      ['Ej: 101', 'Ej: Torre A', '1000000', 'disponible'],
+      ['Ej: 101', 'Ej: 1', '1000000', 'disponible'],
     ];
     const ws = XLSX.utils.aoa_to_sheet(wsData);
     const wb = XLSX.utils.book_new();
@@ -157,30 +158,70 @@ const ProyectoUnidadesTab: React.FC<ProyectoUnidadesTabProps> = ({
     XLSX.writeFile(wb, 'plantilla_unidades.xlsx');
   };
 
-  function unidadesFromExcel(file: File, userId: string, proyectoId: string): Promise<Unidad[]> {
+  function tryToNumberLoose(v: any): number | null {
+    if (typeof v === 'number' && Number.isFinite(v)) return v;
+    if (typeof v === 'string') {
+      const trimmed = v.trim();
+      if (!trimmed) return null;
+      // Extrae primer número válido (soporta comas)
+      const m = trimmed.replace(/,/g, '').match(/-?\d+(\.\d+)?/);
+      if (!m) return null;
+      const n = Number(m[0]);
+      return Number.isFinite(n) ? n : null;
+    }
+    return null;
+  }
+
+  function unidadesFromExcel(
+    file: File,
+    userId: string,
+    proyectoId: string
+  ): Promise<{ unidades: Unidad[]; warnings: string[] }> {
     return new Promise((resolve, reject) => {
+      const isCsv =
+        file.name.toLowerCase().endsWith('.csv') ||
+        (file.type && file.type.toLowerCase().includes('csv'));
+
       const reader = new FileReader();
       reader.onload = e => {
         try {
-          const data = new Uint8Array(e.target?.result as ArrayBuffer);
-          const workbook = XLSX.read(data, { type: 'array' });
-          const sheet = workbook.Sheets[workbook.SheetNames[0]];
+          const wb = isCsv
+            ? XLSX.read(String(e.target?.result || ''), { type: 'string' })
+            : XLSX.read(new Uint8Array(e.target?.result as ArrayBuffer), { type: 'array' });
+
+          const sheet = wb.Sheets[wb.SheetNames[0]];
           const json = XLSX.utils.sheet_to_json(sheet, { defval: '' });
 
           const COLUMNAS_BASE = ['numerounidad', 'unidadprivativa', 'preciolista', 'estatus'];
-          const unidades: Unidad[] = (json as any[]).map(row => {
+          const warnings: string[] = [];
+
+          const unidades: Unidad[] = (json as any[]).map((row, idx) => {
             const base: any = {};
             const extras: any = {};
             for (const key in row) {
               if (COLUMNAS_BASE.includes(key)) base[key] = row[key];
               else extras[key] = row[key];
             }
+
+            // Intentar convertir unidadprivativa a número
+            const upNum = tryToNumberLoose(base.unidadprivativa);
+            let unidadprivativaFinal = base.unidadprivativa ?? '';
+
+            if (upNum !== null) {
+              unidadprivativaFinal = String(upNum);
+            } else if (String(unidadprivativaFinal).trim() !== '') {
+              const fila = idx + 2; // +2: asumiendo cabecera en fila 1
+              warnings.push(
+                `Fila ${fila}: "unidadprivativa" = "${String(unidadprivativaFinal)}" no es numérica; se conservó sin cambios.`
+              );
+            }
+
             return {
               id: crypto.randomUUID(),
               userid: userId,
               proyectoid: proyectoId,
               numerounidad: base.numerounidad || '',
-              unidadprivativa: base.unidadprivativa || '',
+              unidadprivativa: unidadprivativaFinal,
               preciolista: base.preciolista || '',
               extras,
               imagenes: [],
@@ -188,22 +229,25 @@ const ProyectoUnidadesTab: React.FC<ProyectoUnidadesTabProps> = ({
             } as Unidad;
           });
 
-          resolve(unidades);
+          resolve({ unidades, warnings });
         } catch (err) {
           reject(err);
         }
       };
       reader.onerror = err => reject(err);
-      reader.readAsArrayBuffer(file);
+
+      if (isCsv) reader.readAsText(file);
+      else reader.readAsArrayBuffer(file);
     });
   }
 
   const handleExcelSelected = async (file?: File) => {
     if (!file || !proyecto) return;
     try {
-      const unidades = await unidadesFromExcel(file, userid, proyecto.id);
+      const { unidades, warnings } = await unidadesFromExcel(file, userid, proyecto.id);
       setImportPreview(unidades);
       setImportMode('append');
+      setImportWarnings(warnings || []);
       setOpenImportDialog(true);
     } catch (err) {
       alert('Error leyendo archivo: ' + err);
@@ -213,6 +257,7 @@ const ProyectoUnidadesTab: React.FC<ProyectoUnidadesTabProps> = ({
   const applyImport = () => {
     if (!importPreview.length) {
       setOpenImportDialog(false);
+      setImportWarnings([]);
       return;
     }
 
@@ -249,6 +294,7 @@ const ProyectoUnidadesTab: React.FC<ProyectoUnidadesTabProps> = ({
 
     setOpenImportDialog(false);
     setImportPreview([]);
+    setImportWarnings([]);
   };
 
   // ---- Aumentar precios ----
@@ -414,12 +460,12 @@ const ProyectoUnidadesTab: React.FC<ProyectoUnidadesTabProps> = ({
               <input
                 id="carga-unidades-excel"
                 type="file"
-                accept=".xlsx,.xls"
+                accept=".xlsx,.xls,.csv"    // <— ahora acepta CSV
                 style={{ display: 'none' }}
                 onChange={e => handleExcelSelected(e.target.files?.[0] || undefined)}
               />
               <Button variant="contained" component="span">
-                Importar Excel…
+                Importar Excel/CSV…
               </Button>
             </label>
 
@@ -460,7 +506,7 @@ const ProyectoUnidadesTab: React.FC<ProyectoUnidadesTabProps> = ({
             Con <b>Guardar automáticamente</b>, al escribir se actualiza la tabla. Desactívalo si prefieres confirmar con el botón.
           </Alert>
 
-          {/* Datos principales con Box (CSS grid) */}
+          {/* Datos principales */}
           <Box
             sx={{
               mb: 1,
@@ -538,7 +584,7 @@ const ProyectoUnidadesTab: React.FC<ProyectoUnidadesTabProps> = ({
             ))}
           </Box>
 
-          {/* Archivos – 3 tarjetas alineadas con Box */}
+          {/* Archivos */}
           <Box
             sx={{
               display: 'grid',
@@ -756,15 +802,35 @@ const ProyectoUnidadesTab: React.FC<ProyectoUnidadesTabProps> = ({
         </Box>
       </Dialog>
 
-      {/* Diálogo: Importar Excel */}
-      <Dialog open={openImportDialog} onClose={() => setOpenImportDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Importar unidades desde Excel</DialogTitle>
+      {/* Diálogo: Importar Excel/CSV */}
+      <Dialog open={openImportDialog} onClose={() => { setOpenImportDialog(false); setImportWarnings([]); }} maxWidth="sm" fullWidth>
+        <DialogTitle>Importar unidades desde Excel/CSV</DialogTitle>
         <DialogContent dividers>
           <Typography sx={{ mb: 2 }}>
             Se detectaron <b>{importPreview.length}</b> filas en el archivo.
           </Typography>
 
-          <FormControl>
+          {importWarnings.length > 0 && (
+            <Alert severity="warning" sx={{ mt: 2 }}>
+              <Typography fontWeight={700} gutterBottom>
+                Se encontraron {importWarnings.length} advertencia(s):
+              </Typography>
+              <Box sx={{ maxHeight: 160, overflow: 'auto', pl: 1 }}>
+                {importWarnings.slice(0, 20).map((w, i) => (
+                  <Typography key={i} variant="caption" display="block">
+                    • {w}
+                  </Typography>
+                ))}
+                {importWarnings.length > 20 && (
+                  <Typography variant="caption" sx={{ opacity: 0.7 }}>
+                    ...y {importWarnings.length - 20} más.
+                  </Typography>
+                )}
+              </Box>
+            </Alert>
+          )}
+
+          <FormControl sx={{ mt: 2 }}>
             <RadioGroup value={importMode} onChange={(_, v) => setImportMode(v as ImportMode)}>
               <FormControlLabel value="append" control={<Radio />} label="Agregar al final (no modifica las existentes)" />
               <FormControlLabel value="replace" control={<Radio />} label="Reemplazar todo (borra la lista actual y carga la del archivo)" />
@@ -777,7 +843,7 @@ const ProyectoUnidadesTab: React.FC<ProyectoUnidadesTabProps> = ({
           </Alert>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenImportDialog(false)}>Cancelar</Button>
+          <Button onClick={() => { setOpenImportDialog(false); setImportWarnings([]); }}>Cancelar</Button>
           <Button variant="contained" onClick={applyImport}>
             Continuar
           </Button>

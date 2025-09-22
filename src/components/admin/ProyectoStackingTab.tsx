@@ -1,3 +1,4 @@
+// ProyectoStackingDesignerTab.tsx
 import React, { useEffect } from 'react';
 import {
   Box, Paper, Typography, Stack, Chip, IconButton, Tooltip, Button,
@@ -7,7 +8,9 @@ import DeleteOutline from '@mui/icons-material/DeleteOutline';
 import RestartAlt from '@mui/icons-material/RestartAlt';
 import Save from '@mui/icons-material/Save';
 import ZoomOutMap from '@mui/icons-material/ZoomOutMap';
-import type { Proyecto, Unidad } from '../../config/types';
+import ImageIcon from '@mui/icons-material/Image';
+import RemoveCircleOutline from '@mui/icons-material/RemoveCircleOutline';
+import type { Proyecto, Unidad, Document as Doc } from '../../config/types';
 
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -21,6 +24,7 @@ import { formatoMoneda } from '../../hooks/useUtilsFunctions';
 const GRID = 10;
 const CARD_H = 70;
 const MIN_W = 120;
+const AREA_UNIT = 'm'; // unidad para área (no m²)
 
 const normalize = (s?: string | null) =>
   (s ?? '').toString().normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
@@ -54,13 +58,32 @@ const statusColor = (s?: string) =>
   s === 'vendido' ? '#06d6a0' : s === 'apartado' ? '#eab308' : '#ffffff';
 
 // ======================================================
+// Tipos locales
+// ======================================================
+type StackingNode = {
+  id: string;  // unidad.id
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+};
+
+type StackingState = {
+  zoom: number;
+  nodes: StackingNode[];
+  background: Doc[] | null;
+  backgroundFit?: 'contain' | 'cover' | 'none';
+  backgroundOpacity?: number; // 0..1
+};
+
+// ======================================================
 // Mapeo de Unidad -> MappedUnit
 // ======================================================
 type MappedUnit = {
   id: string;
   numero: string;
   torre: string;
-  piso: number;
+  nivel?: number; // solo si existe en extras.nivel/Nivel
   estatus: 'vendido' | 'apartado' | 'disponible';
   area?: number;
   precio?: number;
@@ -72,11 +95,8 @@ const mapUnidad = (u: Unidad): MappedUnit => {
     (u.unidadprivativa as string) ||
     (getFirst<string>(u.extras || {}, ['torre', 'edificio', 'tower']) ?? 'Torre A');
 
-  let piso = toNumber(getFirst<number | string>(u.extras || {}, ['piso', 'nivel', 'floor'])) || NaN;
-  if (!Number.isFinite(piso)) {
-    const m = numero.match(/^(\d{1,2})/);
-    piso = m ? Number(m[1]) : 0;
-  }
+  // Mostrar "Nivel" solo si viene explícito (nivel / Nivel)
+  const nivelVal = toNumber(getFirst<number | string>(u.extras || {}, ['nivel', 'Nivel']));
 
   const area = toNumber(
     getFirst<number | string>(u.extras || {}, [
@@ -89,7 +109,7 @@ const mapUnidad = (u: Unidad): MappedUnit => {
     id: u.id,
     numero,
     torre,
-    piso: Number.isFinite(piso) ? piso : 0,
+    nivel: Number.isFinite(nivelVal) ? nivelVal : undefined,
     estatus: sanitizeStatus(u.estatus) as MappedUnit['estatus'],
     area: Number.isFinite(area) ? area : undefined,
     precio: Number.isFinite(precio) ? precio : undefined,
@@ -108,22 +128,6 @@ function minSizeFor(u?: MappedUnit): { w: number; h: number } {
 }
 
 // ======================================================
-// Estado de Stacking guardado en proyecto.stacking
-// ======================================================
-type StackingNode = {
-  id: string;  // unidad.id
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-};
-
-type StackingState = {
-  zoom: number;
-  nodes: StackingNode[];
-};
-
-// ======================================================
 // Drag & Drop
 // ======================================================
 const DND_TYPES = { UNIT: 'UNIT' } as const;
@@ -132,7 +136,7 @@ type DragItem = { type: typeof DND_TYPES.UNIT; unitId: string };
 // ------------------------------------------------------
 // Palette Card (draggable)
 // ------------------------------------------------------
-const PaletteCard: React.FC<{ u: MappedUnit }> = ({ u }) => {
+const PaletteCard: React.FC<{ u: MappedUnit }> = React.memo(({ u }) => {
   const [{ isDragging }, drag] = useDrag<DragItem, void, { isDragging: boolean }>(() => ({
     type: DND_TYPES.UNIT,
     item: () => ({ type: DND_TYPES.UNIT, unitId: u.id }),
@@ -155,7 +159,10 @@ const PaletteCard: React.FC<{ u: MappedUnit }> = ({ u }) => {
       }}
     >
       <Typography sx={{ fontWeight: 900, lineHeight: 1.1 }}>{u.numero || 'UN'}</Typography>
-      <Typography variant="caption">{String(u.torre)} · Nivel {u.piso}</Typography>
+      <Typography variant="caption">
+        {String(u.torre)}
+        {typeof u.nivel === 'number' ? ` · Nivel ${u.nivel}` : ''}
+      </Typography>
       <Chip
         label={u.estatus.toUpperCase()}
         size="small"
@@ -168,10 +175,11 @@ const PaletteCard: React.FC<{ u: MappedUnit }> = ({ u }) => {
       />
     </Paper>
   );
-};
+});
+PaletteCard.displayName = 'PaletteCard';
 
 // ------------------------------------------------------
-// NodeCard (componente hijo por nodo)  ⭐️
+// NodeCard (componente hijo por nodo)
 // ------------------------------------------------------
 type NodeCardProps = {
   n: StackingNode;
@@ -179,9 +187,10 @@ type NodeCardProps = {
   editMode: boolean;
   setNodes: React.Dispatch<React.SetStateAction<StackingNode[]>>;
   unitById: Map<string, MappedUnit>;
+  scale: number; // <— importante para que Rnd sincronice con el zoom
 };
 
-const NodeCard: React.FC<NodeCardProps> = ({ n, u, editMode, setNodes, unitById }) => {
+const NodeCard: React.FC<NodeCardProps> = React.memo(({ n, u, editMode, setNodes, unitById, scale }) => {
   const isDisponible = u.estatus === 'disponible';
   const bg = statusColor(u.estatus);
   const isWhiteBg = bg === '#ffffff';
@@ -195,6 +204,11 @@ const NodeCard: React.FC<NodeCardProps> = ({ n, u, editMode, setNodes, unitById 
       setNodes(prev => prev.map(nn => nn.id === n.id ? { ...nn, h: needed } : nn));
     }
   }, [n.id, n.h, n.w, u.estatus, u.area, u.precio, setNodes]);
+
+  const info: string[] = [String(u.torre)];
+  if (typeof u.nivel === 'number') info.push(`Nivel ${u.nivel}`);if (typeof u.area === 'number')
+  info.push(`${(Math.round(u.area * 100) / 100).toLocaleString('es-MX', { maximumFractionDigits: 2 })} ${AREA_UNIT}`);
+
 
   const body = (
     <Paper
@@ -214,6 +228,7 @@ const NodeCard: React.FC<NodeCardProps> = ({ n, u, editMode, setNodes, unitById 
         userSelect: 'none',
         overflow: 'hidden',
         wordBreak: 'break-word',
+        willChange: 'transform',
       }}
       elevation={3}
     >
@@ -237,11 +252,8 @@ const NodeCard: React.FC<NodeCardProps> = ({ n, u, editMode, setNodes, unitById 
         )}
       </Stack>
 
-      {/* Info: Torre · Nivel · Área m² (si hay) */}
-      <Typography variant="caption">
-        {String(u.torre)} · Nivel {u.piso}
-        {typeof u.area === 'number' ? ` · ${u.area} m²` : ''}
-      </Typography>
+      {/* Info: Torre · (Nivel) · (Área m) */}
+      <Typography variant="caption">{info.join(' · ')}</Typography>
 
       {/* Precio SOLO si está disponible */}
       {isDisponible && u.precio != null && (
@@ -280,6 +292,7 @@ const NodeCard: React.FC<NodeCardProps> = ({ n, u, editMode, setNodes, unitById 
       resizeGrid={[GRID, GRID]}
       minWidth={MIN_W}
       minHeight={minSizeFor(unitById.get(n.id)).h}
+      scale={scale} // <<< CORRECCIÓN CLAVE DEL PROBLEMA DE ZOOM
       onDragStop={(_, d) => {
         setNodes(prev => prev.map(nn => nn.id === n.id ? { ...nn, x: d.x, y: d.y } : nn));
       }}
@@ -300,19 +313,23 @@ const NodeCard: React.FC<NodeCardProps> = ({ n, u, editMode, setNodes, unitById 
       {body}
     </Rnd>
   );
-};
+});
+NodeCard.displayName = 'NodeCard';
 
 // ------------------------------------------------------
-// CanvasNodes (sin hooks dentro del map)
+// CanvasNodes
 // ------------------------------------------------------
-const CanvasNodes: React.FC<{
+export const CanvasNodes: React.FC<{
   zoom: number;
   editMode: boolean;
   nodes: StackingNode[];
   setNodes: React.Dispatch<React.SetStateAction<StackingNode[]>>;
   unitById: Map<string, MappedUnit>;
   scrollRef: React.RefObject<HTMLDivElement>;
-}> = ({ zoom, editMode, nodes, setNodes, unitById, scrollRef }) => {
+  backgroundDocs: Doc[] | null;
+  backgroundFit: 'contain' | 'cover' | 'none';
+  backgroundOpacity: number;
+}> = ({ zoom, editMode, nodes, setNodes, unitById, scrollRef, backgroundDocs, backgroundFit, backgroundOpacity }) => {
   const canvasRef = React.useRef<HTMLDivElement>(null);
 
   const [, drop] = useDrop<DragItem>(() => ({
@@ -350,6 +367,10 @@ const CanvasNodes: React.FC<{
 
   drop(canvasRef);
 
+  // Resuelve la URL del fondo (tomamos el primer doc)
+  const bgDoc = backgroundDocs?.[0];
+  const bgSrc = bgDoc?.url || bgDoc?.path || '';
+
   return (
     <Paper
       ref={scrollRef}
@@ -370,6 +391,7 @@ const CanvasNodes: React.FC<{
           height: '1400px',
           transform: `scale(${zoom})`,
           transformOrigin: '0 0',
+          // Grid por encima del fondo
           backgroundImage: `
             linear-gradient(to right, rgba(0,0,0,0.06) 1px, transparent 1px),
             linear-gradient(to bottom, rgba(0,0,0,0.06) 1px, transparent 1px)
@@ -377,6 +399,25 @@ const CanvasNodes: React.FC<{
           backgroundSize: `${GRID}px ${GRID}px, ${GRID}px ${GRID}px`,
         }}
       >
+        {/* Fondo de imagen (debajo de los nodos) */}
+        {!!bgSrc && (
+          <Box
+            component="img"
+            src={bgSrc}
+            alt={bgDoc?.nombre || 'background'}
+            sx={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: backgroundFit,
+              opacity: backgroundOpacity,
+              pointerEvents: 'none',
+              userSelect: 'none',
+            }}
+          />
+        )}
+
         {nodes.map(n => {
           const u = unitById.get(n.id);
           if (!u) return null;
@@ -388,6 +429,7 @@ const CanvasNodes: React.FC<{
               editMode={editMode}
               setNodes={setNodes}
               unitById={unitById}
+              scale={zoom}   // <- pasamos el zoom al Rnd
             />
           );
         })}
@@ -413,11 +455,20 @@ const ProyectoStackingDesignerTab: React.FC<Props> = ({ proyecto, setProyecto, r
 
   const initial = React.useMemo<StackingState>(() => {
     const s = (proyecto as any).stacking as StackingState | undefined;
-    return { zoom: s?.zoom ?? 1, nodes: s?.nodes ?? [] };
+    return {
+      zoom: s?.zoom ?? 1,
+      nodes: s?.nodes ?? [],
+      background: s?.background ?? null,
+      backgroundFit: s?.backgroundFit ?? 'contain',
+      backgroundOpacity: typeof s?.backgroundOpacity === 'number' ? s.backgroundOpacity : 0.6,
+    };
   }, [proyecto]);
 
   const [zoom, setZoom] = React.useState<number>(initial.zoom);
   const [nodes, setNodes] = React.useState<StackingNode[]>(initial.nodes);
+  const [backgroundDocs, setBackgroundDocs] = React.useState<Doc[] | null>(initial.background);
+  const [bgFit, setBgFit] = React.useState<'contain' | 'cover' | 'none'>(initial.backgroundFit ?? 'contain');
+  const [bgOpacity, setBgOpacity] = React.useState<number>(initial.backgroundOpacity ?? 0.6);
   const [editMode, setEditMode] = React.useState<boolean>(!readOnly);
 
   // Filtros
@@ -437,7 +488,7 @@ const ProyectoStackingDesignerTab: React.FC<Props> = ({ proyecto, setProyecto, r
     return allUnits
       .filter(u => !placed.has(u.id))
       .filter(u => (filterTorre ? String(u.torre) === filterTorre : true))
-      .filter(u => (filterStatus ? u.estatus === filterStatus : true)) // ya saneado
+      .filter(u => (filterStatus ? u.estatus === filterStatus : true))
       .filter(u => {
         if (!search) return true;
         const n = normalize(search);
@@ -459,7 +510,13 @@ const ProyectoStackingDesignerTab: React.FC<Props> = ({ proyecto, setProyecto, r
     setProyecto(prev => {
       if (!prev) return prev;
       const next: any = { ...prev };
-      next.stacking = { zoom, nodes };
+      next.stacking = {
+        zoom,
+        nodes,
+        background: backgroundDocs,
+        backgroundFit: bgFit,
+        backgroundOpacity: bgOpacity,
+      };
       return next;
     });
   };
@@ -468,15 +525,37 @@ const ProyectoStackingDesignerTab: React.FC<Props> = ({ proyecto, setProyecto, r
   useEffect(() => {
     if (!editMode) return;
     const t = setTimeout(() => {
-      actualizarProyecto({ ...proyecto, stacking: { zoom, nodes } })
-        .catch(err => console.error('autosave stacking error', err));
+      actualizarProyecto({
+        ...proyecto,
+        stacking: {
+          zoom,
+          nodes,
+          background: backgroundDocs,
+          backgroundFit: bgFit,
+          backgroundOpacity: bgOpacity,
+        }
+      }).catch(err => console.error('autosave stacking error', err));
     }, 800);
     return () => clearTimeout(t);
-  }, [zoom, nodes, editMode]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [zoom, nodes, backgroundDocs, bgFit, bgOpacity, editMode, proyecto]);
+
+  // ---- Subir/Quitar imagen de fondo ----
+  const onPickBackground = async (file: File) => {
+    if (!file || !file.type.startsWith('image/')) return;
+    const dataURL = await fileToDataURL(file);
+    const doc: Doc = {
+      id: crypto.randomUUID(),
+      nombre: file.name,
+      file,
+      url: dataURL, // render inmediato
+    };
+    setBackgroundDocs([doc]);
+  };
+  const clearBackground = () => setBackgroundDocs(null);
 
   return (
     <DndProvider backend={HTML5Backend}>
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '300px 1fr' }, gap: 2 }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '320px 1fr' }, gap: 2 }}>
         {/* Sidebar */}
         <Paper sx={{ p: 2, borderRadius: 3, height: '70vh', display: 'flex', flexDirection: 'column', gap: 1 }}>
           <Typography variant="h6" fontWeight={900}>Paleta de unidades</Typography>
@@ -514,10 +593,82 @@ const ProyectoStackingDesignerTab: React.FC<Props> = ({ proyecto, setProyecto, r
 
           <Divider sx={{ my: 1 }} />
 
-          <FormControlLabel
-            control={<Switch checked={editMode} onChange={(_, v) => setEditMode(v)} />}
-            label="Modo edición"
-          />
+          {/* Fondo del canvas */}
+          <Stack spacing={1}>
+            <Stack direction="row" alignItems="center" justifyContent="space-between">
+              <Typography variant="subtitle2" fontWeight={800}>Fondo del canvas</Typography>
+              <FormControlLabel
+                control={<Switch checked={editMode} onChange={(_, v) => setEditMode(v)} />}
+                label="Modo edición"
+              />
+            </Stack>
+
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Button
+                variant="outlined"
+                startIcon={<ImageIcon />}
+                component="label"
+                disabled={!editMode}
+              >
+                Elegir imagen
+                <input
+                  type="file"
+                  hidden
+                  accept="image/*"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) onPickBackground(f);
+                    e.currentTarget.value = '';
+                  }}
+                />
+              </Button>
+
+              <Tooltip title="Quitar imagen de fondo">
+                <span>
+                  <IconButton onClick={clearBackground} disabled={!backgroundDocs || !editMode}>
+                    <RemoveCircleOutline />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            </Stack>
+
+            {backgroundDocs?.[0] && (
+              <>
+                <Typography variant="caption" color="text.secondary" noWrap title={backgroundDocs[0].nombre}>
+                  {backgroundDocs[0].nombre}
+                </Typography>
+
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Typography variant="caption" width={60}>Fit:</Typography>
+                  <Select
+                    size="small"
+                    value={bgFit}
+                    onChange={(e) => setBgFit(e.target.value as any)}
+                    disabled={!editMode}
+                    sx={{ flex: 1 }}
+                  >
+                    <MenuItem value="contain">contain</MenuItem>
+                    <MenuItem value="cover">cover</MenuItem>
+                    <MenuItem value="none">none</MenuItem>
+                  </Select>
+                </Stack>
+
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Typography variant="caption" width={60}>Opacidad:</Typography>
+                  <Slider
+                    min={0} max={100} step={1}
+                    value={Math.round((bgOpacity ?? 1) * 100)}
+                    onChange={(_, v) => setBgOpacity((v as number) / 100)}
+                    valueLabelDisplay="auto"
+                    disabled={!editMode}
+                    sx={{ flex: 1 }}
+                  />
+                </Stack>
+              </>
+            )}
+          </Stack>
+
+          <Divider sx={{ my: 1 }} />
 
           <Stack direction="row" alignItems="center" gap={1}>
             <ZoomOutMap fontSize="small" />
@@ -562,6 +713,9 @@ const ProyectoStackingDesignerTab: React.FC<Props> = ({ proyecto, setProyecto, r
           setNodes={setNodes}
           unitById={unitById}
           scrollRef={scrollRef}
+          backgroundDocs={backgroundDocs}
+          backgroundFit={bgFit}
+          backgroundOpacity={bgOpacity}
         />
       </Box>
 
@@ -576,3 +730,15 @@ const ProyectoStackingDesignerTab: React.FC<Props> = ({ proyecto, setProyecto, r
 };
 
 export default ProyectoStackingDesignerTab;
+
+// ======================================================
+// Helpers
+// ======================================================
+function fileToDataURL(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result || ''));
+    fr.onerror = reject;
+    fr.readAsDataURL(file);
+  });
+}

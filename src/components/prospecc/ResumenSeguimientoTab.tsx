@@ -212,6 +212,7 @@ const ResumenSeguimientosTab: React.FC<Props> = ({ userid, userRole }) => {
               renderDayModal={(date, close) => {
                 const fechaStr = date.toString();
                 const seguimientosDia = segFiltrados.filter(s => esMismoDia(s.fechaProximoSeguimiento, fechaStr));
+                console.log(seguimientosDia)
                 return (
                   <Dialog open onClose={close} maxWidth="sm" fullWidth>
                     <DialogTitle sx={{ fontWeight: 800 }}>

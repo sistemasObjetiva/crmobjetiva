@@ -1,7 +1,7 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   Box, Typography, IconButton, Paper, Tooltip, Table, TableBody, TableCell,
-  TableHead, TableRow, CircularProgress, Chip, TextField, TableSortLabel
+  TableHead, TableRow, CircularProgress, Chip, TextField, TableSortLabel, TablePagination
 } from '@mui/material'
 import PersonAddAltIcon from '@mui/icons-material/PersonAddAlt'
 import VisibilityIcon from '@mui/icons-material/Visibility'
@@ -21,7 +21,7 @@ import SignedAvatar from '../general/SignedAvatar'
 import { getEstatusChip } from '../../hooks/useUtilsFunctions'
 
 const ESTATUS_LIST = [
-  'contactado', 'interaccion', 'cotizacion', 'visita', 'posible', 'apartado', 'vendido','descartado'
+  'contactado', 'interaccion', 'cotizacion', 'visita', 'posible', 'apartado', 'vendido', 'descartado'
 ] as const
 
 interface Props { userid: string }
@@ -86,15 +86,13 @@ const SeguimientosTab: React.FC<Props> = ({ userid }) => {
   const [seguimientoLocal, setSeguimientoLocal] = useState<Seguimiento | null>(null)
   const [loading, setLoading] = useState(false)
 
-
- const prospectosById = useMemo(() => {
-  const map = new Map<string, Prospecto>()
-   ;(prospectos ?? []).forEach(p => {
-     if (p?.id) map.set(p.id, p)
-   })
-   return map
- }, [prospectos])
-
+  const prospectosById = useMemo(() => {
+    const map = new Map<string, Prospecto>()
+    ;(prospectos ?? []).forEach(p => {
+      if (p?.id) map.set(p.id, p)
+    })
+    return map
+  }, [prospectos])
 
   // Prospectos sin seguimiento
   const prospectosSinSeguimiento = useMemo(() => {
@@ -244,13 +242,31 @@ const SeguimientosTab: React.FC<Props> = ({ userid }) => {
     return sorted
   }
 
-  // mismo orden visual del general; luego aplicamos filtros/orden
+  // mismo orden visual, luego filtros/orden
   const historialOrdenado = useMemo(
     () => [...(seguimientos ?? [])].sort(
       (a, b) => new Date(a.fechaCreacion).getTime() - new Date(b.fechaCreacion).getTime()
     ),
     [seguimientos]
   )
+
+  // ===== Paginación por estatus =====
+  type PagingState = Record<string, { page: number; rowsPerPage: number }>
+  const DEFAULT_RPP = 25
+  const [paging, setPaging] = useState<PagingState>(() =>
+    Object.fromEntries(ESTATUS_LIST.map(s => [s, { page: 0, rowsPerPage: DEFAULT_RPP }])) as PagingState
+  )
+  const onChangePage = (status: string, newPage: number) =>
+    setPaging(prev => ({ ...prev, [status]: { ...prev[status], page: newPage } }))
+  const onChangeRpp = (status: string, rpp: number) =>
+    setPaging(prev => ({ ...prev, [status]: { page: 0, rowsPerPage: rpp } }))
+
+  // Reset page al cambiar filtros/orden
+  useEffect(() => {
+    setPaging(prev =>
+      Object.fromEntries(Object.keys(prev).map(k => [k, { ...prev[k], page: 0 }])) as PagingState
+    )
+  }, [filters, order, orderBy])
 
   return (
     <Box>
@@ -320,9 +336,13 @@ const SeguimientosTab: React.FC<Props> = ({ userid }) => {
         <Box p={4} display="flex" justifyContent="center"><CircularProgress /></Box>
       ) : (
         (ESTATUS_LIST as readonly string[]).map((status) => {
-          const rows = filterAndSort(
+          const allRows = filterAndSort(
             historialOrdenado.filter(s => s.estatusSeguimiento === status)
           )
+          const { page, rowsPerPage } = paging[status] ?? { page: 0, rowsPerPage: DEFAULT_RPP }
+          const start = page * rowsPerPage
+          const end = start + rowsPerPage
+          const pageRows = allRows.slice(start, end)
 
           return (
             <Box key={status} mb={4}>
@@ -339,14 +359,10 @@ const SeguimientosTab: React.FC<Props> = ({ userid }) => {
                 }}
               >
                 {getEstatusChip(status)}
-                <Typography
-                  component="span"
-                  sx={{ ml: 1, fontWeight: 700, fontSize: 14 }}
-                >
-                  ({rows.length})
+                <Typography component="span" sx={{ ml: 1, fontWeight: 700, fontSize: 14 }}>
+                  ({allRows.length})
                 </Typography>
               </Typography>
-
 
               <Paper variant="outlined" sx={{ mb: 2, borderLeft: `5px solid var(--primary-color, #1976d2)`, overflowX: 'auto' }}>
                 <Table size="small" stickyHeader>
@@ -468,16 +484,16 @@ const SeguimientosTab: React.FC<Props> = ({ userid }) => {
                   </TableHead>
 
                   <TableBody>
-                    {rows.length === 0 ? (
+                    {pageRows.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={9}>
                           <Typography color="text.secondary" align="center" fontSize={14}>
-                            Sin seguimientos en este estatus
+                            {allRows.length ? 'Sin resultados en esta página/filtros' : 'Sin seguimientos en este estatus'}
                           </Typography>
                         </TableCell>
                       </TableRow>
                     ) : (
-                      rows.map((s) => {
+                      pageRows.map((s) => {
                         const prospecto = prospectosById.get(s.idprospecto)
                         return (
                           <TableRow key={s.id}>
@@ -508,6 +524,20 @@ const SeguimientosTab: React.FC<Props> = ({ userid }) => {
                     )}
                   </TableBody>
                 </Table>
+
+                {/* Paginación por estatus */}
+                <Box sx={{ px: 1 }}>
+                  <TablePagination
+                    component="div"
+                    count={allRows.length}
+                    page={page}
+                    onPageChange={(_, newPage) => onChangePage(status, newPage)}
+                    rowsPerPage={rowsPerPage}
+                    onRowsPerPageChange={(e) => onChangeRpp(status, parseInt(e.target.value, 10))}
+                    rowsPerPageOptions={[10, 25, 50, 100]}
+                    labelRowsPerPage="Filas por página"
+                  />
+                </Box>
               </Paper>
             </Box>
           )

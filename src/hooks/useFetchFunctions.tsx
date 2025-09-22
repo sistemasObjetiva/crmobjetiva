@@ -585,10 +585,17 @@ export async function updateProspecto(prospecto: Prospecto) {
 
   const { data, error } = await supabase
     .from("prospectos")
-    .upsert([prospecto], { onConflict: "id" }); // <-- usa array
+    .upsert(
+      [{
+        ...prospecto,
+        fechaActualizacion: new Date().toISOString()
+      }],
+      { onConflict: "id" }
+    );
 
   if (error) throw error;
-  return { data }
+  return { data };
+
 }
 /////////////////////////////////////////////////Seguimientos////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

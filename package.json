@@ -16,6 +16,7 @@
     "@js-temporal/polyfill": "^0.5.1",
     "@mui/icons-material": "^5.15.15",
     "@mui/material": "^5.15.15",
+    "@mui/x-data-grid": "^8.11.1",
     "@react-pdf/renderer": "^4.3.0",
     "@supabase/supabase-js": "^2.50.3",
     "date-fns": "^4.1.0",

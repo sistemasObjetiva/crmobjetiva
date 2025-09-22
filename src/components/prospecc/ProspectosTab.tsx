@@ -1,16 +1,22 @@
 import React, { useMemo, useState } from 'react'
 import {
-  Box, Typography, IconButton, Paper, Tooltip, Table, TableBody, TableCell,
-  TableHead, TableRow, CircularProgress, Chip, TextField, Autocomplete, TableSortLabel
+  Box, Typography, IconButton, Paper, Tooltip, CircularProgress, Chip, TextField, Autocomplete
 } from '@mui/material'
 import PersonAddAltIcon from '@mui/icons-material/PersonAddAlt'
 import VisibilityIcon from '@mui/icons-material/Visibility'
-import { updateProspecto, useFetchPropiedades, useFetchProspectosUser, useFetchProyects } from '../../hooks/useFetchFunctions'
+import {
+  updateProspecto,
+  useFetchPropiedades,
+  useFetchProspectosUser,
+  useFetchProyects,
+  useFetchSeguimientosUser
+} from '../../hooks/useFetchFunctions'
 import { Prospecto } from '../../config/types'
 import NuevoProspectoModal from './ProspectoModal'
 import { useStatusChip } from '../../config/context/useStatusChip'
 import Spinner from '../general/Spinner'
-import SignedAvatar from '../general/SignedAvatar'
+import { DataGrid, GridColDef, GridSortModel, GridSortDirection } from '@mui/x-data-grid'
+import { SignedAvatarLazy } from '../general/SignedAvatarLazy'
 
 interface ProspectosTabProps {
   userid: string
@@ -25,16 +31,67 @@ type OrderByKey =
   | 'fechaCreacion'
   | 'proyectosInteres' // ordena por cantidad de intereses
 
+const ROW_HEIGHT = 56
+
+// ===================== helper de formato (sin campos extra) =====================
+const fmtFechaCorta = (iso?: string) => {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime())
+    ? ''
+    : d.toLocaleDateString('es-MX', { year: 'numeric', month: '2-digit', day: '2-digit' })
+}
+
+// ===================== Chips "lite" con lazy avatar =====================
+const ProyectosChipsLite: React.FC<{
+  ids?: string[]
+  proyectos: Array<{ id: string; nombre: string; logo?: any }>
+  propiedades: Array<{ id: string; tituloPropiedad: string; imagenes?: any[] }>
+  maxChips?: number
+}> = ({ ids = [], proyectos, propiedades, maxChips = 2 }) => {
+  if (!ids.length) return null
+  const items = ids.slice(0, maxChips)
+  const rest = ids.length - items.length
+
+  const meta = (id: string) => {
+    const p = proyectos.find(x => x.id === id)
+    if (p) return { label: p.nombre, avatarDoc: p.logo }
+    const r = propiedades.find(x => x.id === id)
+    if (r) return { label: r.tituloPropiedad, avatarDoc: r.imagenes?.[0] }
+    return { label: id, avatarDoc: undefined }
+  }
+
+  return (
+    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+      {items.map(id => {
+        const { label, avatarDoc } = meta(id)
+        return (
+          <Chip
+            key={id}
+            label={label}
+            avatar={avatarDoc ? <SignedAvatarLazy doc={avatarDoc} alt={label} size={24} /> : undefined}
+            size="small"
+            sx={{ bgcolor: 'transparent' }}
+          />
+        )
+      })}
+      {rest > 0 && <Chip size="small" label={`+${rest}`} variant="outlined" />}
+    </Box>
+  )
+}
+
 const ProspectosTab: React.FC<ProspectosTabProps> = ({ userid }) => {
   const { showStatus } = useStatusChip()
   const { prospectos, loading: loadingProspectos } = useFetchProspectosUser(userid!)
+  const { seguimientos, loading: loadingSeguimientos } = useFetchSeguimientosUser(userid!)
   const { proyectos } = useFetchProyects()
   const { propiedades } = useFetchPropiedades()
+
   const [modalOpen, setModalOpen] = useState(false)
   const [prospectoSeleccionado, setProspectoSeleccionado] = useState<Prospecto | null>(null)
   const [loading, setLoading] = useState(false)
-console.log(userid)
-  // ----------------- NUEVO: estado de filtros y orden -----------------
+
+  // ----------------- Orden & Filtros -----------------
   const [order, setOrder] = useState<Order>('asc')
   const [orderBy, setOrderBy] = useState<OrderByKey>('fechaCreacion')
 
@@ -43,8 +100,8 @@ console.log(userid)
     correo: '',
     celular: '',
     clasificacion: '',
-    proyectoTexto: '', // filtra por texto en nombre de proyecto/propiedad
-    fecha: '', // yyyy-mm-dd
+    proyectoTexto: '',
+    fecha: '',
   })
 
   // Opciones de autocomplete (proyectos + propiedades)
@@ -53,7 +110,6 @@ console.log(userid)
       ...proyectos.map(p => ({ id: p.id, label: p.nombre })),
       ...propiedades.map(p => ({ id: p.id, label: p.tituloPropiedad })),
     ]
-    // único por label
     const seen = new Set<string>()
     return arr.filter(o => {
       if (seen.has(o.label)) return false
@@ -62,7 +118,7 @@ console.log(userid)
     })
   }, [proyectos, propiedades])
 
-  // Mapa id -> label para render y filtrados
+  // Mapa id -> label para filtrar por texto
   const idToLabel = useMemo(() => {
     const map = new Map<string, string>()
     proyectos.forEach(p => map.set(p.id, p.nombre))
@@ -70,7 +126,12 @@ console.log(userid)
     return map
   }, [proyectos, propiedades])
 
-  const handleRequestSort = (key: OrderByKey) => {
+  const handleRequestSort = (key: OrderByKey, forced?: Order) => {
+    if (forced) {
+      setOrderBy(key)
+      setOrder(forced)
+      return
+    }
     if (orderBy === key) {
       setOrder(prev => (prev === 'asc' ? 'desc' : 'asc'))
     } else {
@@ -121,19 +182,16 @@ console.log(userid)
     const list = (prospectos ?? []).filter(Boolean)
 
     const filtrada = list.filter(p => {
-      // nombre, correo, celular
       if (filters.nombre && !matches(p.nombreCompleto, filters.nombre)) return false
       if (filters.correo && !matches(p.correoElectronico, filters.correo)) return false
       if (filters.celular && !matches(p.celular, filters.celular)) return false
 
-      // clasificacion (exacto si eliges del dropdown, o substring si tecleas)
       if (filters.clasificacion) {
         const c = normalize(filters.clasificacion)
         const pc = normalize(p.clasificacionCliente)
         if (!pc.includes(c)) return false
       }
 
-      // proyectoTexto: busca en labels de ids de proyectosInteres
       if (filters.proyectoTexto) {
         const needle = normalize(filters.proyectoTexto)
         const anyMatch =
@@ -141,7 +199,6 @@ console.log(userid)
         if (!anyMatch) return false
       }
 
-      // fecha = fechaCreacion (yyyy-mm-dd)
       if (filters.fecha) {
         const fechaRow = p.fechaCreacion ? new Date(p.fechaCreacion) : null
         const fechaStr = fechaRow
@@ -158,9 +215,9 @@ console.log(userid)
     return [...filtrada].sort(sortComparator)
   }, [prospectos, filters, order, orderBy, idToLabel])
 
-  // ----------------- resto de tu lógica -----------------
+  // ----------------- Crear / Editar -----------------
   const initialProspecto = (): Prospecto => ({
-    id: crypto.randomUUID(),
+    id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
     userid,
     nombreCompleto: '',
     correoElectronico: '',
@@ -189,12 +246,7 @@ console.log(userid)
       showStatus('Prospecto guardado exitosamente', 'success')
     } catch (err: any) {
       console.error(err)
-      showStatus(
-        err?.message
-          ? `Error al guardar prospecto: ${err.message}`
-          : 'Error al guardar prospecto',
-        'error'
-      )
+      showStatus(err?.message ? `Error al guardar prospecto: ${err.message}` : 'Error al guardar prospecto', 'error')
     } finally {
       setModalOpen(false)
       setProspectoSeleccionado(null)
@@ -206,20 +258,93 @@ console.log(userid)
     setProspectoSeleccionado(prev => (prev ? { ...prev, [field]: value } : null))
   }
 
-  // valores únicos de clasificación para sugerir (puedes cambiar por una lista fija)
+  // valores únicos de clasificación para sugerir
   const opcionesClasificacion = useMemo(() => {
     const set = new Set<string>()
     ;(prospectos ?? []).forEach(p => p?.clasificacionCliente && set.add(p.clasificacionCliente))
     return Array.from(set)
   }, [prospectos])
 
+  // ===================== DataGrid =====================
+  // mapeo columnas -> claves de sort
+  const fieldToOrderKey: Record<string, OrderByKey> = {
+    nombreCompleto: 'nombreCompleto',
+    correoElectronico: 'correoElectronico',
+    celular: 'celular',
+    clasificacionCliente: 'clasificacionCliente',
+    fechaCreacion: 'fechaCreacion',
+  }
+
+  const orderKeyToField: Record<OrderByKey, string> = {
+    nombreCompleto: 'nombreCompleto',
+    correoElectronico: 'correoElectronico',
+    celular: 'celular',
+    clasificacionCliente: 'clasificacionCliente',
+    proyectosInteres: 'proyectosInteres', // no sortable en grid
+    fechaCreacion: 'fechaCreacion',
+  }
+
+  const sortModel: GridSortModel = useMemo(
+    () => [{ field: orderKeyToField[orderBy], sort: (order as GridSortDirection) }],
+    [order, orderBy]
+  )
+
+  const columns: GridColDef[] = useMemo(() => [
+    { field: 'nombreCompleto', headerName: 'Nombre', flex: 1, sortable: true },
+    { field: 'correoElectronico', headerName: 'Correo', flex: 1, sortable: true },
+    { field: 'celular', headerName: 'Celular', width: 140, sortable: true },
+    { field: 'clasificacionCliente', headerName: 'Clasificación', width: 160, sortable: true },
+    {
+      field: 'proyectosInteres',
+      headerName: 'Proyecto(s) interés',
+      flex: 1.3,
+      sortable: false,
+      renderCell: (params: any) => (
+        <ProyectosChipsLite
+          ids={params.row.proyectosInteres}
+          proyectos={proyectos}
+          propiedades={propiedades}
+          maxChips={2}
+        />
+      ),
+    },
+    {
+      field: 'fechaCreacion',
+      headerName: 'Fecha creación',
+      width: 140,
+      sortable: true,
+      valueGetter: (_value, row) => fmtFechaCorta(row.fechaCreacion),      // Nota: usamos sort "server" abajo; aquí devolvemos texto solo para UI
+    },
+    {
+      field: 'acciones',
+      headerName: 'Ver',
+      width: 80,
+      sortable: false,
+      renderCell: (params: any) => (
+        <IconButton size="small" onClick={() => handleAbrirModalVer(params.row)}>
+          <VisibilityIcon />
+        </IconButton>
+      ),
+    },
+  ], [proyectos, propiedades])
+
+  // Preparamos rows con ID seguro (sin campos derivados)
+  const rowsDG: Prospecto[] = useMemo(() =>
+    (rows ?? []).map((p) => ({
+      ...p,
+      id: p.id ?? p.correoElectronico ?? (
+        (typeof crypto !== 'undefined' && crypto.randomUUID)
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+      )
+    })), [rows])
+
   return (
     <Box>
       {loading && <Spinner open={true} />}
+
       <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
-        <Typography variant="h6" fontWeight={700} color="primary">
-          Lista de prospectos
-        </Typography>
+        <Typography variant="h6" fontWeight={700} color="primary">Lista de prospectos</Typography>
         <Tooltip title="Agregar prospecto">
           <IconButton color="primary" onClick={handleAbrirModalNuevo} size="large" sx={{ borderRadius: 2 }}>
             <PersonAddAltIcon fontSize="large" />
@@ -227,231 +352,92 @@ console.log(userid)
         </Tooltip>
       </Box>
 
-      <Paper variant="outlined" sx={{ overflow: 'auto' }}>
-        {loadingProspectos ? (
+      <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
+        {loadingProspectos??loadingSeguimientos ? (
           <Box p={4} display="flex" justifyContent="center"><CircularProgress /></Box>
         ) : (
-          <Table size="small" stickyHeader>
-            <TableHead>
-              {/* Fila de títulos con sort */}
-              <TableRow>
-                <TableCell sortDirection={orderBy === 'nombreCompleto' ? order : false}>
-                  <TableSortLabel
-                    active={orderBy === 'nombreCompleto'}
-                    direction={orderBy === 'nombreCompleto' ? order : 'asc'}
-                    onClick={() => handleRequestSort('nombreCompleto')}
-                  >
-                    Nombre
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell sortDirection={orderBy === 'correoElectronico' ? order : false}>
-                  <TableSortLabel
-                    active={orderBy === 'correoElectronico'}
-                    direction={orderBy === 'correoElectronico' ? order : 'asc'}
-                    onClick={() => handleRequestSort('correoElectronico')}
-                  >
-                    Correo
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell sortDirection={orderBy === 'celular' ? order : false}>
-                  <TableSortLabel
-                    active={orderBy === 'celular'}
-                    direction={orderBy === 'celular' ? order : 'asc'}
-                    onClick={() => handleRequestSort('celular')}
-                  >
-                    Celular
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell sortDirection={orderBy === 'clasificacionCliente' ? order : false}>
-                  <TableSortLabel
-                    active={orderBy === 'clasificacionCliente'}
-                    direction={orderBy === 'clasificacionCliente' ? order : 'asc'}
-                    onClick={() => handleRequestSort('clasificacionCliente')}
-                  >
-                    Clasificación
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell sortDirection={orderBy === 'proyectosInteres' ? order : false}>
-                  <TableSortLabel
-                    active={orderBy === 'proyectosInteres'}
-                    direction={orderBy === 'proyectosInteres' ? order : 'asc'}
-                    onClick={() => handleRequestSort('proyectosInteres')}
-                  >
-                    Proyecto(s) interés
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell sortDirection={orderBy === 'fechaCreacion' ? order : false}>
-                  <TableSortLabel
-                    active={orderBy === 'fechaCreacion'}
-                    direction={orderBy === 'fechaCreacion' ? order : 'asc'}
-                    onClick={() => handleRequestSort('fechaCreacion')}
-                  >
-                    Fecha creación
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell align="center">Ver</TableCell>
-              </TableRow>
+          <Box sx={{ width: '100%' }}>
+            {/* Filtros */}
+            <Box
+              sx={{
+                p: 1.5,
+                borderBottom: theme => `1px solid ${theme.palette.divider}`,
+                display: 'grid',
+                gap: 1,
+                gridTemplateColumns: 'repeat(6, minmax(0, 1fr))'
+              }}
+            >
+              <TextField
+                value={filters.nombre}
+                onChange={e => setFilters(f => ({ ...f, nombre: e.target.value }))}
+                placeholder="Filtrar nombre…"
+                size="small"
+              />
+              <TextField
+                value={filters.correo}
+                onChange={e => setFilters(f => ({ ...f, correo: e.target.value }))}
+                placeholder="Filtrar correo…"
+                size="small"
+              />
+              <TextField
+                value={filters.celular}
+                onChange={e => setFilters(f => ({ ...f, celular: e.target.value }))}
+                placeholder="Filtrar celular…"
+                size="small"
+              />
+              <Autocomplete
+                freeSolo
+                options={opcionesClasificacion}
+                value={filters.clasificacion}
+                onInputChange={(_, val) => setFilters(f => ({ ...f, clasificacion: val ?? '' }))}
+                renderInput={(params) => (
+                  <TextField {...params} placeholder="Filtrar clasificación…" size="small" />
+                )}
+              />
+              <Autocomplete
+                freeSolo
+                options={opcionesProyecto.map(o => o.label)}
+                value={filters.proyectoTexto}
+                onInputChange={(_, val) => setFilters(f => ({ ...f, proyectoTexto: val ?? '' }))}
+                renderInput={(params) => (
+                  <TextField {...params} placeholder="Proyecto/Propiedad…" size="small" />
+                )}
+              />
+              <TextField
+                type="date"
+                value={filters.fecha}
+                onChange={e => setFilters(f => ({ ...f, fecha: e.target.value }))}
+                size="small"
+                InputLabelProps={{ shrink: true }}
+              />
+            </Box>
 
-              {/* Fila de filtros integrada en el header */}
-              <TableRow>
-                <TableCell>
-                  <TextField
-                    value={filters.nombre}
-                    onChange={e => setFilters(f => ({ ...f, nombre: e.target.value }))}
-                    placeholder="Filtrar nombre…"
-                    size="small"
-                    fullWidth
-                    variant="outlined"
-                  />
-                </TableCell>
-                <TableCell>
-                  <TextField
-                    value={filters.correo}
-                    onChange={e => setFilters(f => ({ ...f, correo: e.target.value }))}
-                    placeholder="Filtrar correo…"
-                    size="small"
-                    fullWidth
-                    variant="outlined"
-                  />
-                </TableCell>
-                <TableCell>
-                  <TextField
-                    value={filters.celular}
-                    onChange={e => setFilters(f => ({ ...f, celular: e.target.value }))}
-                    placeholder="Filtrar celular…"
-                    size="small"
-                    fullWidth
-                    variant="outlined"
-                  />
-                </TableCell>
-                <TableCell>
-                  <Autocomplete
-                    freeSolo
-                    options={opcionesClasificacion}
-                    value={filters.clasificacion}
-                    onInputChange={(_, val) => setFilters(f => ({ ...f, clasificacion: val ?? '' }))}
-                    renderInput={(params) => (
-                      <TextField {...params} placeholder="Filtrar clasificación…" size="small" />
-                    )}
-                  />
-                </TableCell>
-                <TableCell>
-                  <Autocomplete
-                    freeSolo
-                    options={opcionesProyecto.map(o => o.label)}
-                    value={filters.proyectoTexto}
-                    onInputChange={(_, val) => setFilters(f => ({ ...f, proyectoTexto: val ?? '' }))}
-                    renderInput={(params) => (
-                      <TextField {...params} placeholder="Proyecto/Propiedad…" size="small" />
-                    )}
-                  />
-                </TableCell>
-                <TableCell>
-                  <TextField
-                    type="date"
-                    value={filters.fecha}
-                    onChange={e => setFilters(f => ({ ...f, fecha: e.target.value }))}
-                    size="small"
-                    fullWidth
-                    InputLabelProps={{ shrink: true }}
-                  />
-                </TableCell>
-                <TableCell align="center">
-                  <Tooltip title="Limpiar filtros">
-                    <IconButton
-                      size="small"
-                      onClick={() =>
-                        setFilters({ nombre: '', correo: '', celular: '', clasificacion: '', proyectoTexto: '', fecha: '' })
-                      }
-                    >
-                      {/* Ícono minimalista: un círculo con X, puedes usar otro si prefieres */}
-                      <span style={{ fontWeight: 700 }}>✕</span>
-                    </IconButton>
-                  </Tooltip>
-                </TableCell>
-              </TableRow>
-            </TableHead>
-
-            <TableBody>
-              {!rows || rows.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7}>
-                    <Typography color="text.secondary" align="center">
-                      {prospectos?.length ? 'Sin resultados con los filtros actuales' : 'Sin prospectos registrados'}
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                rows.map((p) => (
-                  <TableRow key={p.id ?? p.correoElectronico ?? Math.random()}>
-                    <TableCell>{p.nombreCompleto}</TableCell>
-                    <TableCell>{p.correoElectronico}</TableCell>
-                    <TableCell>{p.celular}</TableCell>
-                    <TableCell>{p.clasificacionCliente}</TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                        {(p.proyectosInteres ?? []).map((id) => {
-                          // Buscar si es un proyecto
-                          const proy = proyectos.find(x => x.id === id)
-                          if (proy) {
-                            return (
-                              <Chip
-                                key={id}
-                                label={proy.nombre}
-                                avatar={
-                                  proy.logo && (
-                                    <SignedAvatar
-                                      value={proy.logo}
-                                      alt={proy.nombre}
-                                      sx={{ width: 24, height: 24 }}
-                                    />
-                                  )
-                                }
-                                size="small"
-                                sx={{ mr: 0.5, bgcolor: 'transparent' }}
-                              />
-                            )
-                          }
-                          // Si no, buscar si es una propiedad
-                          const prop = propiedades.find(x => x.id === id)
-                          if (prop) {
-                            return (
-                              <Chip
-                                key={id}
-                                label={prop.tituloPropiedad}
-                                avatar={
-                                  prop.imagenes?.length ? (
-                                    <SignedAvatar
-                                      value={prop.imagenes[0]}
-                                      alt={prop.tituloPropiedad}
-                                      sx={{ width: 24, height: 24 }}
-                                    />
-                                  ) : undefined
-                                }
-                                size="small"
-                                sx={{ mr: 0.5, bgcolor: 'transparent' }}
-                              />
-                            )
-                          }
-                          return null // Si no encontró nada
-                        })}
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      {p.fechaCreacion ? new Date(p.fechaCreacion).toLocaleDateString() : ''}
-                    </TableCell>
-                    <TableCell align="center">
-                      <Tooltip title="Ver prospecto">
-                        <IconButton onClick={() => handleAbrirModalVer(p)} size="small">
-                          <VisibilityIcon />
-                        </IconButton>
-                      </Tooltip>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+            {/* DataGrid virtualizado */}
+            <DataGrid
+              rows={rowsDG}
+              columns={columns}
+              sortingMode="server"
+              sortModel={sortModel}
+              onSortModelChange={(model) => {
+                const item = model[0]
+                if (!item?.field) return
+                const key = fieldToOrderKey[item.field] || 'fechaCreacion'
+                const dir = (item.sort === 'desc' ? 'desc' : 'asc') as Order
+                handleRequestSort(key, dir)
+              }}
+              density="comfortable"
+              getRowHeight={() => ROW_HEIGHT}
+              disableRowSelectionOnClick
+              pageSizeOptions={[50, 100]}
+              initialState={{
+                pagination: { paginationModel: { pageSize: 50, page: 0 } },
+              }}
+              sx={{
+                border: 0,
+                '& .MuiDataGrid-virtualScroller': { overflowX: 'hidden' }
+              }}
+            />
+          </Box>
         )}
       </Paper>
 
@@ -464,6 +450,7 @@ console.log(userid)
         proyectos={proyectos}
         propiedades={propiedades}
         readOnly={false}
+        seguimientos={seguimientos}
       />
     </Box>
   )
