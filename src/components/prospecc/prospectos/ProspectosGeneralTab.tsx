@@ -10,15 +10,15 @@ import {
   useFetchProspectos,
   useFetchProyects,
   useFetchUsuarios
-} from '../../hooks/useFetchFunctions'
-import { Prospecto, Document as StorageDocument } from '../../config/types'
+} from '../../../hooks/useFetchFunctions'
+import { Prospecto, Document as StorageDocument } from '../../../config/types'
 import NuevoProspectoModal from './ProspectoModal'
-import { useStatusChip } from '../../config/context/useStatusChip'
-import Spinner from '../general/Spinner'
+import { useStatusChip } from '../../../config/context/useStatusChip'
+import Spinner from '../../general/Spinner'
 import * as XLSX from 'xlsx'
 import Papa from 'papaparse'
 import { DataGrid, GridColDef, GridSortDirection, GridSortModel } from '@mui/x-data-grid'
-import { SignedAvatarLazy } from '../general/SignedAvatarLazy'
+import { SignedAvatarLazy } from '../../general/SignedAvatarLazy'
 
 interface ProspectosTabProps {
   userid: string

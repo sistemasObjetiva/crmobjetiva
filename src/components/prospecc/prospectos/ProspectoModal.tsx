@@ -16,13 +16,13 @@ import FlagIcon from '@mui/icons-material/Flag'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import AddIcon from '@mui/icons-material/Add'
 
-import { Propiedad, Prospecto, Proyecto, Seguimiento } from '../../config/types'
-import { ListasDesplegables } from '../../config/variables'
-import SignedAvatar from '../general/SignedAvatar'
-import { getEstatusChip } from '../../hooks/useUtilsFunctions'
+import { Propiedad, Prospecto, Proyecto, Seguimiento } from '../../../config/types'
+import { ListasDesplegables } from '../../../config/variables'
+import SignedAvatar from '../../general/SignedAvatar'
+import { getEstatusChip } from '../../../hooks/useUtilsFunctions'
 
 // ⚠️ Ajusta la ruta según tu estructura
-import SeguimientoModal from './SeguimientoModal'
+import SeguimientoModal from '../seguimientos/SeguimientoModal'
 
 // ===================== Props =====================
 interface NuevoProspectoModalProps {

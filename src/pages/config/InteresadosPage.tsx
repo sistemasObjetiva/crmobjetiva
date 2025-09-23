@@ -4,13 +4,15 @@ import {
   Box, Typography, IconButton, Tooltip,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   Dialog, DialogTitle, DialogContent, DialogActions, Button,
-  LinearProgress, Stack
+  LinearProgress, Stack, TextField, InputAdornment, Select, MenuItem, FormControl, InputLabel, Chip
 } from '@mui/material'
 import AddBusinessIcon from '@mui/icons-material/AddBusiness'
 import PersonAddIcon from '@mui/icons-material/PersonAdd'
 import EditIcon from '@mui/icons-material/Edit'
 import VisibilityIcon from '@mui/icons-material/Visibility'
-import UploadFileIcon from '@mui/icons-material/UploadFile' // === IMPORT CSV ===
+import UploadFileIcon from '@mui/icons-material/UploadFile'
+import SearchIcon from '@mui/icons-material/Search'
+import FilterListIcon from '@mui/icons-material/FilterList'
 
 import { useAuthRole } from '../../config/auth'
 import { Empresa, ROLES, User } from '../../config/types'
@@ -51,7 +53,14 @@ const InteresadosPage: React.FC = () => {
   const [errCount, setErrCount] = useState(0)
   const [skipCount, setSkipCount] = useState(0)
 
+  // === FILTROS ===
+  const [empresaQuery, setEmpresaQuery] = useState('')
+  const [usuarioQuery, setUsuarioQuery] = useState('')
+  const [roleFilter, setRoleFilter] = useState<string>('all')
+
+  // helpers
   const emailRegex = useMemo(() => /^[^@\s]+@[^@\s]+\.[^@\s]+$/, [])
+  const norm = (s?: string) => (s ?? '').toString().trim().toLowerCase()
 
   const handleAgregarEmpresa = () => {
     const nuevo: Empresa = {
@@ -201,37 +210,142 @@ const InteresadosPage: React.FC = () => {
     showStatus(`Importación terminada: OK ${okCount}/${rows.length} (saltados ${badRows.length}, errores ${errCount})`, 'success')
   }
 
+  // === APLICAR FILTROS ===
+  const empresasFiltradas = useMemo(() => {
+    const q = norm(empresaQuery)
+    if (!q) return empresas
+    return empresas.filter(e => norm(e.nombre).includes(q))
+  }, [empresas, empresaQuery])
+
+  const usuariosPorEmpresaFiltrados = useMemo(() => {
+    const qU = norm(usuarioQuery)
+    const selectedRole = roleFilter
+    // construimos un mapa empresaId -> usuarios filtrados
+    const map = new Map<string, User[]>()
+    for (const emp of empresasFiltradas) {
+      const list = usuarios.filter(u => u.empresaid === emp.id).filter(u => {
+        const matchesUser =
+          !qU ||
+          norm(u.nombre).includes(qU) ||
+          norm(u.email).includes(qU)
+        const curRole = typeof u.role === 'string' ? u.role : (u.role?.tipo ?? '')
+        const matchesRole = selectedRole === 'all' || norm(curRole) === norm(selectedRole)
+        return matchesUser && matchesRole
+      })
+      map.set(emp.id, list)
+    }
+    return map
+  }, [empresasFiltradas, usuarios, usuarioQuery, roleFilter])
+
+  const totalUsuariosFiltrados = useMemo(() => {
+    let sum = 0
+    usuariosPorEmpresaFiltrados.forEach(arr => { sum += arr.length })
+    return sum
+  }, [usuariosPorEmpresaFiltrados])
+
   return (
     <>
       {loading && <Spinner open={true} />}
 
-      <Box display="flex" justifyContent="end" mb={2}>
-        <Tooltip title="Agregar Empresa">
-          <IconButton onClick={handleAgregarEmpresa} color="primary">
-            <AddBusinessIcon />
-          </IconButton>
-        </Tooltip>
-      </Box>
+      {/* Barra superior con botón claro */}
+      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ xs: 'stretch', md: 'center' }} justifyContent="space-between" mb={2}>
+        <Typography variant="h6" fontWeight={800}>
+          Empresas y Usuarios
+        </Typography>
+
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems="stretch">
+          <TextField
+            size="small"
+            label="Filtrar empresa"
+            value={empresaQuery}
+            onChange={(e) => setEmpresaQuery(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+            }}
+          />
+          <TextField
+            size="small"
+            label="Filtrar usuario (nombre o correo)"
+            value={usuarioQuery}
+            onChange={(e) => setUsuarioQuery(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+            }}
+          />
+          <FormControl size="small" sx={{ minWidth: 160 }}>
+            <InputLabel id="role-filter-label"><FilterListIcon sx={{ mr: 1 }} /> Rol</InputLabel>
+            <Select
+              labelId="role-filter-label"
+              label="Rol"
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
+            >
+              <MenuItem value="all">Todos</MenuItem>
+              <MenuItem value="admin">Admin</MenuItem>
+              <MenuItem value="gerencia">Gerencia</MenuItem>
+              <MenuItem value="operacion">Operación</MenuItem>
+              <MenuItem value="usuario">Usuario</MenuItem>
+            </Select>
+          </FormControl>
+
+          <Tooltip title="Crear nueva empresa">
+            <span>
+              <Button
+                onClick={handleAgregarEmpresa}
+                variant="contained"
+                startIcon={<AddBusinessIcon />}
+                sx={{ fontWeight: 800 }}
+              >
+                Nueva Empresa
+              </Button>
+            </span>
+          </Tooltip>
+        </Stack>
+      </Stack>
+
+      {/* Resumen filtros */}
+      <Stack direction="row" spacing={1} mb={1} flexWrap="wrap">
+        <Chip label={`Empresas: ${empresasFiltradas.length}`} size="small" />
+        <Chip label={`Usuarios visibles: ${totalUsuariosFiltrados}`} size="small" />
+        {empresaQuery && <Chip label={`Filtro empresa: "${empresaQuery}"`} size="small" color="info" />}
+        {usuarioQuery && <Chip label={`Filtro usuario: "${usuarioQuery}"`} size="small" color="info" />}
+        {roleFilter !== 'all' && <Chip label={`Rol: ${roleFilter}`} size="small" color="warning" />}
+      </Stack>
 
       <TableContainer component={Paper} sx={{ minWidth: '90vw' }}>
-        <Table>
+        <Table stickyHeader>
           <TableHead>
             <TableRow sx={{ backgroundColor: 'var(--primary-color)' }}>
-              <TableCell sx={{ color: 'white' }}>Nombre</TableCell>
-              <TableCell sx={{ color: 'white' }}>Correo</TableCell>
-              <TableCell sx={{ color: 'white' }}>Rol</TableCell>
-              <TableCell sx={{ color: 'white' }} align="right">Acciones</TableCell>
+              <TableCell sx={{ color: 'white', fontWeight: 700 }}>Nombre</TableCell>
+              <TableCell sx={{ color: 'white', fontWeight: 700 }}>Correo</TableCell>
+              <TableCell sx={{ color: 'white', fontWeight: 700 }}>Rol</TableCell>
+              <TableCell sx={{ color: 'white', fontWeight: 700 }} align="right">Acciones</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {empresas.map(emp => {
-              const usuariosDeEmpresa = usuarios.filter(u => u.empresaid === emp.id)
+            {empresasFiltradas.map(emp => {
+              const usuariosDeEmpresa = usuariosPorEmpresaFiltrados.get(emp.id) ?? []
               return (
                 <React.Fragment key={emp.id}>
                   <TableRow sx={{ backgroundColor: 'var(--secondary-color)', color: 'white' }}>
                     <TableCell colSpan={4} sx={{ color: 'white', fontWeight: 'bold' }}>
                       <Box display="flex" alignItems="center" justifyContent="space-between">
-                        <Typography sx={{ color: 'white' }}>{emp.nombre}</Typography>
+                        <Stack direction="row" alignItems="center" spacing={1}>
+                          <Typography sx={{ color: 'white' }}>{emp.nombre}</Typography>
+                          <Chip
+                            size="small"
+                            label={`${usuariosDeEmpresa.length} usuario${usuariosDeEmpresa.length === 1 ? '' : 's'}`}
+                            sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white' }}
+                          />
+                        </Stack>
                         <Box>
                           <Tooltip title="Ver Empresa">
                             <IconButton onClick={() => handleEditEmpresa(emp)} sx={{ color: 'white' }}>
@@ -284,7 +398,7 @@ const InteresadosPage: React.FC = () => {
                   ) : (
                     <TableRow>
                       <TableCell colSpan={4} sx={{ color: '#666', fontStyle: 'italic' }}>
-                        No hay usuarios registrados para esta empresa.
+                        No hay usuarios con los filtros aplicados para esta empresa.
                       </TableCell>
                     </TableRow>
                   )}

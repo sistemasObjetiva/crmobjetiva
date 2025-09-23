@@ -59,7 +59,7 @@ const ContainerSeguimientos: React.FC<Props> = ({ userid, userRole }) => {
           {active === 'seg' && <SeguimientosTab userid={userid} />}
 
           {active === 'seg_gen' && canViewGeneral && (
-            <SeguimientosGeneralTab userid={userid} />
+            <SeguimientosGeneralTab  />
           )}
         </Box>
       </Paper>

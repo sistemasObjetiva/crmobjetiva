@@ -10,13 +10,13 @@ import {
   useFetchProspectosUser,
   useFetchProyects,
   useFetchSeguimientosUser
-} from '../../hooks/useFetchFunctions'
-import { Prospecto } from '../../config/types'
+} from '../../../hooks/useFetchFunctions'
+import { Prospecto } from '../../../config/types'
 import NuevoProspectoModal from './ProspectoModal'
-import { useStatusChip } from '../../config/context/useStatusChip'
-import Spinner from '../general/Spinner'
+import { useStatusChip } from '../../../config/context/useStatusChip'
+import Spinner from '../../general/Spinner'
 import { DataGrid, GridColDef, GridSortModel, GridSortDirection } from '@mui/x-data-grid'
-import { SignedAvatarLazy } from '../general/SignedAvatarLazy'
+import { SignedAvatarLazy } from '../../general/SignedAvatarLazy'
 
 interface ProspectosTabProps {
   userid: string

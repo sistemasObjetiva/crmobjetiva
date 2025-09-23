@@ -1,35 +1,34 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   Box, Typography, IconButton, Paper, Tooltip, Table, TableBody, TableCell,
-  TableHead, TableRow, CircularProgress, Button, Chip,
-  FormControl, InputLabel, Select, MenuItem, TextField, TableSortLabel
+  TableHead, TableRow, CircularProgress, Chip, TextField, TableSortLabel, TablePagination
 } from '@mui/material'
+import PersonAddAltIcon from '@mui/icons-material/PersonAddAlt'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import {
   updateSeguimiento,
   useFetchPropiedades,
-  useFetchProspectos,
+  useFetchProspectosUser,
   useFetchProyects,
-  useFetchSeguimientos,
-  useFetchUsuarios
-} from '../../hooks/useFetchFunctions'
-import { ESTATUS_OPCIONES, Prospecto, Seguimiento } from '../../config/types'
+  useFetchSeguimientosUser
+} from '../../../hooks/useFetchFunctions'
+import { Prospecto, Seguimiento } from '../../../config/types'
 import SeguimientoModal from './SeguimientoModal'
-import { useStatusChip } from '../../config/context/useStatusChip'
-import Spinner from '../general/Spinner'
-import { fechaActual } from '../../hooks/useDateUtils'
-import { getEstatusChip } from '../../hooks/useUtilsFunctions'
-import * as XLSX from 'xlsx'
-import SignedAvatar from '../general/SignedAvatar'
+import { useStatusChip } from '../../../config/context/useStatusChip'
+import Spinner from '../../general/Spinner'
+import { fechaActual } from '../../../hooks/useDateUtils'
+import SignedAvatar from '../../general/SignedAvatar'
+import { getEstatusChip } from '../../../hooks/useUtilsFunctions'
+
+const ESTATUS_LIST = [
+  'contactado', 'interaccion', 'cotizacion', 'visita', 'posible', 'apartado', 'vendido', 'descartado'
+] as const
 
 interface Props { userid: string }
 
 const fmtDate = (d?: string) => (d ? new Date(d).toLocaleDateString() : '')
 
-const getUserId = (u: any) => u?.id ?? u?.uid ?? null
-const getUserEmail = (u: any) => u?.email ?? u?.correo ?? u?.correoElectronico ?? ''
-const getUserName = (u: any) => u?.nombre ?? u?.displayName ?? u?.name ?? ''
-
+/** Chips reutilizables de proyectos/propiedades de interés */
 function ProyectosInteresChips({
   ids,
   proyectos,
@@ -42,7 +41,7 @@ function ProyectosInteresChips({
   if (!ids || ids.length === 0) return null
   return (
     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-      {ids.map((id) => {
+      {ids.map((id: string)  => {
         const proy = proyectos.find((x: any) => x.id === id)
         if (proy) {
           return (
@@ -77,20 +76,29 @@ function ProyectosInteresChips({
   )
 }
 
-const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
+const SeguimientosTab: React.FC<Props> = ({ userid }) => {
   const { showStatus } = useStatusChip()
-  const { seguimientos, loading: loadingSeguimientos } = useFetchSeguimientos()
-  const { prospectos } = useFetchProspectos()
+  const { seguimientos, loading: loadingSeguimientos } = useFetchSeguimientosUser(userid)
+  const { prospectos } = useFetchProspectosUser(userid)
   const { proyectos } = useFetchProyects()
   const { propiedades } = useFetchPropiedades()
-  const { usuarios } = useFetchUsuarios()
-
   const [modalOpen, setModalOpen] = useState(false)
   const [seguimientoLocal, setSeguimientoLocal] = useState<Seguimiento | null>(null)
   const [loading, setLoading] = useState(false)
 
-  // 🔎 Filtro por usuario (topbar)
-  const [filtroUsuarioId, setFiltroUsuarioId] = useState<string>('')
+  const prospectosById = useMemo(() => {
+    const map = new Map<string, Prospecto>()
+    ;(prospectos ?? []).forEach(p => {
+      if (p?.id) map.set(p.id, p)
+    })
+    return map
+  }, [prospectos])
+
+  // Prospectos sin seguimiento
+  const prospectosSinSeguimiento = useMemo(() => {
+    const segIds = new Set((seguimientos ?? []).map(s => s.idprospecto))
+    return (prospectos ?? []).filter(p => !segIds.has(p.id))
+  }, [prospectos, seguimientos])
 
   const initialSeguimiento = (): Seguimiento => ({
     id: crypto.randomUUID(),
@@ -108,6 +116,11 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
     historialSeguimiento: [],
     estatusSeguimiento: 'contactado'
   })
+
+  const handleAbrirModalNuevo = () => {
+    setSeguimientoLocal(initialSeguimiento())
+    setModalOpen(true)
+  }
 
   const handleAbrirModalVer = (s: Seguimiento) => {
     setSeguimientoLocal(s)
@@ -129,68 +142,19 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
     }
   }
 
-  // Usuarios y accesos rápidos
-  const usuariosById = useMemo(() => {
-    const map = new Map<string, any>()
-    ;(usuarios ?? []).forEach(u => {
-      const id = getUserId(u)
-      if (id != null) map.set(String(id), u)
-    })
-    return map
-  }, [usuarios])
-
-  // Agrupo por estatus
-  const seguimientosByEstatus: Record<string, Seguimiento[]> = useMemo(() => {
-    const groups: Record<string, Seguimiento[]> = {}
-    ESTATUS_OPCIONES.forEach(s => (groups[s.value] = []))
-    ;(seguimientos ?? []).forEach(s => {
-      if (groups[s.estatusSeguimiento] !== undefined) groups[s.estatusSeguimiento].push(s)
-    })
-    Object.values(groups).forEach(arr =>
-      arr.sort((a,b) => new Date(a.fechaCreacion).getTime() - new Date(b.fechaCreacion).getTime())
-    )
-    return groups
-  }, [seguimientos])
-
-  const prospectosById = useMemo(() => {
-    const map = new Map<string, Prospecto>()
-     ;(prospectos ?? []).forEach(p => {
-       if (p?.id) map.set(p.id, p)
-     })
-     return map
-   }, [prospectos])
-
-  const handleExportExcel = () => {
-    const all = (seguimientos ?? [])
-    const filtered = filtroUsuarioId ? all.filter(s => String(s.userid) === filtroUsuarioId) : all
-    const rows = filtered.map(s => {
-      const u = usuariosById.get(String(s.userid))
-      return { ...s, usuarioEmail: getUserEmail(u) }
-    })
-    const ws = XLSX.utils.json_to_sheet(rows)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Seguimientos')
-    XLSX.writeFile(wb, 'seguimientos.xlsx')
-  }
-
-  const getUserLabelById = (id: string) => {
-    const u = usuariosById.get(String(id))
-    if (!u) return '—'
-    const name = getUserName(u)
-    const email = getUserEmail(u)
-    return name && email ? `${name} (${email})` : (name || email || '—')
+  const handleChange = (field: keyof Seguimiento, value: any) => {
+    setSeguimientoLocal(prev => prev ? { ...prev, [field]: value } : null)
   }
 
   // -------- ORDEN + FILTROS EN HEADER --------
   type Order = 'asc' | 'desc'
   type OrderByKey =
-    | 'usuario' | 'nombre' | 'correo' | 'temperatura' | 'unidad'
+    | 'nombre' | 'correo' | 'temperatura' | 'unidad'
     | 'fechaProximo' | 'fechaActualizacion'
 
   const [order, setOrder] = useState<Order>('asc')
   const [orderBy, setOrderBy] = useState<OrderByKey>('fechaProximo')
   const [filters, setFilters] = useState({
-    usuarioId: '',  // sincronizable con filtro superior
     nombre: '',
     correo: '',
     temperatura: '',
@@ -201,12 +165,6 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
     comentarios: '',
   })
 
-  // sincroniza ambos select de usuario si quieres
-  const setUsuarioId = (id: string) => {
-    setFiltroUsuarioId(id)
-    setFilters(f => ({ ...f, usuarioId: id }))
-  }
-
   const handleRequestSort = (key: OrderByKey) => {
     if (orderBy === key) setOrder(prev => (prev === 'asc' ? 'desc' : 'asc'))
     else { setOrderBy(key); setOrder('asc') }
@@ -214,9 +172,11 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
 
   const normalize = (s?: string | null) =>
     (s ?? '').toString().normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
-  const matches = (v?: string | null, n = '') => normalize(v).includes(normalize(n))
+  const matches = (val?: string | null, needle = '') =>
+    normalize(val).includes(normalize(needle))
   const compare = <T,>(a: T, b: T) => (a < b ? -1 : a > b ? 1 : 0)
 
+  // id -> label proyecto/propiedad
   const idToLabel = useMemo(() => {
     const map = new Map<string, string>()
     proyectos.forEach(p => map.set(p.id, p.nombre))
@@ -224,17 +184,8 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
     return map
   }, [proyectos, propiedades])
 
-  const getUsuarioEmailById = (id?: string) => {
-    if (!id) return ''
-    const u = usuariosById.get(String(id))
-    return getUserEmail(u)
-  }
-
   const filterAndSort = (arr: Seguimiento[]) => {
-    let base = arr
-    if (filters.usuarioId) base = base.filter(s => String(s.userid) === filters.usuarioId)
-
-    const filtrada = base.filter(s => {
+    const filtrada = arr.filter(s => {
       const prosp = prospectosById.get(s.idprospecto)
       if (!prosp) return false
 
@@ -266,8 +217,6 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
       const pa = prospectosById.get(a.idprospecto)
       const pb = prospectosById.get(b.idprospecto)
       switch (orderBy) {
-        case 'usuario':
-          cmp = compare(normalize(getUsuarioEmailById(String(a.userid))), normalize(getUsuarioEmailById(String(b.userid)))); break
         case 'nombre':
           cmp = compare(normalize(pa?.nombreCompleto), normalize(pb?.nombreCompleto)); break
         case 'correo':
@@ -290,9 +239,34 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
       }
       return order === 'asc' ? cmp : -cmp
     })
-
     return sorted
   }
+
+  // mismo orden visual, luego filtros/orden
+  const historialOrdenado = useMemo(
+    () => [...(seguimientos ?? [])].sort(
+      (a, b) => new Date(a.fechaCreacion).getTime() - new Date(b.fechaCreacion).getTime()
+    ),
+    [seguimientos]
+  )
+
+  // ===== Paginación por estatus =====
+  type PagingState = Record<string, { page: number; rowsPerPage: number }>
+  const DEFAULT_RPP = 25
+  const [paging, setPaging] = useState<PagingState>(() =>
+    Object.fromEntries(ESTATUS_LIST.map(s => [s, { page: 0, rowsPerPage: DEFAULT_RPP }])) as PagingState
+  )
+  const onChangePage = (status: string, newPage: number) =>
+    setPaging(prev => ({ ...prev, [status]: { ...prev[status], page: newPage } }))
+  const onChangeRpp = (status: string, rpp: number) =>
+    setPaging(prev => ({ ...prev, [status]: { page: 0, rowsPerPage: rpp } }))
+
+  // Reset page al cambiar filtros/orden
+  useEffect(() => {
+    setPaging(prev =>
+      Object.fromEntries(Object.keys(prev).map(k => [k, { ...prev[k], page: 0 }])) as PagingState
+    )
+  }, [filters, order, orderBy])
 
   return (
     <Box>
@@ -300,73 +274,101 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
 
       <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
         <Typography variant="h6" fontWeight={700} color="primary">Seguimientos</Typography>
-        <Box display="flex" gap={2} alignItems="center">
-          <FormControl size="small" sx={{ minWidth: 260 }}>
-            <InputLabel id="filter-user-label">Filtrar por usuario</InputLabel>
-            <Select
-              labelId="filter-user-label"
-              label="Filtrar por usuario"
-              value={filtroUsuarioId}
-              onChange={(e) => setUsuarioId(String(e.target.value))}
-            >
-              <MenuItem value=""><em>Todos</em></MenuItem>
-              {(usuarios ?? []).map(u => {
-                const id = getUserId(u)
-                if (id == null) return null
-                return (
-                  <MenuItem key={String(id)} value={String(id)}>
-                    {getUserLabelById(String(id))}
-                  </MenuItem>
-                )
-              })}
-            </Select>
-          </FormControl>
-
-          <Button variant="outlined" color="primary" onClick={handleExportExcel}>
-            Descargar Excel
-          </Button>
-        </Box>
+        <Tooltip title="Agregar seguimiento">
+          <IconButton color="primary" onClick={handleAbrirModalNuevo} size="large" sx={{ borderRadius: 2 }}>
+            <PersonAddAltIcon fontSize="large" />
+          </IconButton>
+        </Tooltip>
       </Box>
 
-      {loadingSeguimientos ? (
-        <Paper variant="outlined">
-          <Box p={4} display="flex" justifyContent="center">
-            <CircularProgress />
-          </Box>
+      {/* Prospectos sin seguimiento */}
+      {prospectosSinSeguimiento.length > 0 && (
+        <Paper variant="outlined" sx={{ mb: 4, borderLeft: '5px solid orange', p: 2, overflowX: 'auto' }}>
+          <Typography variant="subtitle1" fontWeight={700} color="warning.main" sx={{ mb: 1 }}>
+            Prospectos sin seguimiento ({prospectosSinSeguimiento.length})
+          </Typography>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Nombre</TableCell>
+                <TableCell>Correo</TableCell>
+                <TableCell>Teléfono</TableCell>
+                <TableCell>Proyectos/Propiedades interés</TableCell>
+                <TableCell align="center">Agregar</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {prospectosSinSeguimiento.map(prosp => (
+                <TableRow key={prosp.id}>
+                  <TableCell>{prosp.nombreCompleto ?? ''}</TableCell>
+                  <TableCell>{prosp.correoElectronico ?? ''}</TableCell>
+                  <TableCell>{prosp.celular ?? ''}</TableCell>
+                  <TableCell>
+                    <ProyectosInteresChips
+                      ids={prosp.proyectosInteres}
+                      proyectos={proyectos}
+                      propiedades={propiedades}
+                    />
+                  </TableCell>
+                  <TableCell align="center">
+                    <Tooltip title="Agregar seguimiento">
+                      <IconButton
+                        color="primary"
+                        onClick={() => {
+                          const nuevo = initialSeguimiento()
+                          nuevo.idprospecto = prosp.id
+                          setSeguimientoLocal(nuevo)
+                          setModalOpen(true)
+                        }}
+                      >
+                        <PersonAddAltIcon />
+                      </IconButton>
+                    </Tooltip>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </Paper>
+      )}
+
+      {loadingSeguimientos ? (
+        <Box p={4} display="flex" justifyContent="center"><CircularProgress /></Box>
       ) : (
-        ESTATUS_OPCIONES.map(estatus => {
-          const grupo = seguimientosByEstatus[estatus.value] ?? []
-          // Aplica filtro superior + header
-          const rows = filterAndSort(
-            filtroUsuarioId ? grupo.filter(s => String(s.userid) === filtroUsuarioId) : grupo
+        (ESTATUS_LIST as readonly string[]).map((status) => {
+          const allRows = filterAndSort(
+            historialOrdenado.filter(s => s.estatusSeguimiento === status)
           )
+          const { page, rowsPerPage } = paging[status] ?? { page: 0, rowsPerPage: DEFAULT_RPP }
+          const start = page * rowsPerPage
+          const end = start + rowsPerPage
+          const pageRows = allRows.slice(start, end)
 
           return (
-            <Box key={estatus.value} mb={4}>
-              <Box display="flex" alignItems="center" gap={1} mb={1}
-                sx={{ textTransform: 'uppercase', letterSpacing: 1, minHeight: 40 }}>
-                {getEstatusChip(estatus.value)}
-                <Typography variant="subtitle1" fontWeight={700} color="text.secondary"
-                  sx={{ lineHeight: 1, mb: 0, fontSize: 17, letterSpacing: 1, textTransform: 'uppercase' }}>
-                  {`(${rows.length})`}
+            <Box key={status} mb={4}>
+              <Typography
+                variant="subtitle1"
+                fontWeight={700}
+                color="text.secondary"
+                sx={{
+                  mb: 1,
+                  textTransform: 'uppercase',
+                  letterSpacing: 1,
+                  display: 'flex',
+                  alignItems: 'center'
+                }}
+              >
+                {getEstatusChip(status)}
+                <Typography component="span" sx={{ ml: 1, fontWeight: 700, fontSize: 14 }}>
+                  ({allRows.length})
                 </Typography>
-              </Box>
+              </Typography>
 
               <Paper variant="outlined" sx={{ mb: 2, borderLeft: `5px solid var(--primary-color, #1976d2)`, overflowX: 'auto' }}>
                 <Table size="small" stickyHeader>
                   <TableHead>
                     {/* Títulos con sort */}
                     <TableRow>
-                      <TableCell sortDirection={orderBy === 'usuario' ? order : false}>
-                        <TableSortLabel
-                          active={orderBy === 'usuario'}
-                          direction={orderBy === 'usuario' ? order : 'asc'}
-                          onClick={() => handleRequestSort('usuario')}
-                        >
-                          Usuario (email)
-                        </TableSortLabel>
-                      </TableCell>
                       <TableCell sortDirection={orderBy === 'nombre' ? order : false}>
                         <TableSortLabel
                           active={orderBy === 'nombre'}
@@ -385,7 +387,6 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
                           Correo
                         </TableSortLabel>
                       </TableCell>
-                      <TableCell>Estatus</TableCell>
                       <TableCell sortDirection={orderBy === 'temperatura' ? order : false}>
                         <TableSortLabel
                           active={orderBy === 'temperatura'}
@@ -430,62 +431,51 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
                     {/* Fila de filtros inline */}
                     <TableRow>
                       <TableCell>
-                        <Select size="small" fullWidth displayEmpty
-                          value={filters.usuarioId}
-                          onChange={e => setUsuarioId(String(e.target.value))}>
-                          <MenuItem value=""><em>Todos</em></MenuItem>
-                          {(usuarios ?? []).map(u => {
-                            const id = getUserId(u); if (id == null) return null
-                            return (
-                              <MenuItem key={String(id)} value={String(id)}>
-                                {getUserEmail(u)}
-                              </MenuItem>
-                            )
-                          })}
-                        </Select>
-                      </TableCell>
-                      <TableCell>
                         <TextField size="small" fullWidth placeholder="Filtrar nombre…"
-                          value={filters.nombre} onChange={e => setFilters(f => ({ ...f, nombre: e.target.value }))}/>
+                          value={filters.nombre}
+                          onChange={e => setFilters(f => ({ ...f, nombre: e.target.value }))} />
                       </TableCell>
                       <TableCell>
                         <TextField size="small" fullWidth placeholder="Filtrar correo…"
-                          value={filters.correo} onChange={e => setFilters(f => ({ ...f, correo: e.target.value }))}/>
+                          value={filters.correo}
+                          onChange={e => setFilters(f => ({ ...f, correo: e.target.value }))} />
                       </TableCell>
-                      <TableCell />{/* estatus visual */}
                       <TableCell>
                         <TextField size="small" fullWidth placeholder="Filtrar temperatura…"
-                          value={filters.temperatura} onChange={e => setFilters(f => ({ ...f, temperatura: e.target.value }))}/>
+                          value={filters.temperatura}
+                          onChange={e => setFilters(f => ({ ...f, temperatura: e.target.value }))} />
                       </TableCell>
                       <TableCell>
                         <TextField size="small" fullWidth placeholder="Filtrar unidad/proyecto…"
-                          value={filters.unidad} onChange={e => setFilters(f => ({ ...f, unidad: e.target.value }))}/>
+                          value={filters.unidad}
+                          onChange={e => setFilters(f => ({ ...f, unidad: e.target.value }))} />
                       </TableCell>
                       <TableCell>
                         <TextField size="small" fullWidth placeholder="Proyecto/Propiedad (chips)…"
-                          value={filters.proyectoTexto} onChange={e => setFilters(f => ({ ...f, proyectoTexto: e.target.value }))}/>
+                          value={filters.proyectoTexto}
+                          onChange={e => setFilters(f => ({ ...f, proyectoTexto: e.target.value }))} />
                       </TableCell>
                       <TableCell>
                         <TextField size="small" fullWidth type="date"
-                          value={filters.fechaProximo} onChange={e => setFilters(f => ({ ...f, fechaProximo: e.target.value }))}/>
+                          value={filters.fechaProximo}
+                          onChange={e => setFilters(f => ({ ...f, fechaProximo: e.target.value }))} />
                       </TableCell>
                       <TableCell>
                         <TextField size="small" fullWidth type="date"
-                          value={filters.fechaActualizacion} onChange={e => setFilters(f => ({ ...f, fechaActualizacion: e.target.value }))}/>
+                          value={filters.fechaActualizacion}
+                          onChange={e => setFilters(f => ({ ...f, fechaActualizacion: e.target.value }))} />
                       </TableCell>
                       <TableCell>
                         <TextField size="small" fullWidth placeholder="Filtrar comentarios…"
-                          value={filters.comentarios} onChange={e => setFilters(f => ({ ...f, comentarios: e.target.value }))}/>
+                          value={filters.comentarios}
+                          onChange={e => setFilters(f => ({ ...f, comentarios: e.target.value }))} />
                       </TableCell>
                       <TableCell align="center">
                         <Tooltip title="Limpiar filtros">
-                          <IconButton size="small" onClick={() => {
-                            setFilters({
-                              usuarioId:'', nombre:'', correo:'', temperatura:'', unidad:'',
-                              proyectoTexto:'', fechaProximo:'', fechaActualizacion:'', comentarios:''
-                            })
-                            setFiltroUsuarioId('')
-                          }}>
+                          <IconButton size="small" onClick={() => setFilters({
+                            nombre:'', correo:'', temperatura:'', unidad:'', proyectoTexto:'',
+                            fechaProximo:'', fechaActualizacion:'', comentarios:''
+                          })}>
                             <span style={{ fontWeight:700 }}>✕</span>
                           </IconButton>
                         </Tooltip>
@@ -494,24 +484,21 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
                   </TableHead>
 
                   <TableBody>
-                    {rows.length === 0 ? (
+                    {pageRows.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={11}>
+                        <TableCell colSpan={9}>
                           <Typography color="text.secondary" align="center" fontSize={14}>
-                            Sin seguimientos en este estatus
+                            {allRows.length ? 'Sin resultados en esta página/filtros' : 'Sin seguimientos en este estatus'}
                           </Typography>
                         </TableCell>
                       </TableRow>
                     ) : (
-                      rows.map((s) => {
+                      pageRows.map((s) => {
                         const prospecto = prospectosById.get(s.idprospecto)
-                        const usuario = usuariosById.get(String(s.userid))
                         return (
                           <TableRow key={s.id}>
-                            <TableCell>{getUserEmail(usuario)}</TableCell>
                             <TableCell>{prospecto?.nombreCompleto ?? ''}</TableCell>
                             <TableCell>{prospecto?.correoElectronico ?? ''}</TableCell>
-                            <TableCell>{getEstatusChip(s.estatusSeguimiento)}</TableCell>
                             <TableCell>{s.temperaturaInteres}</TableCell>
                             <TableCell>{s.unidadInteres || s.proyectoInteres}</TableCell>
                             <TableCell>
@@ -537,6 +524,20 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
                     )}
                   </TableBody>
                 </Table>
+
+                {/* Paginación por estatus */}
+                <Box sx={{ px: 1 }}>
+                  <TablePagination
+                    component="div"
+                    count={allRows.length}
+                    page={page}
+                    onPageChange={(_, newPage) => onChangePage(status, newPage)}
+                    rowsPerPage={rowsPerPage}
+                    onRowsPerPageChange={(e) => onChangeRpp(status, parseInt(e.target.value, 10))}
+                    rowsPerPageOptions={[10, 25, 50, 100]}
+                    labelRowsPerPage="Filas por página"
+                  />
+                </Box>
               </Paper>
             </Box>
           )
@@ -547,7 +548,7 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
         open={modalOpen}
         seguimiento={seguimientoLocal || initialSeguimiento()}
         prospectos={prospectos}
-        onChange={(field, value) => setSeguimientoLocal(prev => prev ? { ...prev, [field]: value } : null)}
+        onChange={handleChange}
         onClose={() => setModalOpen(false)}
         onSave={handleGuardarSeguimiento}
         proyectos={proyectos}
@@ -558,4 +559,4 @@ const SeguimientosGeneralTab: React.FC<Props> = ({ userid }) => {
   )
 }
 
-export default SeguimientosGeneralTab
+export default SeguimientosTab

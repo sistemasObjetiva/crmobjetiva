@@ -33,10 +33,10 @@ import ReceiptLongIcon from '@mui/icons-material/ReceiptLong'
 import EventIcon from '@mui/icons-material/Event'
 import UpdateIcon from '@mui/icons-material/Update'
 
-import SignedAvatar from '../general/SignedAvatar'
-import CotizadorPropiedadModal from '../inventario/CotizadorPropiedadModal'
-import CotizadorModal from '../inventario/CotizadorModal'
-import DocumentUploadList from '../general/DocumentUploadList'
+import SignedAvatar from '../../general/SignedAvatar'
+import CotizadorPropiedadModal from '../../inventario/CotizadorPropiedadModal'
+import CotizadorModal from '../../inventario/CotizadorModal'
+import DocumentUploadList from '../../general/DocumentUploadList'
 
 import {
   Propiedad,
@@ -48,9 +48,9 @@ import {
   ESTATUS_OPCIONES,
   MOTIVOS_DESCARTE,
   MOTIVOS_INTERACCION,
-} from '../../config/types'
-import { ListasDesplegables } from '../../config/variables'
-import { getEstatusChip } from '../../hooks/useUtilsFunctions'
+} from '../../../config/types'
+import { ListasDesplegables } from '../../../config/variables'
+import { getEstatusChip } from '../../../hooks/useUtilsFunctions'
 
 interface Props {
   open: boolean

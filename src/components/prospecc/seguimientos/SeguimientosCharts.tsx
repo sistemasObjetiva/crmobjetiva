@@ -11,7 +11,7 @@ import {
   LabelList,
   Cell,
 } from 'recharts'
-import { ESTATUS_OPCIONES, EstatusSeguimiento, Seguimiento } from '../../config/types'
+import { ESTATUS_OPCIONES, EstatusSeguimiento, Seguimiento } from '../../../config/types'
 
 // Helpers
 const getUserEmail = (u: any): string =>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Box, Typography, Paper, Grid, Chip, CircularProgress, Stack, Divider, Avatar, Card, CardContent,
   Button, Dialog, DialogActions, DialogContent, DialogTitle
@@ -15,7 +15,7 @@ import {
 import { Temporal } from '@js-temporal/polyfill';
 import { useAuthRole } from '../config/auth';
 import { useFetchProspectosUser, useFetchProyects, useFetchPropiedades, useFetchSeguimientos } from '../hooks/useFetchFunctions';
-import type {  Proyecto, Propiedad } from '../config/types';
+import type {  Proyecto, Propiedad, Seguimiento } from '../config/types';
 import SignedImage from '../components/general/SignedImage';
 import Calendar from '../components/general/calendar/Calendar';
 
@@ -61,44 +61,81 @@ const CHART_COLORS = [
 
 const AUTOPLAY_INTERVAL = 4200;
 
+// ---- helpers: pertenencia por usuario ----
+const OWNER_FIELDS = ['userid', 'vendedorid', 'asignadoA'] as const;
+function belongsToUser(obj: Record<string, any>, userid?: string) {
+  if (!userid) return false;
+  for (const f of OWNER_FIELDS) {
+    const v = obj?.[f];
+    if (typeof v === 'string' && v === userid) return true;
+    if (typeof v === 'number' && String(v) === String(userid)) return true;
+  }
+  return false;
+}
+
+// fechas seguras (solo día)
+const sameDay = (iso1?: string, iso2?: string) => {
+  if (!iso1 || !iso2) return false;
+  const d1 = Temporal.PlainDate.from(iso1.slice(0,10));
+  const d2 = Temporal.PlainDate.from(iso2.slice(0,10));
+  return d1.equals(d2);
+};
+
 const IndexPage: React.FC = () => {
-  
+
   const { user, loading } = useAuthRole();
   const userid =  user?.id;
+
+  // prospectos ya vienen por usuario
   const { prospectos, loading: loadingProspectos } = useFetchProspectosUser(userid);
+
+  // proyectos/propiedades (globales por ahora)
   const { proyectos } = useFetchProyects();
   const { propiedades } = useFetchPropiedades();
+
+  // seguimientos (luego filtramos según rol)
   const { seguimientos } = useFetchSeguimientos();
 
-  // Agrupar seguimientos por estatus
-  const seguimientosPorEstatus: Record<EstatusKey, number> = ESTATUS_LIST.reduce((acc, e) => {
-    acc[e] = seguimientos.filter(s => s.estatusSeguimiento === e).length;
-    return acc;
-  }, {} as Record<EstatusKey, number>);
+  // --- rol y filtro de seguimientos ---
+  const{role } = useAuthRole();
+  const isUsuario = role === 'Usuario';
+  // si quieres que "operacion" también vea solo lo suyo:
+  // const isUsuario = ['usuario','operacion'].includes(role);
+
+  const seguimientosFiltrados: Seguimiento[] = useMemo(
+    () => (isUsuario ? seguimientos.filter(s => belongsToUser(s as any, userid)) : seguimientos),
+    [isUsuario, seguimientos, userid]
+  );
+
+  // Agrupar seguimientos por estatus (filtrados si es usuario)
+  const seguimientosPorEstatus: Record<EstatusKey, number> = useMemo(() => (
+    ESTATUS_LIST.reduce((acc, e) => {
+      acc[e] = seguimientosFiltrados.filter(s => s.estatusSeguimiento === e).length;
+      return acc;
+    }, {} as Record<EstatusKey, number>)
+  ), [seguimientosFiltrados]);
 
   // Nombre del usuario (iniciales mayúsculas)
   const toTitleCase = (s: string) =>
-  s
-    .trim()
-    .replace(/\s+/g, ' ')
-    .split(' ')
-    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-    .join(' ');
+    s
+      .trim()
+      .replace(/\s+/g, ' ')
+      .split(' ')
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ');
 
-// Prioriza distintas fuentes comunes de "nombre"
-const displayNameRaw =
-  user?.nombre ??
-  (user as any)?.profile?.nombre ??               // si tu hook mete profile
-  user?.user_metadata?.nombre ??
-  user?.user_metadata?.name ??
-  user?.user_metadata?.full_name ??
-  user?.app_metadata?.name ??
-  user?.email?.split('@')[0] ??
-  'Usuario';
+  // Prioriza distintas fuentes comunes de "nombre"
+  const displayNameRaw =
+    user?.nombre ??
+    (user as any)?.profile?.nombre ??
+    user?.user_metadata?.nombre ??
+    user?.user_metadata?.name ??
+    user?.user_metadata?.full_name ??
+    user?.app_metadata?.name ??
+    user?.email?.split('@')[0] ??
+    'Usuario';
 
-const username = toTitleCase(String(displayNameRaw));
-
-  
+  const username = toTitleCase(String(displayNameRaw));
 
   // ---- CARRUSEL DE PROYECTOS Y PROPIEDADES ----
   type CardType = { tipo: 'proyecto' | 'propiedad'; data: Proyecto | Propiedad };
@@ -135,8 +172,8 @@ const username = toTitleCase(String(displayNameRaw));
     return () => clearInterval(id);
   }, [cards.length]);
 
-  // --- GRAFICAS Y CALENDARIO ---
-  function getSeguimientosPorDia(segs: any[]) {
+  // --- GRÁFICAS Y CALENDARIO (con seguimientos filtrados si es usuario) ---
+  function getSeguimientosPorDia(segs: Seguimiento[]) {
     const hoy = Temporal.Now.plainDateISO();
     return Array.from({ length: 7 }).map((_, i) => {
       const fecha = hoy.add({ days: i }).toString();
@@ -157,19 +194,24 @@ const username = toTitleCase(String(displayNameRaw));
     value: seguimientosPorEstatus[estatus] ?? 0,
     color: CHART_COLORS[i],
   }));
-  const seguimientosPorDia = getSeguimientosPorDia(seguimientos);
+
+  const seguimientosPorDia = useMemo(
+    () => getSeguimientosPorDia(seguimientosFiltrados),
+    [seguimientosFiltrados]
+  );
 
   // Para el calendario (solo los que no estén vendidos)
-  const calendarEvents = seguimientos
-    .filter(s => s.fechaProximoSeguimiento && s.estatusSeguimiento !== 'vendido')
-    .map(s => ({
-      id: s.id,
-      fecha: s.fechaProximoSeguimiento,
-      label: STATUS_LABEL[s.estatusSeguimiento as EstatusKey]
-    }));
+  const calendarEvents = useMemo(() => (
+    seguimientosFiltrados
+      .filter(s => s.fechaProximoSeguimiento && s.estatusSeguimiento !== 'vendido')
+      .map(s => ({
+        id: s.id,
+        fecha: s.fechaProximoSeguimiento!,
+        label: STATUS_LABEL[s.estatusSeguimiento as EstatusKey]
+      }))
+  ), [seguimientosFiltrados]);
 
-  const esMismoDia = (f1: string, f2: string) =>
-    Temporal.PlainDate.from(f1).equals(Temporal.PlainDate.from(f2));
+  const esMismoDia = (f1: string, f2: string) => sameDay(f1, f2);
 
   if (loading || loadingProspectos) {
     return (
@@ -241,14 +283,14 @@ const username = toTitleCase(String(displayNameRaw));
           <Paper sx={{ p: 2, borderRadius: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
             <TimelineIcon color="success" sx={{ fontSize: 36 }} />
             <Box>
-              <Typography fontWeight={700} fontSize={24}>{seguimientos.length}</Typography>
+              <Typography fontWeight={700} fontSize={24}>{seguimientosFiltrados.length}</Typography>
               <Typography variant="caption" color="text.secondary">Seguimientos</Typography>
             </Box>
           </Paper>
         </Grid>
       </Grid>
 
-      {/* Carrusel de proyectos y propiedades */}
+      {/* Carrusel de proyectos y propiedades (global por ahora) */}
       {cards.length > 0 && (
         <Box
           sx={{ mt: 3, mb: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 270 }}
@@ -270,7 +312,8 @@ const username = toTitleCase(String(displayNameRaw));
             >
               {/* Imagen del card usando SignedImage */}
               {(() => {
-                const { path, bucket, alt } = getCardImage(cards[cardIdx]);
+                const card = cards[cardIdx];
+                const { path, bucket, alt } = getCardImage(card);
                 return path && bucket ? (
                   <SignedImage
                     path={path}
@@ -382,8 +425,8 @@ const username = toTitleCase(String(displayNameRaw));
           events={calendarEvents}
           renderDayModal={(date, close) => {
             const fechaStr = date.toString();
-            const seguimientosDia = seguimientos.filter(
-              s => esMismoDia(s.fechaProximoSeguimiento, fechaStr)
+            const seguimientosDia = seguimientosFiltrados.filter(
+              s => esMismoDia(s.fechaProximoSeguimiento!, fechaStr)
             );
             return (
               <Dialog open onClose={close} maxWidth="sm" fullWidth>
@@ -402,7 +445,7 @@ const username = toTitleCase(String(displayNameRaw));
                           </Typography>
                           <Typography variant="body2">
                             Estatus:{' '}
-                            <b style={{ color: CHART_COLORS[ESTATUS_LIST.indexOf(s.estatusSeguimiento as EstatusKey)] }}>
+                            <b style={{ color: CHART_COLORS[Math.max(0, ESTATUS_LIST.indexOf(s.estatusSeguimiento as EstatusKey))] }}>
                               {STATUS_LABEL[s.estatusSeguimiento as EstatusKey]}
                             </b>
                           </Typography>

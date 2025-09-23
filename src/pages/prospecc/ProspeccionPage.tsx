@@ -4,11 +4,11 @@ import {
   Tabs,
   Tab,
 } from '@mui/material'
-import ContainerProspectos from '../../components/prospecc/ContainerProspectos'
+import ContainerProspectos from '../../components/prospecc/prospectos/ContainerProspectos'
 import { useAuthRole } from '../../config/auth'
 import Spinner from '../../components/general/Spinner'
-import ContainerSeguimientos from '../../components/prospecc/ContainerSeguimientos'
-import ResumenSeguimientosTab from '../../components/prospecc/ResumenSeguimientoTab'
+import ContainerSeguimientos from '../../components/prospecc/seguimientos/ContainerSeguimientos'
+import ResumenSeguimientosTab from '../../components/prospecc/seguimientos/ResumenSeguimientoTab'
 
 const ProspeccionPage: React.FC = () => {
   const { user, loading,roleObject } = useAuthRole()

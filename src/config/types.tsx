@@ -169,6 +169,7 @@ export interface PlanPago {
     proyectosInteres?: string[];
     fechaCreacion?: string;
     fechaActualizacion?: string;
+    estatusBaja?:boolean
   }
 
 // Define el tipo de estatus como un union type:
