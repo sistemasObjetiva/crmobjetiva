@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react'
 import { Box, Dialog, DialogActions, DialogContent, DialogTitle, Button } from '@mui/material'
-import * as XLSX from 'xlsx'
 import Papa from 'papaparse'
 
 import {
@@ -54,74 +53,52 @@ export default function SeguimientosGeneralPage() {
     seguimientos, prospectos, usuariosById, getUsuarioEmailById, idToLabel
   })
 
-  // ------- Exportadores -------
-  const handleExportExcel = () => {
-    const all = (seguimientos ?? [])
-    const filtered = vm.filtroUsuarioId ? all.filter(s => String(s.userid) === vm.filtroUsuarioId) : all
-    const rows = filtered.map(s => {
-      const u = usuariosById.get(String(s.userid))
-      return { ...s, usuarioEmail: getUserEmail(u) }
-    })
-    const ws = XLSX.utils.json_to_sheet(rows)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Seguimientos')
-    XLSX.writeFile(wb, 'seguimientos.xlsx')
-  }
-
-  const handleExportFilteredExcel = () => {
-    const rows = vm.rowsForCharts.map((s) => {
-      const p = (prospectos ?? []).find(pp => pp.id === s.idprospecto)
-      const u = usuariosById.get(String(s.userid))
-      const proyectosLabels = (p?.proyectosInteres ?? [])
-        .map(id => idToLabel.get(id) ?? id)
-        .filter(Boolean)
-        .join(' | ')
-      return {
-        id: s.id,
-        usuarioEmail: getUserEmail(u),
-        usuarioNombre: getUserName(u),
-        prospectoNombre: p?.nombreCompleto ?? '',
-        prospectoCorreo: p?.correoElectronico ?? '',
-        estatus: s.estatusSeguimiento,
-        temperatura: s.temperaturaInteres ?? '',
-        proyectosInteres: proyectosLabels,
-        unidadInteres: s.unidadInteres ?? s.proyectoInteres ?? '',
-        formaDePago: s.formaDePago ?? '',
-        capacidadDePago: s.capacidadDePago ?? '',
-        comentarios: s.comentarios ?? '',
-        fechaProximoSeguimiento: s.fechaProximoSeguimiento ?? '',
-        fechaActualizacion: s.fechaActualizacion ?? '',
-        fechaCreacion: s.fechaCreacion ?? '',
-      }
-    })
-    if (!rows.length) { showStatus('No hay filas con los filtros actuales', 'warning'); return }
-    const ws = XLSX.utils.json_to_sheet(rows)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'SeguimientosFiltrados')
-    XLSX.writeFile(wb, 'seguimientos_filtrados.xlsx')
-  }
-
+  // ------- Exportadores (solo CSV) -------
   const handleExportFilteredCSV = () => {
     const header = [
       'Consecutivo','Fecha Registro','Nombre Completo Cliente','Celular Cliente','Correo Electrónico Cliente',
-      'Ocupación Cliente','Medio de Captación','Vendedor','Ultimo seguimiento','Razón','Estatus',
+      'Ocupación Cliente','Medio de Captación','Vendedor','Ultimo seguimiento','Última fecha de seguimiento','Razón','Estatus',
     ]
     const rowsAOA: (string | number)[][] = [header]
+
     vm.rowsForCharts.forEach((s, idx) => {
       const p = (prospectos ?? []).find(pp => pp.id === s.idprospecto)
       const u = usuariosById.get(String(s.userid))
+
+      // último registro de historial
       const lastHist = [...(s.historialSeguimiento ?? [])]
         .sort((a, b) => new Date(a.fechaCreacion).getTime() - new Date(b.fechaCreacion).getTime())
         .at(-1)
-      const fechaReg = s.fechaCreacion ? new Date(s.fechaCreacion).toLocaleDateString() : ''
+
+      const fechaReg = s.fechaCreacion ? new Date(s.fechaCreacion).toLocaleDateString('es-MX') : ''
       const vendedor = getUserName(u) || getUserEmail(u)
+
+      // nueva columna: última fecha de seguimiento (historial → actualizado → creado)
+      const ultimaFechaSeg =
+        lastHist?.fechaCreacion
+          ? new Date(lastHist.fechaCreacion).toLocaleString('es-MX')
+          : s.fechaActualizacion
+            ? new Date(s.fechaActualizacion).toLocaleString('es-MX')
+            : s.fechaCreacion
+              ? new Date(s.fechaCreacion).toLocaleString('es-MX')
+              : ''
+
       rowsAOA.push([
-        idx + 1, fechaReg, p?.nombreCompleto ?? '', p?.celular ?? '', p?.correoElectronico ?? '',
-        '', '', vendedor, (lastHist?.comentarios || s.comentarios || '').toString(),
+        idx + 1,
+        fechaReg,
+        p?.nombreCompleto ?? '',
+        p?.celular ?? '',
+        p?.correoElectronico ?? '',
+        '', // Ocupación Cliente (si no lo tienes en el modelo, queda vacío)
+        '', // Medio de Captación (idem)
+        vendedor,
+        (lastHist?.comentarios || s.comentarios || '').toString(), // "Ultimo seguimiento" = texto
+        ultimaFechaSeg, // ⬅️ NUEVA COLUMNA FECHA
         Array.isArray(s.motivo) ? s.motivo.join(' | ') : (s as any)?.razon ?? '',
         s.estatusSeguimiento ?? '',
       ])
     })
+
     if (rowsAOA.length === 1) { showStatus('No hay filas con los filtros actuales', 'warning'); return }
     const csv = Papa.unparse(rowsAOA)
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
@@ -132,6 +109,7 @@ export default function SeguimientosGeneralPage() {
     a.click()
     URL.revokeObjectURL(url)
   }
+
 
   // ------- Modal ver/editar -------
   const [modalOpen, setModalOpen] = useState(false)
@@ -173,10 +151,8 @@ export default function SeguimientosGeneralPage() {
       <SeguimientosToolbar
         usuarios={usuarios}
         filtroUsuarioId={vm.filtroUsuarioId}
-        setUsuarioId={vm.setUsuarioId}
-        onExportExcel={handleExportExcel}
-        onExportFilteredExcel={handleExportFilteredExcel}
-        onExportFilteredCSV={handleExportFilteredCSV}
+        setUsuarioId={vm.setUsuarioId}// ⬅️ deshabilitado (muestra info)
+        onExportFilteredCSV={handleExportFilteredCSV}     // ✅ CSV activo
         onOpenImport={onOpenImport}
         getUserLabelById={(id) => {
           const u = usuariosById.get(String(id))
@@ -196,9 +172,10 @@ export default function SeguimientosGeneralPage() {
         selectedProjectLabel={vm.filters.proyectoTexto}
         selectedStatus={vm.statusFocus}
         onSelectUser={(userId) => vm.setUsuarioId(userId)}
-        onSelectProyecto={(label) => vm.setFilters(f => ({ ...f, proyectoTexto: label }))}
+        onSelectProyecto={(label) => vm.setFilters(f => ({ ...f, proyectoTexto: label }))} 
         onSelectStatus={(status) => vm.setStatusFocus(status)}
       />
+
 
       {/* Secciones por estatus */}
       {(vm.statusFocus ? ESTATUS_OPCIONES.filter(e => e.value === vm.statusFocus) : ESTATUS_OPCIONES).map(estatus => {
@@ -240,7 +217,7 @@ export default function SeguimientosGeneralPage() {
             propiedades={propiedades}
             // acciones
             onView={handleAbrirModalVer}
-            onToggleBaja={onToggleBaja}   
+            onToggleBaja={onToggleBaja}
           />
         )
       })}

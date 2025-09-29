@@ -1,3 +1,4 @@
+// src/components/prospecc/seguimientos/SeguimientoModal.tsx
 import React, { useEffect, useMemo, useState } from 'react'
 import {
   Dialog,
@@ -27,6 +28,7 @@ import {
   Avatar,
   Paper,
   Tooltip,
+  FormHelperText, // ⬅️ para mensajes de error
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong'
@@ -111,6 +113,9 @@ const SeguimientoModal: React.FC<Props> = ({
   const [cotizadorSeleccionado, setCotizadorSeleccionado] = useState<any>(null)
   const [openCotizadorPropiedad, setOpenCotizadorPropiedad] = useState(false)
   const [openCotizadorUnidad, setOpenCotizadorUnidad] = useState(false)
+
+  // --- Validación (estatus + motivo obligatorios)
+  const [attemptSave, setAttemptSave] = useState(false)
 
   // --- COMENTARIO: último guardado (solo lectura) + nuevo comentario (draft)
   const [comentarioInput, setComentarioInput] = useState('')
@@ -219,6 +224,13 @@ const SeguimientoModal: React.FC<Props> = ({
     ListasDesplegables.CapacidadDePago.includes(seguimiento?.capacidadDePago || '')
       ? (seguimiento?.capacidadDePago || '')
       : (CAPACIDAD_MAP_OLD_TO_NEW[seguimiento?.capacidadDePago || ''] || (seguimiento?.capacidadDePago || ''))
+
+  // ======== VALIDACIÓN (estatus + motivo obligatorios) ========
+  const estatusValue = seguimiento?.estatusSeguimiento ?? ''
+  const motivosValue = Array.isArray(seguimiento?.motivo) ? (seguimiento!.motivo as string[]) : []
+  const isEstatusValid = !!estatusValue
+  const isMotivoValid  = motivosValue.length > 0
+  const canSave        = isEstatusValid && isMotivoValid
 
   return (
     <>
@@ -348,15 +360,16 @@ const SeguimientoModal: React.FC<Props> = ({
                     </Select>
                   </FormControl>
 
-                  {/* Estatus */}
-                  <FormControl fullWidth>
+                  {/* Estatus (OBLIGATORIO) */}
+                  <FormControl fullWidth error={attemptSave && !isEstatusValid}>
                     <InputLabel shrink>Estatus</InputLabel>
                     {!readOnly ? (
                       <Select
                         label="Estatus"
-                        value={seguimiento?.estatusSeguimiento ?? 'contactado'}
+                        value={estatusValue || ''}
                         onChange={e => handleChangeEstatus(String(e.target.value))}
                         renderValue={value => getEstatusChip(value as string)}
+                        required
                       >
                         {ESTATUS_OPCIONES.map(e => (
                           <MenuItem value={e.value} key={e.value}>
@@ -365,22 +378,32 @@ const SeguimientoModal: React.FC<Props> = ({
                         ))}
                       </Select>
                     ) : (
-                      <Box mt={1}>{getEstatusChip(seguimiento?.estatusSeguimiento ?? '')}</Box>
+                      <Box mt={1}>{getEstatusChip(estatusValue)}</Box>
+                    )}
+                    {attemptSave && !isEstatusValid && (
+                      <FormHelperText>El estatus es obligatorio.</FormHelperText>
                     )}
                   </FormControl>
 
-                  {/* Motivos (según estatus) */}
+                  {/* Motivos (OBLIGATORIO según estatus) */}
                   {seguimiento?.estatusSeguimiento === 'descartado' ? (
                     <Autocomplete
                       multiple
                       options={MOTIVOS_DESCARTE}
-                      value={(seguimiento?.motivo as string[] | undefined) ?? []}
+                      value={motivosValue}
                       onChange={(_, value) => {
                         setMotivosDescDraft(value as string[])
                         onChange('motivo', value)
                       }}
                       renderInput={params => (
-                        <TextField {...params} label="Motivos de descarte" placeholder="Selecciona motivo(s)" />
+                        <TextField
+                          {...params}
+                          label="Motivos de descarte"
+                          placeholder="Selecciona motivo(s)"
+                          error={attemptSave && !isMotivoValid}
+                          helperText={attemptSave && !isMotivoValid ? 'Debes seleccionar al menos un motivo.' : undefined}
+                          required
+                        />
                       )}
                       fullWidth
                     />
@@ -388,13 +411,20 @@ const SeguimientoModal: React.FC<Props> = ({
                     <Autocomplete
                       multiple
                       options={MOTIVOS_INTERACCION}
-                      value={(seguimiento?.motivo as string[] | undefined) ?? []}
+                      value={motivosValue}
                       onChange={(_, value) => {
                         setMotivosInterDraft(value as string[])
                         onChange('motivo', value)
                       }}
                       renderInput={params => (
-                        <TextField {...params} label="Motivos de interacción" placeholder="Selecciona motivo(s)" />
+                        <TextField
+                          {...params}
+                          label="Motivos de interacción"
+                          placeholder="Selecciona motivo(s)"
+                          error={attemptSave && !isMotivoValid}
+                          helperText={attemptSave && !isMotivoValid ? 'Debes seleccionar al menos un motivo.' : undefined}
+                          required
+                        />
                       )}
                       fullWidth
                     />
@@ -589,7 +619,19 @@ const SeguimientoModal: React.FC<Props> = ({
         <DialogActions sx={{ justifyContent: 'flex-end', pb: 2, pt: 1 }}>
           <Button onClick={onClose} variant="outlined">Cancelar</Button>
           {!readOnly && (
-            <Button onClick={() => onSave(seguimiento!)} variant="contained" color="primary" sx={{ fontWeight: 700 }}>
+            <Button
+              onClick={() => {
+                if (!canSave) {
+                  setAttemptSave(true)
+                  return
+                }
+                onSave(seguimiento!)
+              }}
+              variant="contained"
+              color="primary"
+              sx={{ fontWeight: 700 }}
+              disabled={!canSave}
+            >
               Guardar
             </Button>
           )}

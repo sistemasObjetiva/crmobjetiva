@@ -12,11 +12,11 @@ const ProspeccionPage: React.FC = () => {
   const { user, loading, roleObject } = useAuthRole()
   const [tab, setTab] = useState(0)
 
-  // Cargando o sin sesión => evita renderizar hijos que requieren user
   if (loading || !user) return <Spinner open />
 
   const userid = user.id
-  const userRole = roleObject?.tipo ?? 'operacion' // fallback seguro
+  const userRole = roleObject?.tipo ?? 'operacion'
+  const jerarquia = roleObject?.jerarquia ?? 99
 
   return (
     <Box
@@ -35,26 +35,19 @@ const ProspeccionPage: React.FC = () => {
         <Tab label="Resumen" />
         <Tab label="Prospectos" />
         <Tab label="Seguimientos" />
-        <Tab label="Reportes" />
+        {jerarquia < 2 && <Tab label="Reportes" />}
       </Tabs>
 
-      {/* Contenido de los tabs */}
       {tab === 0 && (
         <ResumenSeguimientosTab userid={userid} userRole={userRole} />
       )}
-
       {tab === 1 && (
         <ContainerProspectos userid={userid} userRole={userRole} />
       )}
-
       {tab === 2 && (
         <ContainerSeguimientos userid={userid} userRole={userRole} />
       )}
-
-      {tab === 3 && (
-        <ReportesGerentes
-        />
-      )}
+      {tab === 3 && jerarquia < 2 && <ReportesGerentes />}
     </Box>
   )
 }
