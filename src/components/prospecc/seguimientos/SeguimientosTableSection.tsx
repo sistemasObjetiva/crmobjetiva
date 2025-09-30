@@ -1,4 +1,3 @@
-
 import {
   Box, CircularProgress, IconButton, Paper, Table, TableBody, TableCell,
   TableHead, TableRow, TablePagination, Tooltip, Typography, TableSortLabel
@@ -10,7 +9,6 @@ import RestoreFromTrashIcon from '@mui/icons-material/RestoreFromTrash'
 import { OrderByKey } from '../../../hooks/seguimientos/useSeguimientosViewModel'
 import { getEstatusChip } from '../../../hooks/useUtilsFunctions'
 import ProyectosInteresChips from './ProyectoInteresChip'
-import SeguimientosFiltersRow from './SeguimientoFiltersRow'
 
 const fmtDate = (d?: string) => (d ? new Date(d).toLocaleDateString() : '')
 
@@ -25,26 +23,12 @@ export interface SeguimientosTableSectionProps {
   order: 'asc' | 'desc'
   onRequestSort: (key: OrderByKey) => void
   loading: boolean
-
-  // filtros (fila de filtros)
-  usuarios: any[]
-  filters: any
-  setFilters: (updater: any) => void
-  clearAllFilters: () => void
-  setUsuarioId: (id: string) => void
-  getUserId: (u: any) => string | null
   getUserEmail: (u: any) => string
-
-  // mapas / datos auxiliares
   prospectosById: Map<string, any>
   usuariosById: Map<string, any>
   proyectos: any[]
   propiedades: any[]
-
-  // acciones
   onView: (s: any) => void
-
-  // NUEVO: baja/restaurar (borrado lógico en Prospecto.estatusBaja)
   onToggleBaja: (prospectoId: string, next: boolean) => void
 }
 
@@ -59,19 +43,12 @@ export default function SeguimientosTableSection({
   order,
   onRequestSort,
   loading,
-  // filters row
-  usuarios,
-  filters,
-  setFilters,
-  clearAllFilters,
-  setUsuarioId,
-  getUserId,
-  getUserEmail,
-  // maps
+  // maps & utils
   prospectosById,
   usuariosById,
   proyectos,
   propiedades,
+  getUserEmail,
   // actions
   onView,
   onToggleBaja,
@@ -101,7 +78,7 @@ export default function SeguimientosTableSection({
 
       <Paper
         variant="outlined"
-        sx={{ mb: 2, borderLeft: '5px solid var(--primary-color, #1976d2)', overflowX: 'auto' }}
+        sx={{ mb: 2, borderLeft: '5px solid var(--primary-color, #1976d2)', overflowX: 'auto' ,width: "100%"}}
       >
         <Table size="small" stickyHeader>
           <TableHead>
@@ -117,7 +94,6 @@ export default function SeguimientosTableSection({
                 { key: 'fechaActualizacion', label: 'Fecha actualización' },
                 { key: 'comentarios', label: 'Comentarios', sortable: false },
                 { key: 'ver', label: 'Ver', sortable: false, align: 'center' },
-                // NUEVA columna de baja/restaurar
                 { key: 'baja', label: 'Baja', sortable: false, align: 'center' },
               ].map(col => (
                 <TableCell
@@ -140,16 +116,7 @@ export default function SeguimientosTableSection({
               ))}
             </TableRow>
 
-            {/* Filtros inline */}
-            <SeguimientosFiltersRow
-              usuarios={usuarios}
-              filters={filters}
-              setFilters={setFilters}
-              clearAll={clearAllFilters}
-              setUsuarioId={setUsuarioId}
-              getUserId={getUserId}
-              getUserEmail={getUserEmail}
-            />
+            {/* ⛔️ Eliminada la fila de filtros por tabla */}
           </TableHead>
 
           <TableBody>
@@ -214,7 +181,6 @@ export default function SeguimientosTableSection({
                       </Tooltip>
                     </TableCell>
 
-                    {/* Baja / Restaurar */}
                     <TableCell align="center">
                       {prospecto ? (
                         isBaja ? (

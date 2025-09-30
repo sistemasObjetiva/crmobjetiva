@@ -228,7 +228,6 @@ const IndexPage: React.FC = () => {
         backgroundColor: '#fff',
         borderRadius: 4,
         boxShadow: '0 2px 12px 0 rgba(60,60,60,0.12)',
-        maxWidth: 1100,
         mx: 'auto',
       }}
     >

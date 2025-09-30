@@ -8,21 +8,19 @@ import {
 } from '@react-pdf/renderer';
 import { Proyecto, Unidad, PlanPago } from '../../config/types';
 import { formatoMoneda } from '../../hooks/useUtilsFunctions';
-import {  styles } from '../../styles/pdfStyles';
+import { styles } from '../../styles/pdfStyles';
 
-
-// Helper seguro para estilos condicionales
+// Combinar estilos condicionalmente
 function styleArr(...args: any[]): any[] {
   return args.filter(Boolean);
 }
 
+/* ---------------------- Secciones ---------------------- */
 
-
-
-function PDFHeader({ logoUrl, proyecto }: { logoUrl?: string, proyecto: Proyecto }) {
+function PDFHeader({ logoUrl, proyecto }: { logoUrl?: string; proyecto: Proyecto }) {
   return (
     <View style={styles.header} wrap={false}>
-      {logoUrl && <Image src={logoUrl} style={styles.logo} />}
+      {logoUrl ? <Image src={logoUrl} style={styles.logo} /> : null}
       <View style={styles.headerMain}>
         <Text style={styles.title}>Cotización de Unidad</Text>
         <Text style={styles.projectName}>{proyecto.nombre}</Text>
@@ -39,24 +37,24 @@ function PDFInfoUnidad({ unidad }: { unidad: Unidad }) {
 
   return (
     <View style={styles.detailsBox}>
-      {/* Título más grande y separado */}
       <Text style={styles.sectionTitle}>Detalles de la Unidad</Text>
-      
+
       <View style={styles.detailRow}>
         <Text style={styles.label}>Número:</Text>
         <Text style={styles.value}>{unidad.numerounidad}</Text>
       </View>
+
       <View style={styles.detailRow}>
         <Text style={styles.label}>Privativa (m²):</Text>
         <Text style={styles.value}>{unidad.unidadprivativa}</Text>
       </View>
+
       <View style={styles.detailRow}>
         <Text style={styles.label}>Precio Lista:</Text>
         <Text style={styles.value}>{fmt(precioLista)}</Text>
       </View>
-      
-      {/* Otros detalles */}
-      {unidad.extras && Object.keys(unidad.extras).length > 0 && (
+
+      {unidad.extras && Object.keys(unidad.extras).length > 0 ? (
         <>
           <Text style={styles.otrosDetallesTitle}>Otros Detalles</Text>
           <View style={styles.otrosDetallesTable}>
@@ -67,38 +65,127 @@ function PDFInfoUnidad({ unidad }: { unidad: Unidad }) {
               </View>
             ))}
           </View>
-
         </>
-      )}
+      ) : null}
     </View>
   );
 }
 
+/* ---------------------- Imágenes (principal + galería) ---------------------- */
 
+// Decide principal (preferentemente el render) y las restantes
+function splitImages(
+  renderUrl?: string,
+  isometricoUrl?: string,
+  planoUrl?: string,
+  galeriaUrls: string[] = []
+) {
+  const list: { url: string; label: string }[] = [];
+  if (renderUrl) list.push({ url: renderUrl, label: 'Render' });
+  if (isometricoUrl) list.push({ url: isometricoUrl, label: 'Isométrico' });
+  if (planoUrl) list.push({ url: planoUrl, label: 'Plano' });
+  for (const u of galeriaUrls) list.push({ url: u, label: 'Vista' });
 
-function PDFImagenes({
-  renderUrl, isometricoUrl, planoUrl, galeriaUrls
-}: { renderUrl?: string, isometricoUrl?: string, planoUrl?: string, galeriaUrls?: string[] }) {
-  const imgLabels = ['Render', 'Isométrico', 'Plano', ...(galeriaUrls || []).map(() => 'Vista')];
+  const principal = list[0];            // el primero disponible será el principal
+  const secundarios = principal ? list.slice(1) : [];
+
+  return { principal, secundarios };
+}
+
+// Imagen principal (arriba, a la derecha del panel de detalles)
+function PDFImagenPrincipal({
+  renderUrl,
+  isometricoUrl,
+  planoUrl,
+  galeriaUrls,
+}: {
+  renderUrl?: string;
+  isometricoUrl?: string;
+  planoUrl?: string;
+  galeriaUrls?: string[];
+}) {
+  const { principal } = splitImages(renderUrl, isometricoUrl, planoUrl, galeriaUrls || []);
+  if (!principal) return null;
+
+  const S: Record<string, any> = {
+    container: {
+      flex: 1,
+      width: '48%',     // ancho frente al panel de detalles
+      minWidth: 260,
+      marginLeft: 8,
+    },
+    mainImg: {
+      width: '100%',
+      height: 270,
+      objectFit: 'cover',
+      borderRadius: 6,
+      borderWidth: 1,
+      borderColor: '#E5E7EB',
+    },
+    caption: { textAlign: 'center', fontSize: 10, color: '#6b7280', marginTop: 4 },
+  };
 
   return (
-    <View style={styles.imagesBox} wrap>
-      {[renderUrl, isometricoUrl, planoUrl, ...(galeriaUrls || [])]
-        .filter(Boolean)
-        .slice(0, 4)
-        .map((url, i) => (
-          <View key={i} style={styles.imgContainer}>
-            <Image src={url as string} style={styles.imgPreview} />
-            <Text style={styles.imgCaption}>{imgLabels[i] || 'Vista'}</Text>
-          </View>
-        ))}
+    <View style={S.container} wrap={false}>
+      <Image src={principal.url} style={S.mainImg} />
+      <Text style={S.caption}>{principal.label}</Text>
     </View>
   );
 }
 
+// Galería secundaria (abajo, a todo lo ancho)
+function PDFGaleriaSecundaria({
+  renderUrl,
+  isometricoUrl,
+  planoUrl,
+  galeriaUrls,
+  title = 'Planos e imágenes adicionales',
+}: {
+  renderUrl?: string;
+  isometricoUrl?: string;
+  planoUrl?: string;
+  galeriaUrls?: string[];
+  title?: string;
+}) {
+  const { secundarios } = splitImages(renderUrl, isometricoUrl, planoUrl, galeriaUrls || []);
+  if (secundarios.length === 0) return null;
+
+  const S: Record<string, any> = {
+    wrapper: { marginTop: 10 },
+    heading: { fontSize: 12, fontWeight: 700, color: '#0f766e', marginBottom: 6 },
+    grid: { flexDirection: 'row', flexWrap: 'wrap' },
+    item: { width: '31%', marginRight: '3.5%', marginBottom: 8 }, // 3 por fila
+    img: {
+      width: '100%',
+      height: 120,
+      objectFit: 'cover',
+      borderRadius: 5,
+      borderWidth: 1,
+      borderColor: '#E5E7EB',
+    },
+    caption: { textAlign: 'center', fontSize: 9, color: '#6b7280', marginTop: 3 },
+  };
+
+  return (
+    <View style={S.wrapper} wrap>
+      <Text style={S.heading}>{title}</Text>
+      <View style={S.grid} wrap>
+        {secundarios.map((it, i) => (
+          <View key={`sec-${i}`} style={S.item}>
+            <Image src={it.url} style={S.img} />
+            <Text style={S.caption}>{it.label}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+/* ---------------------- Tabla de planes ---------------------- */
+
 function getMonthLabels(start: Date, count: number) {
-  const labels = [];
-  let date = new Date(start);
+  const labels: string[] = [];
+  const date = new Date(start);
   for (let i = 0; i < count; i++) {
     const label = `${date.toLocaleString('es-MX', { month: 'short', year: 'numeric' })}`;
     labels.push(label[0].toUpperCase() + label.slice(1));
@@ -108,16 +195,22 @@ function getMonthLabels(start: Date, count: number) {
 }
 
 function PDFTablaPlanes({
-  columnas, filas, selectedName, esPersonalizado
+  columnas,
+  filas,
+  selectedName,
+  esPersonalizado,
 }: {
-  columnas: any[],
-  filas: any[],
-  selectedName: string,
-  esPersonalizado?: boolean
+  columnas: any[];
+  filas: any[];
+  selectedName?: string;
+  esPersonalizado?: boolean;
 }) {
+  if (!columnas || columnas.length === 0) return null;
+
   return (
     <View style={styles.plansWrapper} wrap={false}>
       <Text style={styles.plansTitle}>Comparativa de Planes</Text>
+
       <View style={styles.matrixHeaderRow}>
         <Text style={[styles.matrixHeaderCell, styles.conceptHeaderCell]}>Concepto</Text>
         {columnas.map((c, i) => (
@@ -125,76 +218,73 @@ function PDFTablaPlanes({
             key={c.plan.name + i}
             style={styleArr(
               styles.matrixHeaderCell,
-              c.plan.name === selectedName ? styles.selectedHeaderCol : undefined,
+              selectedName && c.plan.name === selectedName ? styles.selectedHeaderCol : undefined
             )}
           >
             {c.plan.name}
           </Text>
         ))}
       </View>
+
       <View style={styles.matrixContainer}>
         {filas.map((fila, rIdx) => (
           <View
             key={fila.label}
-            style={styleArr(
-              styles.matrixRow,
-              rIdx % 2 === 1 ? styles.altRow : undefined,
-            )}
+            style={styleArr(styles.matrixRow, rIdx % 2 === 1 ? styles.altRow : undefined)}
           >
             <Text style={styles.conceptCell}>{fila.label}</Text>
-            {columnas.map((c, ci) => (
-              <Text
-                key={fila.label + ci}
-                style={styleArr(
-                  c.plan.name === selectedName ? styles.selectedCol : undefined,
-                  styles.matrixCell,
-                  fila.render(c) === '—'
-                    ? { color: '#c3c3c3', fontStyle: 'italic' }
-                    : undefined,
-                )}
-              >
-                {typeof fila.render(c) === 'object'
-                  ? fila.render(c)
-                  : fila.render(c)}
-              </Text>
-            ))}
+            {columnas.map((c, ci) => {
+              const val = fila.render(c);
+              const isDash = val === '—';
+              return (
+                <Text
+                  key={fila.label + ci}
+                  style={styleArr(
+                    selectedName && c.plan.name === selectedName ? styles.selectedCol : undefined,
+                    styles.matrixCell,
+                    isDash ? { color: '#c3c3c3', fontStyle: 'italic' } : undefined
+                  )}
+                >
+                  {val}
+                </Text>
+              );
+            })}
           </View>
         ))}
       </View>
-      {esPersonalizado && (
-        <Text style={styles.personalizadoNote}>
-          * Incluye plan personalizado seleccionado.
-        </Text>
-      )}
+
+      {esPersonalizado ? (
+        <Text style={styles.personalizadoNote}>* Incluye plan personalizado seleccionado.</Text>
+      ) : null}
     </View>
   );
 }
 
-
-
 function PDFFooter() {
+  const ahora = new Date();
+  const fecha = `${ahora.toLocaleDateString('es-MX')} ${ahora.toLocaleTimeString('es-MX')}`;
   return (
     <View style={styles.footerSection} wrap={false}>
       <Text style={styles.footerText}>
-        Documento generado el {new Date().toLocaleString()} | Vigencia de la oferta: 10 días. Precios sujetos a cambio sin previo aviso.
+        Documento generado el {fecha} | Vigencia de la oferta: 10 días. Precios sujetos a cambio sin previo aviso.
       </Text>
-      <Text style={styles.footerText}>
-        Consultas: ventas@objetiva.mx | (33) 1234-5678 | www.objetiva.mx
-      </Text>
+      <Text style={styles.footerText}>Consultas: ventas@objetiva.mx | (33) 1234-5678 | www.objetiva.mx</Text>
       <Text style={styles.legalNote}>
         *Este documento es informativo y no representa un compromiso contractual. Las imágenes son ilustrativas.
       </Text>
     </View>
   );
 }
+
+/* ---------------------- Componente principal ---------------------- */
+
 export interface PDFProps {
   proyecto: Proyecto;
   unidad: Unidad;
-  planSeleccionado: PlanPago;
-  planes: PlanPago[];
-  enganche: number;
-  liquidacion: number;
-  pagosMensuales: number[];
+  /** Puede venir vacío: el PDF debe seguir generándose */
+  planSeleccionado?: PlanPago | null;
+  /** Si no llega, no se renderiza la tabla de comparación */
+  planes?: PlanPago[];
   logoUrl?: string;
   renderUrl?: string;
   isometricoUrl?: string;
@@ -203,26 +293,25 @@ export interface PDFProps {
   esPersonalizado?: boolean;
 }
 
-const CotizacionPDF: React.FC<PDFProps> = (props) => {
-  const {
-    proyecto,
-    unidad,
-    planSeleccionado,
-    planes,
-    logoUrl,
-    renderUrl,
-    isometricoUrl,
-    planoUrl,
-    galeriaUrls = [],
-    esPersonalizado,
-  } = props;
-
-  // -------- Lógica de planes --------
+const CotizacionPDF: React.FC<PDFProps> = ({
+  proyecto,
+  unidad,
+  planSeleccionado,
+  planes = [],
+  logoUrl,
+  renderUrl,
+  isometricoUrl,
+  planoUrl,
+  galeriaUrls = [],
+  esPersonalizado,
+}) => {
+  // Precio base
   const precioLista = Number(String(unidad.preciolista).replace(/[$,]/g, '')) || 0;
   const fmt = (n: number) =>
     formatoMoneda ? formatoMoneda(n) : '$' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 
-  const columnas = planes.map((p) => {
+  // Columnas por plan (si no hay planes, la tabla no se mostrará)
+  const columnas = (planes || []).map((p) => {
     const descuento = p.descuento || 0;
     const base = precioLista * (1 - descuento / 100);
     const engPct = p.pInicial || 0;
@@ -231,10 +320,10 @@ const CotizacionPDF: React.FC<PDFProps> = (props) => {
 
     let pagosArray: number[] = [];
     if (p.parcialidades?.length) {
-      pagosArray = p.parcialidades.map(par => base * (par.value / 100));
+      pagosArray = p.parcialidades.map((par) => base * (par.value / 100));
     } else if (mensualidades > 0) {
       const pctRestante = Math.max(0, 100 - engPct - contraPct);
-      const pctCada = pctRestante / mensualidades;
+      const pctCada = mensualidades > 0 ? pctRestante / mensualidades : 0;
       pagosArray = Array.from({ length: mensualidades }, () => base * (pctCada / 100));
     }
 
@@ -256,67 +345,76 @@ const CotizacionPDF: React.FC<PDFProps> = (props) => {
       sumaMensualidades,
       pagoMensualProm,
       ahorro,
-      pagosArray, // <-- AGREGA ESTA LÍNEA
+      pagosArray,
     };
   });
 
-
-  const selectedName = planSeleccionado.name;
-
+  const selectedName = planSeleccionado?.name;
   const hoy = new Date();
-  const maxMensualidades = Math.max(...columnas.map(c => c.mensualidades || 0));
-  const mensualidadLabels = getMonthLabels(hoy, maxMensualidades);
+  const maxMensualidades =
+    columnas.length > 0 ? Math.max(...columnas.map((c) => c.mensualidades || 0)) : 0;
+  const mensualidadLabels = maxMensualidades > 0 ? getMonthLabels(hoy, maxMensualidades) : [];
 
-  const filas = [
-    {
-      label: 'Descuento (%)',
-      render: (c: any) => c.descuento ? c.descuento.toFixed(2) + '%' : '—',
-    },
-    {
-      label: 'Enganche (% / $)',
-      render: (c: any) => `${c.engPct.toFixed(2)}% / ${fmt(c.engancheMonto)}`,
-    },
-    {
-      label: 'Contraentrega (% / $)',
-      render: (c: any) => `${c.contraPct.toFixed(2)}% / ${fmt(c.contraMonto)}`,
-    },
-     ...mensualidadLabels.map((monthLabel, idx) => ({
-    label: `Mensualidad ${idx + 1} (${monthLabel})`,
-    render: (c: any) =>
-      c.pagosArray && c.pagosArray[idx] !== undefined
-        ? fmt(c.pagosArray[idx])
-        : '—'
-  })),
-    {
-      label: 'Total Mensualidades',
-      render: (c: any) => (c.mensualidades ? fmt(c.sumaMensualidades) : '—'),
-    },
-    {
-      label: 'Total con Descuento',
-      render: (c: any) => fmt(c.base),
-    },
-  ];
+  const filas =
+    columnas.length === 0
+      ? []
+      : [
+          {
+            label: 'Descuento (%)',
+            render: (c: any) => (c.descuento ? c.descuento.toFixed(2) + '%' : '—'),
+          },
+          {
+            label: 'Enganche (% / $)',
+            render: (c: any) => `${c.engPct.toFixed(2)}% / ${fmt(c.engancheMonto)}`,
+          },
+          {
+            label: 'Contraentrega (% / $)',
+            render: (c: any) => `${c.contraPct.toFixed(2)}% / ${fmt(c.contraMonto)}`,
+          },
+          ...mensualidadLabels.map((monthLabel, idx) => ({
+            label: `Mensualidad ${idx + 1} (${monthLabel})`,
+            render: (c: any) =>
+              c.pagosArray && c.pagosArray[idx] !== undefined ? fmt(c.pagosArray[idx]) : '—',
+          })),
+          {
+            label: 'Total Mensualidades',
+            render: (c: any) => (c.mensualidades ? fmt(c.sumaMensualidades) : '—'),
+          },
+          {
+            label: 'Total con Descuento',
+            render: (c: any) => fmt(c.base),
+          },
+        ];
 
-
-  // ------ Render principal ------
   return (
     <PDFDocument>
       <Page size="A4" style={styles.page} wrap>
         {/* Marca de agua */}
-        {logoUrl && (
-          <Image src={logoUrl} style={styles.watermark} />
-        )}
+        {logoUrl ? <Image src={logoUrl} style={styles.watermark} /> : null}
 
-        {/* 1. Header */}
+        {/* Header */}
         <PDFHeader logoUrl={logoUrl} proyecto={proyecto} />
 
-        {/* 2-3. Info unidad + imágenes */}
+        {/* Bloque superior: detalles + imagen principal */}
         <View style={styles.topSection} wrap>
           <PDFInfoUnidad unidad={unidad} />
-          <PDFImagenes renderUrl={renderUrl} isometricoUrl={isometricoUrl} planoUrl={planoUrl} galeriaUrls={galeriaUrls} />
+          <PDFImagenPrincipal
+            renderUrl={renderUrl}
+            isometricoUrl={isometricoUrl}
+            planoUrl={planoUrl}
+            galeriaUrls={galeriaUrls}
+          />
         </View>
 
-        {/* 4. Tabla de Planes */}
+        {/* Galería secundaria (debajo del bloque superior) */}
+        <PDFGaleriaSecundaria
+          renderUrl={renderUrl}
+          isometricoUrl={isometricoUrl}
+          planoUrl={planoUrl}
+          galeriaUrls={galeriaUrls}
+        />
+
+        {/* Tabla de Planes (opcional) */}
         <PDFTablaPlanes
           columnas={columnas}
           filas={filas}
@@ -324,7 +422,7 @@ const CotizacionPDF: React.FC<PDFProps> = (props) => {
           esPersonalizado={esPersonalizado}
         />
 
-        {/* 5. Footer */}
+        {/* Footer */}
         <PDFFooter />
       </Page>
     </PDFDocument>

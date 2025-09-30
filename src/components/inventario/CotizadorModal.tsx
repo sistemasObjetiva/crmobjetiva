@@ -6,7 +6,7 @@ import {
 import CloseIcon from '@mui/icons-material/Close';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 
-import { Proyecto, Unidad, PlanPago, Seguimiento ,Document} from '../../config/types';
+import { Proyecto, Unidad, PlanPago, Seguimiento, Document } from '../../config/types';
 import SignedAvatar from '../general/SignedAvatar';
 import SignedImage from '../general/SignedImage';
 import CotizacionPDF from './CotizacionUnidadPDF';
@@ -17,27 +17,28 @@ import SelectorPlanPago, { CustomPayment } from './CotizadorUnidadSelectorPlant'
 
 import { pdf } from '@react-pdf/renderer';
 import { blobToDataURL, getSignedUrl } from '../../hooks/useUtilsFunctions';
+
 interface CotizadorModalProps {
   proyecto: Proyecto;
   unidad: Unidad;
   open: boolean;
   onClose: () => void;
-  onAsignarCotizacion?: (doc: Document) => void
-  seguimiento?: Seguimiento
+  onAsignarCotizacion?: (doc: Document) => void;
+  seguimiento?: Seguimiento;
 }
 
 const CotizadorModal: React.FC<CotizadorModalProps> = ({
-  proyecto, unidad, open, onClose,onAsignarCotizacion,
+  proyecto, unidad, open, onClose, onAsignarCotizacion,
 }) => {
   const [selectedPlan, setSelectedPlan] = useState<PlanPago | null>(null);
   const [isCustomPlan, setIsCustomPlan] = useState(false);
   const [customPayments, setCustomPayments] = useState<CustomPayment[]>([]);
-  const [customPrecioPlan, setCustomPrecioPlan] = useState<number>(parseFloat(String(unidad.preciolista).replace(/[$,]/g, '')) || 0);
+  const [customPrecioPlan, setCustomPrecioPlan] = useState<number>(
+    parseFloat(String(unidad.preciolista).replace(/[$,]/g, '')) || 0
+  );
   const [customPagoInicial, setCustomPagoInicial] = useState<number>(0);
   const [customContraEntrega, setCustomContraEntrega] = useState<number>(0);
 
-    
-  // Handlers requeridos por SelectorPlanPago
   const handleSelectedPlanChange = (plan: PlanPago | null) => setSelectedPlan(plan);
   const handleIsCustomPlanChange = (val: boolean) => setIsCustomPlan(val);
 
@@ -50,7 +51,6 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
   const totalProgramado = customPagoInicial + customContraEntrega + totalCustomMonthly;
   const restante = customPrecioPlan - totalProgramado;
 
-  // Recibe todos los cambios del selector aquí
   const handlePlanSelected = (
     plan: PlanPago | null,
     isCustom: boolean,
@@ -67,20 +67,10 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
     setCustomContraEntrega(customContraEntrega ?? 0);
   };
 
-  // ----------- PDF Lógica Completa -----------
+  // ✅ Permite descargar aunque no haya plan (cuando NO es personalizado)
   const canDownload = isCustomPlan
     ? (customPrecioPlan > 0 && restante === 0 && (customPagoInicial + customContraEntrega + customPayments.length > 0))
-    : !!selectedPlan;
-
-  const calcularValoresPlan = (plan: PlanPago) => {
-    const base = precioLista * ((100 - plan.descuento) / 100);
-    const enganche = base * (plan.pInicial / 100);
-    const liquidacion = base * (plan.contraentrega / 100);
-    const pagosMensuales = plan.parcialidades.map(p =>
-      base * (p.value / 100)
-    );
-    return { enganche, liquidacion, pagosMensuales };
-  };
+    : true;
 
   function buildCustomPseudoPlan(
     total: number,
@@ -88,12 +78,12 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
     contraEntrega: number,
     pagos: { mes: string; monto: number }[]
   ): PlanPago {
-    const restantePosible = Math.max(total, 0) || 1;
-    const pInicialPct = (pagoInicial / restantePosible) * 100;
-    const contraPct = (contraEntrega / restantePosible) * 100;
+    const totalSeguro = total > 0 ? total : 1;
+    const pInicialPct = (pagoInicial / totalSeguro) * 100;
+    const contraPct = (contraEntrega / totalSeguro) * 100;
     const parcialidades = pagos.map((p, i) => ({
       month: i + 1,
-      value: (p.monto / restantePosible) * 100,
+      value: (p.monto / totalSeguro) * 100,
     }));
 
     return {
@@ -107,51 +97,8 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
     } as PlanPago;
   }
 
-  const handleDownloadPdf = async () => {
-    let planParaPdf: PlanPago | null = selectedPlan;
-    let enganche = 0;
-    let liquidacion = 0;
-    let pagosMensuales: number[] = [];
-
-    if (isCustomPlan) {
-      if (customPrecioPlan <= 0) {
-        alert('Define un precio total > 0 para el plan personalizado.');
-        return;
-      }
-      if (restante !== 0) {
-        alert('El total programado no coincide con el precio del plan.');
-        return;
-      }
-      const hayPagos =
-        (customPayments.length > 0) ||
-        (customContraEntrega > 0) ||
-        (customPagoInicial > 0);
-      if (!hayPagos) {
-        alert('Agrega al menos un pago al plan personalizado.');
-        return;
-      }
-      planParaPdf = buildCustomPseudoPlan(
-        customPrecioPlan,
-        customPagoInicial,
-        customContraEntrega,
-        customPayments
-      );
-      enganche = customPagoInicial;
-      liquidacion = customContraEntrega;
-      pagosMensuales = customPayments.map(p => p.monto);
-
-    } else {
-      if (!selectedPlan) {
-        alert('Selecciona un plan primero.');
-        return;
-      }
-      const { enganche: e, liquidacion: l, pagosMensuales: pm } = calcularValoresPlan(selectedPlan);
-      enganche = e;
-      liquidacion = l;
-      pagosMensuales = pm;
-    }
-
-    // 1) Firmar URLs (igual que antes)
+  // --- Utilidad para firmar y convertir a base64 ---
+  const prepararMedios = async () => {
     const logoUrl = proyecto.logo?.path
       ? await getSignedUrl(proyecto.logo.path, proyecto.logo.bucket!)
       : undefined;
@@ -168,32 +115,54 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
       (unidad.imagenes || []).map(img => getSignedUrl(img.path!, img.bucket!))
     );
 
-    // 2) Convertir a Base64
+    const urls = [logoUrl, renderUrl, isoUrl, planoUrl, ...galeriaUrlsSigned].filter(Boolean) as string[];
     const bases = await Promise.all(
-      [logoUrl, renderUrl, isoUrl, planoUrl, ...galeriaUrlsSigned]
-        .filter(Boolean)
-        .map(async url => {
-          const resp = await fetch(url!);
-          const blob = await resp.blob();
-          return blobToDataURL(blob);
-        })
+      urls.map(async url => {
+        const resp = await fetch(url);
+        const blob = await resp.blob();
+        return blobToDataURL(blob);
+      })
     );
     const [logoBase, renderBase, isoBase, planoBase, ...galeriaBases] = bases;
+    return { logoBase, renderBase, isoBase, planoBase, galeriaBases };
+  };
 
-    const planesParaPdf = isCustomPlan
-      ? [...proyecto.paymentPlans, planParaPdf!] // agregas el custom al final
+  const handleDownloadPdf = async () => {
+    // Si es personalizado, mantenemos las validaciones
+    let planParaPdf: PlanPago | null = selectedPlan;
+
+    if (isCustomPlan) {
+      if (customPrecioPlan <= 0) {
+        alert('Define un precio total > 0 para el plan personalizado.');
+        return;
+      }
+      if (restante !== 0) {
+        alert('El total programado no coincide con el precio del plan.');
+        return;
+      }
+      const hayPagos = (customPayments.length > 0) || (customContraEntrega > 0) || (customPagoInicial > 0);
+      if (!hayPagos) {
+        alert('Agrega al menos un pago al plan personalizado.');
+        return;
+      }
+      planParaPdf = buildCustomPseudoPlan(customPrecioPlan, customPagoInicial, customContraEntrega, customPayments);
+    } else {
+      // ✅ No hay plan seleccionado: continuamos (la tabla se mostrará vacía/neutral)
+      // Si hay plan seleccionado, perfecto; si no, `planParaPdf` seguirá en null.
+    }
+
+    const { logoBase, renderBase, isoBase, planoBase, galeriaBases } = await prepararMedios();
+
+    const planesParaPdf = isCustomPlan && planParaPdf
+      ? [...proyecto.paymentPlans, planParaPdf]
       : proyecto.paymentPlans;
 
-    // 3) Generar PDF
     const blobPdf = await pdf(
       <CotizacionPDF
         proyecto={proyecto}
         unidad={unidad}
-        planSeleccionado={planParaPdf!}
+        planSeleccionado={planParaPdf || undefined}
         planes={planesParaPdf}
-        enganche={enganche}
-        liquidacion={liquidacion}
-        pagosMensuales={pagosMensuales}
         logoUrl={logoBase}
         renderUrl={renderBase}
         isometricoUrl={isoBase}
@@ -211,103 +180,62 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
     URL.revokeObjectURL(blobUrl);
   };
 
-  // ------------------------------------------
-const handleAsignarPdf = async () => {
-  // 1. Prepara los datos igual que en handleDownloadPdf
+  const handleAsignarPdf = async () => {
+    let planParaPdf: PlanPago | null = selectedPlan;
 
-  let planParaPdf: PlanPago | null = selectedPlan;
-  let enganche = 0;
-  let liquidacion = 0;
-  let pagosMensuales: number[] = [];
+    if (isCustomPlan) {
+      // Misma lógica/validaciones que arriba
+      if (customPrecioPlan <= 0 || restante !== 0) return;
+      const hayPagos = (customPayments.length > 0) || (customContraEntrega > 0) || (customPagoInicial > 0);
+      if (!hayPagos) return;
+      planParaPdf = buildCustomPseudoPlan(customPrecioPlan, customPagoInicial, customContraEntrega, customPayments);
+    }
 
-  if (isCustomPlan) {
-    planParaPdf = buildCustomPseudoPlan(
-      customPrecioPlan,
-      customPagoInicial,
-      customContraEntrega,
-      customPayments
-    );
-    enganche = customPagoInicial;
-    liquidacion = customContraEntrega;
-    pagosMensuales = customPayments.map(p => p.monto);
-  } else if (selectedPlan) {
-    const { enganche: e, liquidacion: l, pagosMensuales: pm } = calcularValoresPlan(selectedPlan);
-    enganche = e;
-    liquidacion = l;
-    pagosMensuales = pm;
-  }
+    const { logoBase, renderBase, isoBase, planoBase, galeriaBases } = await prepararMedios();
 
-  // 2. URLs firmadas y base64 (igual que handleDownloadPdf)
-  const logoUrl = proyecto.logo?.path
-    ? await getSignedUrl(proyecto.logo.path, proyecto.logo.bucket!)
-    : undefined;
-  const renderUrl = unidad.render?.path
-    ? await getSignedUrl(unidad.render.path, unidad.render.bucket!)
-    : undefined;
-  const isoUrl = unidad.isometrico?.path
-    ? await getSignedUrl(unidad.isometrico.path, unidad.isometrico.bucket!)
-    : undefined;
-  const planoUrl = unidad.plano?.path
-    ? await getSignedUrl(unidad.plano.path, unidad.plano.bucket!)
-    : undefined;
-  const galeriaUrlsSigned = await Promise.all(
-    (unidad.imagenes || []).map(img => getSignedUrl(img.path!, img.bucket!))
-  );
-  const bases = await Promise.all(
-    [logoUrl, renderUrl, isoUrl, planoUrl, ...galeriaUrlsSigned]
-      .filter(Boolean)
-      .map(async url => {
-        const resp = await fetch(url!);
-        const blob = await resp.blob();
-        return blobToDataURL(blob);
-      })
-  );
-  const [logoBase, renderBase, isoBase, planoBase, ...galeriaBases] = bases;
+    const planesParaPdf = isCustomPlan && planParaPdf
+      ? [...proyecto.paymentPlans, planParaPdf]
+      : proyecto.paymentPlans;
 
-  const planesParaPdf = isCustomPlan
-    ? [...proyecto.paymentPlans, planParaPdf!] // agregas el custom al final
-    : proyecto.paymentPlans;
+    const blobPdf = await pdf(
+      <CotizacionPDF
+        proyecto={proyecto}
+        unidad={unidad}
+        planSeleccionado={planParaPdf || undefined}
+        planes={planesParaPdf}
+        logoUrl={logoBase}
+        renderUrl={renderBase}
+        isometricoUrl={isoBase}
+        planoUrl={planoBase}
+        galeriaUrls={galeriaBases}
+        esPersonalizado={isCustomPlan}
+      />
+    ).toBlob();
 
-  // 3. Genera el PDF
-  const blobPdf = await pdf(
-    <CotizacionPDF
-      proyecto={proyecto}
-      unidad={unidad}
-      planSeleccionado={planParaPdf!}
-      planes={planesParaPdf}
-      enganche={enganche}
-      liquidacion={liquidacion}
-      pagosMensuales={pagosMensuales}
-      logoUrl={logoBase}
-      renderUrl={renderBase}
-      isometricoUrl={isoBase}
-      planoUrl={planoBase}
-      galeriaUrls={galeriaBases}
-      esPersonalizado={isCustomPlan}
-    />
-  ).toBlob();
+    const archivoNombre = `${proyecto.nombre.replace(/\s+/g, '_')}_cotizacion.pdf`;
+    const filePdf = new File([blobPdf], archivoNombre, { type: 'application/pdf' });
 
-  // 4. Prepara el archivo y el Document
-  const archivoNombre = `${proyecto.nombre.replace(/\s+/g, '_')}_cotizacion.pdf`;
-  const filePdf = new File([blobPdf], archivoNombre, { type: 'application/pdf' });
+    const documento: Document = {
+      id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()),
+      nombre: archivoNombre,
+      file: filePdf
+    };
 
-  const documento: Document = {
-    id: crypto.randomUUID(),   // O usa uuidv4()
-    nombre: archivoNombre,
-    file: filePdf
+    if (onAsignarCotizacion) onAsignarCotizacion(documento);
+    onClose();
   };
 
-  // 5. Llama al callback para que lo maneje el padre
-  if (onAsignarCotizacion) {
-    onAsignarCotizacion(documento);
-  }
-  onClose()
-};
-
-
-
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
+    <Dialog
+      open={open}
+      onClose={onClose}
+      // 🔸 Más ancho
+      fullWidth
+      maxWidth="xl"
+      PaperProps={{
+        sx: { width: 'min(1200px, 96vw)' }
+      }}
+    >
       <DialogTitle
         sx={{
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -321,8 +249,9 @@ const handleAsignarPdf = async () => {
           <CloseIcon />
         </IconButton>
       </DialogTitle>
+
       <DialogContent>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, mb: 3 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, mb: 3, flexWrap: 'wrap' }}>
           <SignedAvatar value={proyecto.logo!} alt="Logo del Proyecto" sx={{ width: 90, height: 90, boxShadow: 2 }} />
           {proyecto.render && (
             <SignedImage
@@ -330,14 +259,16 @@ const handleAsignarPdf = async () => {
               bucket={proyecto.render.bucket!}
               alt="Fachada del Proyecto"
               sx={{
-                width: 200, height: 120,
+                width: 260, height: 150,
                 borderRadius: 2, boxShadow: '2px 2px 10px rgba(0,0,0,0.13)'
               }}
             />
           )}
         </Box>
+
         <UnidadInfo unidad={unidad} />
         <UnidadImagenes unidad={unidad} />
+
         <SelectorPlanPago
           paymentPlans={proyecto.paymentPlans}
           precioLista={precioLista}
@@ -353,33 +284,35 @@ const handleAsignarPdf = async () => {
           onCustomPrecioPlanChange={setCustomPrecioPlan}
           onCustomPagoInicialChange={setCustomPagoInicial}
           onCustomContraEntregaChange={setCustomContraEntrega}
-          onSelectedPlanChange={handleSelectedPlanChange}         // <-- Importante!
-          onIsCustomPlanChange={handleIsCustomPlanChange}         // <-- Importante!
+          onSelectedPlanChange={handleSelectedPlanChange}
+          onIsCustomPlanChange={handleIsCustomPlanChange}
         />
       </DialogContent>
-      <DialogActions>
-      <Button
-        variant="outlined"
-        startIcon={<PictureAsPdfIcon />}
-        onClick={handleDownloadPdf}
-        disabled={!canDownload}
-        sx={{ mr: 1, color: 'var(--primary-color)', borderColor: '#fff' }}
-      >
-        Descargar PDF
-      </Button>
-      {onAsignarCotizacion && (
-        <Button
-          variant="contained"
-          color="primary"
-          onClick={handleAsignarPdf}
-          disabled={!canDownload}
-        >
-          Asignar a seguimiento
-        </Button>
-      )}
-      <Button onClick={onClose}>Cerrar</Button>
-    </DialogActions>
 
+      <DialogActions>
+        <Button
+          variant="outlined"
+          startIcon={<PictureAsPdfIcon />}
+          onClick={handleDownloadPdf}
+          disabled={!canDownload}
+          sx={{ mr: 1, color: 'var(--primary-color)', borderColor: '#fff' }}
+        >
+          Descargar PDF
+        </Button>
+
+        {onAsignarCotizacion && (
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={handleAsignarPdf}
+            disabled={!canDownload}
+          >
+            Asignar a seguimiento
+          </Button>
+        )}
+
+        <Button onClick={onClose}>Cerrar</Button>
+      </DialogActions>
     </Dialog>
   );
 };

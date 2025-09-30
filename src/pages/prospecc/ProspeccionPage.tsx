@@ -23,7 +23,8 @@ const ProspeccionPage: React.FC = () => {
       sx={{
         px: { xs: 1, sm: 3 },
         pt: 2,
-        pb: 1
+        pb: 1,
+        width: "100%"
       }}
     >
       <Tabs

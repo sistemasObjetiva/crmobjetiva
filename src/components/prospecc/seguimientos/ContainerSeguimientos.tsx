@@ -29,7 +29,7 @@ const ContainerSeguimientos: React.FC<Props> = ({ userid, userRole }) => {
   }, [tabs, active])
 
   return (
-    <Box sx={{ width: '100%', maxWidth: 1200, mx: 'auto', py: 3 }}>
+    <Box sx={{ width: '100%', mx: 'auto', py: 3 }}>
       <Typography variant="h5" sx={{ mb: 2, color: 'var(--primary-color)', fontWeight: 700 }}>
         Seguimientos
       </Typography>

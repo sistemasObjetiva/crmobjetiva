@@ -35,7 +35,7 @@ const ContainerProspectos: React.FC<ContainerProspectosProps> = ({ userid, userR
   }, [tabs, active])
 
   return (
-    <Box sx={{ width: '100%', maxWidth: 1200, mx: 'auto', py: 3 }}>
+    <Box sx={{ width: '100%',  mx: 'auto', py: 3 }}>
       <Typography
         variant="h5"
         sx={{ mb: 2, color: 'var(--primary-color)', fontWeight: 700 }}
@@ -43,7 +43,7 @@ const ContainerProspectos: React.FC<ContainerProspectosProps> = ({ userid, userR
         Prospectos
       </Typography>
 
-      <Paper sx={{ borderRadius: 4, boxShadow: 2, p: 0 }}>
+      <Paper sx={{ borderRadius: 4, boxShadow: 2, p: 0,width: "100%" }}>
         <Box sx={{ px: { xs: 1, sm: 3 }, pt: 2 }}>
           <Tabs
             value={tabs.findIndex(t => t.key === active)}

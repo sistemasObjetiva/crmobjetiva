@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import {
   Box, Typography, IconButton, Paper, Tooltip, Table, TableBody, TableCell,
-  TableHead, TableRow, CircularProgress, Chip, TextField, TableSortLabel, TablePagination
+  TableHead, TableRow, CircularProgress, Chip, TableSortLabel, TablePagination
 } from '@mui/material'
 import PersonAddAltIcon from '@mui/icons-material/PersonAddAlt'
 import VisibilityIcon from '@mui/icons-material/Visibility'
@@ -19,6 +19,9 @@ import Spinner from '../../general/Spinner'
 import { fechaActual } from '../../../hooks/useDateUtils'
 import SignedAvatar from '../../general/SignedAvatar'
 import { getEstatusChip } from '../../../hooks/useUtilsFunctions'
+import SeguimientosFiltersBar from './SeguimientosFilterBar'
+import { useSeguimientosFilters } from '../../../hooks/seguimientos/useSeguimientosFilter'
+
 
 const ESTATUS_LIST = [
   'contactado', 'interaccion', 'cotizacion', 'visita', 'posible', 'apartado', 'vendido', 'descartado'
@@ -86,11 +89,12 @@ const SeguimientosTab: React.FC<Props> = ({ userid }) => {
   const [seguimientoLocal, setSeguimientoLocal] = useState<Seguimiento | null>(null)
   const [loading, setLoading] = useState(false)
 
+  // 🔹 filtros globales
+  const { filters } = useSeguimientosFilters()
+
   const prospectosById = useMemo(() => {
     const map = new Map<string, Prospecto>()
-    ;(prospectos ?? []).forEach(p => {
-      if (p?.id) map.set(p.id, p)
-    })
+    ;(prospectos ?? []).forEach(p => { if (p?.id) map.set(p.id, p) })
     return map
   }, [prospectos])
 
@@ -117,36 +121,21 @@ const SeguimientosTab: React.FC<Props> = ({ userid }) => {
     estatusSeguimiento: 'contactado'
   })
 
-  const handleAbrirModalNuevo = () => {
-    setSeguimientoLocal(initialSeguimiento())
-    setModalOpen(true)
-  }
-
-  const handleAbrirModalVer = (s: Seguimiento) => {
-    setSeguimientoLocal(s)
-    setModalOpen(true)
-  }
+  const handleAbrirModalNuevo = () => { setSeguimientoLocal(initialSeguimiento()); setModalOpen(true) }
+  const handleAbrirModalVer = (s: Seguimiento) => { setSeguimientoLocal(s); setModalOpen(true) }
 
   const handleGuardarSeguimiento = async (s: Seguimiento) => {
     setLoading(true)
-    try {
-      await updateSeguimiento(s)
-      showStatus('Seguimiento guardado exitosamente', 'success')
-    } catch (err: any) {
-      console.error(err)
-      showStatus(err?.message ? `Error al guardar seguimiento: ${err.message}` : 'Error al guardar seguimiento', 'error')
-    } finally {
-      setModalOpen(false)
-      setSeguimientoLocal(null)
-      setLoading(false)
-    }
+    try { await updateSeguimiento(s); showStatus('Seguimiento guardado exitosamente', 'success') }
+    catch (err: any) { console.error(err); showStatus(err?.message ? `Error al guardar seguimiento: ${err.message}` : 'Error al guardar seguimiento', 'error') }
+    finally { setModalOpen(false); setSeguimientoLocal(null); setLoading(false) }
   }
 
   const handleChange = (field: keyof Seguimiento, value: any) => {
     setSeguimientoLocal(prev => prev ? { ...prev, [field]: value } : null)
   }
 
-  // -------- ORDEN + FILTROS EN HEADER --------
+  // -------- ORDEN --------
   type Order = 'asc' | 'desc'
   type OrderByKey =
     | 'nombre' | 'correo' | 'temperatura' | 'unidad'
@@ -154,16 +143,6 @@ const SeguimientosTab: React.FC<Props> = ({ userid }) => {
 
   const [order, setOrder] = useState<Order>('asc')
   const [orderBy, setOrderBy] = useState<OrderByKey>('fechaProximo')
-  const [filters, setFilters] = useState({
-    nombre: '',
-    correo: '',
-    temperatura: '',
-    unidad: '',
-    proyectoTexto: '',
-    fechaProximo: '',
-    fechaActualizacion: '',
-    comentarios: '',
-  })
 
   const handleRequestSort = (key: OrderByKey) => {
     if (orderBy === key) setOrder(prev => (prev === 'asc' ? 'desc' : 'asc'))
@@ -172,8 +151,7 @@ const SeguimientosTab: React.FC<Props> = ({ userid }) => {
 
   const normalize = (s?: string | null) =>
     (s ?? '').toString().normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
-  const matches = (val?: string | null, needle = '') =>
-    normalize(val).includes(normalize(needle))
+  const matches = (val?: string | null, needle = '') => normalize(val).includes(normalize(needle))
   const compare = <T,>(a: T, b: T) => (a < b ? -1 : a > b ? 1 : 0)
 
   // id -> label proyecto/propiedad
@@ -217,14 +195,10 @@ const SeguimientosTab: React.FC<Props> = ({ userid }) => {
       const pa = prospectosById.get(a.idprospecto)
       const pb = prospectosById.get(b.idprospecto)
       switch (orderBy) {
-        case 'nombre':
-          cmp = compare(normalize(pa?.nombreCompleto), normalize(pb?.nombreCompleto)); break
-        case 'correo':
-          cmp = compare(normalize(pa?.correoElectronico), normalize(pb?.correoElectronico)); break
-        case 'temperatura':
-          cmp = compare(normalize(a.temperaturaInteres), normalize(b.temperaturaInteres)); break
-        case 'unidad':
-          cmp = compare(normalize(a.unidadInteres || a.proyectoInteres), normalize(b.unidadInteres || b.proyectoInteres)); break
+        case 'nombre': cmp = compare(normalize(pa?.nombreCompleto), normalize(pb?.nombreCompleto)); break
+        case 'correo': cmp = compare(normalize(pa?.correoElectronico), normalize(pb?.correoElectronico)); break
+        case 'temperatura': cmp = compare(normalize(a.temperaturaInteres), normalize(b.temperaturaInteres)); break
+        case 'unidad': cmp = compare(normalize(a.unidadInteres || a.proyectoInteres), normalize(b.unidadInteres || b.proyectoInteres)); break
         case 'fechaActualizacion': {
           const da = a.fechaActualizacion ? new Date(a.fechaActualizacion).getTime() : 0
           const db = b.fechaActualizacion ? new Date(b.fechaActualizacion).getTime() : 0
@@ -272,7 +246,7 @@ const SeguimientosTab: React.FC<Props> = ({ userid }) => {
     <Box>
       {loading && <Spinner open={true} />}
 
-      <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+      <Box display="flex" alignItems="center" justifyContent="space-between" mb={1.5}>
         <Typography variant="h6" fontWeight={700} color="primary">Seguimientos</Typography>
         <Tooltip title="Agregar seguimiento">
           <IconButton color="primary" onClick={handleAbrirModalNuevo} size="large" sx={{ borderRadius: 2 }}>
@@ -280,6 +254,9 @@ const SeguimientosTab: React.FC<Props> = ({ userid }) => {
           </IconButton>
         </Tooltip>
       </Box>
+
+      {/* 🔹 Barra ÚNICA de filtros (global) */}
+      <SeguimientosFiltersBar />
 
       {/* Prospectos sin seguimiento */}
       {prospectosSinSeguimiento.length > 0 && (
@@ -304,11 +281,7 @@ const SeguimientosTab: React.FC<Props> = ({ userid }) => {
                   <TableCell>{prosp.correoElectronico ?? ''}</TableCell>
                   <TableCell>{prosp.celular ?? ''}</TableCell>
                   <TableCell>
-                    <ProyectosInteresChips
-                      ids={prosp.proyectosInteres}
-                      proyectos={proyectos}
-                      propiedades={propiedades}
-                    />
+                    <ProyectosInteresChips ids={prosp.proyectosInteres} proyectos={proyectos} propiedades={propiedades} />
                   </TableCell>
                   <TableCell align="center">
                     <Tooltip title="Agregar seguimiento">
@@ -350,13 +323,7 @@ const SeguimientosTab: React.FC<Props> = ({ userid }) => {
                 variant="subtitle1"
                 fontWeight={700}
                 color="text.secondary"
-                sx={{
-                  mb: 1,
-                  textTransform: 'uppercase',
-                  letterSpacing: 1,
-                  display: 'flex',
-                  alignItems: 'center'
-                }}
+                sx={{ mb: 1, textTransform: 'uppercase', letterSpacing: 1, display: 'flex', alignItems: 'center' }}
               >
                 {getEstatusChip(status)}
                 <Typography component="span" sx={{ ml: 1, fontWeight: 700, fontSize: 14 }}>
@@ -367,119 +334,41 @@ const SeguimientosTab: React.FC<Props> = ({ userid }) => {
               <Paper variant="outlined" sx={{ mb: 2, borderLeft: `5px solid var(--primary-color, #1976d2)`, overflowX: 'auto' }}>
                 <Table size="small" stickyHeader>
                   <TableHead>
-                    {/* Títulos con sort */}
+                    {/* Títulos con sort (⛔️ sin fila de filtros aquí) */}
                     <TableRow>
                       <TableCell sortDirection={orderBy === 'nombre' ? order : false}>
-                        <TableSortLabel
-                          active={orderBy === 'nombre'}
-                          direction={orderBy === 'nombre' ? order : 'asc'}
-                          onClick={() => handleRequestSort('nombre')}
-                        >
+                        <TableSortLabel active={orderBy === 'nombre'} direction={orderBy === 'nombre' ? order : 'asc'} onClick={() => handleRequestSort('nombre')}>
                           Nombre
                         </TableSortLabel>
                       </TableCell>
                       <TableCell sortDirection={orderBy === 'correo' ? order : false}>
-                        <TableSortLabel
-                          active={orderBy === 'correo'}
-                          direction={orderBy === 'correo' ? order : 'asc'}
-                          onClick={() => handleRequestSort('correo')}
-                        >
+                        <TableSortLabel active={orderBy === 'correo'} direction={orderBy === 'correo' ? order : 'asc'} onClick={() => handleRequestSort('correo')}>
                           Correo
                         </TableSortLabel>
                       </TableCell>
                       <TableCell sortDirection={orderBy === 'temperatura' ? order : false}>
-                        <TableSortLabel
-                          active={orderBy === 'temperatura'}
-                          direction={orderBy === 'temperatura' ? order : 'asc'}
-                          onClick={() => handleRequestSort('temperatura')}
-                        >
+                        <TableSortLabel active={orderBy === 'temperatura'} direction={orderBy === 'temperatura' ? order : 'asc'} onClick={() => handleRequestSort('temperatura')}>
                           Temperatura
                         </TableSortLabel>
                       </TableCell>
                       <TableCell sortDirection={orderBy === 'unidad' ? order : false}>
-                        <TableSortLabel
-                          active={orderBy === 'unidad'}
-                          direction={orderBy === 'unidad' ? order : 'asc'}
-                          onClick={() => handleRequestSort('unidad')}
-                        >
+                        <TableSortLabel active={orderBy === 'unidad'} direction={orderBy === 'unidad' ? order : 'asc'} onClick={() => handleRequestSort('unidad')}>
                           Unidad/Proyecto interés
                         </TableSortLabel>
                       </TableCell>
                       <TableCell>Proyectos/Propiedades interés</TableCell>
                       <TableCell sortDirection={orderBy === 'fechaProximo' ? order : false}>
-                        <TableSortLabel
-                          active={orderBy === 'fechaProximo'}
-                          direction={orderBy === 'fechaProximo' ? order : 'asc'}
-                          onClick={() => handleRequestSort('fechaProximo')}
-                        >
+                        <TableSortLabel active={orderBy === 'fechaProximo'} direction={orderBy === 'fechaProximo' ? order : 'asc'} onClick={() => handleRequestSort('fechaProximo')}>
                           Fecha Próx. Seguimiento
                         </TableSortLabel>
                       </TableCell>
                       <TableCell sortDirection={orderBy === 'fechaActualizacion' ? order : false}>
-                        <TableSortLabel
-                          active={orderBy === 'fechaActualizacion'}
-                          direction={orderBy === 'fechaActualizacion' ? order : 'asc'}
-                          onClick={() => handleRequestSort('fechaActualizacion')}
-                        >
+                        <TableSortLabel active={orderBy === 'fechaActualizacion'} direction={orderBy === 'fechaActualizacion' ? order : 'asc'} onClick={() => handleRequestSort('fechaActualizacion')}>
                           Fecha actualización
                         </TableSortLabel>
                       </TableCell>
                       <TableCell>Comentarios</TableCell>
                       <TableCell align="center">Ver</TableCell>
-                    </TableRow>
-
-                    {/* Fila de filtros inline */}
-                    <TableRow>
-                      <TableCell>
-                        <TextField size="small" fullWidth placeholder="Filtrar nombre…"
-                          value={filters.nombre}
-                          onChange={e => setFilters(f => ({ ...f, nombre: e.target.value }))} />
-                      </TableCell>
-                      <TableCell>
-                        <TextField size="small" fullWidth placeholder="Filtrar correo…"
-                          value={filters.correo}
-                          onChange={e => setFilters(f => ({ ...f, correo: e.target.value }))} />
-                      </TableCell>
-                      <TableCell>
-                        <TextField size="small" fullWidth placeholder="Filtrar temperatura…"
-                          value={filters.temperatura}
-                          onChange={e => setFilters(f => ({ ...f, temperatura: e.target.value }))} />
-                      </TableCell>
-                      <TableCell>
-                        <TextField size="small" fullWidth placeholder="Filtrar unidad/proyecto…"
-                          value={filters.unidad}
-                          onChange={e => setFilters(f => ({ ...f, unidad: e.target.value }))} />
-                      </TableCell>
-                      <TableCell>
-                        <TextField size="small" fullWidth placeholder="Proyecto/Propiedad (chips)…"
-                          value={filters.proyectoTexto}
-                          onChange={e => setFilters(f => ({ ...f, proyectoTexto: e.target.value }))} />
-                      </TableCell>
-                      <TableCell>
-                        <TextField size="small" fullWidth type="date"
-                          value={filters.fechaProximo}
-                          onChange={e => setFilters(f => ({ ...f, fechaProximo: e.target.value }))} />
-                      </TableCell>
-                      <TableCell>
-                        <TextField size="small" fullWidth type="date"
-                          value={filters.fechaActualizacion}
-                          onChange={e => setFilters(f => ({ ...f, fechaActualizacion: e.target.value }))} />
-                      </TableCell>
-                      <TableCell>
-                        <TextField size="small" fullWidth placeholder="Filtrar comentarios…"
-                          value={filters.comentarios}
-                          onChange={e => setFilters(f => ({ ...f, comentarios: e.target.value }))} />
-                      </TableCell>
-                      <TableCell align="center">
-                        <Tooltip title="Limpiar filtros">
-                          <IconButton size="small" onClick={() => setFilters({
-                            nombre:'', correo:'', temperatura:'', unidad:'', proyectoTexto:'',
-                            fechaProximo:'', fechaActualizacion:'', comentarios:''
-                          })}>
-                            <span style={{ fontWeight:700 }}>✕</span>
-                          </IconButton>
-                        </Tooltip>
-                      </TableCell>
                     </TableRow>
                   </TableHead>
 
@@ -502,11 +391,7 @@ const SeguimientosTab: React.FC<Props> = ({ userid }) => {
                             <TableCell>{s.temperaturaInteres}</TableCell>
                             <TableCell>{s.unidadInteres || s.proyectoInteres}</TableCell>
                             <TableCell>
-                              <ProyectosInteresChips
-                                ids={prospecto?.proyectosInteres}
-                                proyectos={proyectos}
-                                propiedades={propiedades}
-                              />
+                              <ProyectosInteresChips ids={prospecto?.proyectosInteres} proyectos={proyectos} propiedades={propiedades} />
                             </TableCell>
                             <TableCell>{fmtDate(s.fechaProximoSeguimiento)}</TableCell>
                             <TableCell>{fmtDate(s.fechaActualizacion)}</TableCell>

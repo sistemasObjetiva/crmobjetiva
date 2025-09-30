@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Box, Dialog, DialogActions, DialogContent, DialogTitle, Button } from '@mui/material'
 import Papa from 'papaparse'
 
@@ -9,7 +9,7 @@ import {
   useFetchSeguimientos,
   useFetchUsuarios,
   updateSeguimiento,
-  updateProspecto,           // 👈 asegúrate de tener este helper en tus hooks
+  updateProspecto,
 } from '../../../hooks/useFetchFunctions'
 
 import { useStatusChip } from '../../../config/context/useStatusChip'
@@ -21,6 +21,9 @@ import SeguimientosCharts from './SeguimientosCharts'
 import SeguimientoModal from './SeguimientoModal'
 
 import { useSeguimientosViewModel, DEFAULT_RPP } from '../../../hooks/seguimientos/useSeguimientosViewModel'
+import { useSeguimientosFilters } from '../../../hooks/seguimientos/useSeguimientosFilter'
+import SeguimientosFiltersBar from './SeguimientosFilterBar'
+
 
 const getUserId    = (u: any) => u?.id ?? u?.uid ?? null
 const getUserEmail = (u: any) => u?.email ?? u?.correo ?? u?.correoElectronico ?? ''
@@ -33,6 +36,9 @@ export default function SeguimientosGeneralPage() {
   const { proyectos } = useFetchProyects()
   const { propiedades } = useFetchPropiedades()
   const { usuarios } = useFetchUsuarios()
+
+  // 🔹 Filtros globales (Zustand)
+  const { filters, setFilters } = useSeguimientosFilters()
 
   const usuariosById = useMemo(() => {
     const map = new Map<string, any>()
@@ -53,6 +59,14 @@ export default function SeguimientosGeneralPage() {
     seguimientos, prospectos, usuariosById, getUsuarioEmailById, idToLabel
   })
 
+useEffect(() => {
+  vm.setFilters({
+    ...filters,                          // viene de tu store global (sin usuarioId)
+    usuarioId: vm.filtroUsuarioId || '', // lo tomamos del VM
+  })
+}, [filters, vm.filtroUsuarioId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+
   // ------- Exportadores (solo CSV) -------
   const handleExportFilteredCSV = () => {
     const header = [
@@ -65,7 +79,6 @@ export default function SeguimientosGeneralPage() {
       const p = (prospectos ?? []).find(pp => pp.id === s.idprospecto)
       const u = usuariosById.get(String(s.userid))
 
-      // último registro de historial
       const lastHist = [...(s.historialSeguimiento ?? [])]
         .sort((a, b) => new Date(a.fechaCreacion).getTime() - new Date(b.fechaCreacion).getTime())
         .at(-1)
@@ -73,7 +86,6 @@ export default function SeguimientosGeneralPage() {
       const fechaReg = s.fechaCreacion ? new Date(s.fechaCreacion).toLocaleDateString('es-MX') : ''
       const vendedor = getUserName(u) || getUserEmail(u)
 
-      // nueva columna: última fecha de seguimiento (historial → actualizado → creado)
       const ultimaFechaSeg =
         lastHist?.fechaCreacion
           ? new Date(lastHist.fechaCreacion).toLocaleString('es-MX')
@@ -89,11 +101,11 @@ export default function SeguimientosGeneralPage() {
         p?.nombreCompleto ?? '',
         p?.celular ?? '',
         p?.correoElectronico ?? '',
-        '', // Ocupación Cliente (si no lo tienes en el modelo, queda vacío)
-        '', // Medio de Captación (idem)
+        '', // Ocupación Cliente
+        '', // Medio de Captación
         vendedor,
-        (lastHist?.comentarios || s.comentarios || '').toString(), // "Ultimo seguimiento" = texto
-        ultimaFechaSeg, // ⬅️ NUEVA COLUMNA FECHA
+        (lastHist?.comentarios || s.comentarios || '').toString(),
+        ultimaFechaSeg,
         Array.isArray(s.motivo) ? s.motivo.join(' | ') : (s as any)?.razon ?? '',
         s.estatusSeguimiento ?? '',
       ])
@@ -109,7 +121,6 @@ export default function SeguimientosGeneralPage() {
     a.click()
     URL.revokeObjectURL(url)
   }
-
 
   // ------- Modal ver/editar -------
   const [modalOpen, setModalOpen] = useState(false)
@@ -151,8 +162,8 @@ export default function SeguimientosGeneralPage() {
       <SeguimientosToolbar
         usuarios={usuarios}
         filtroUsuarioId={vm.filtroUsuarioId}
-        setUsuarioId={vm.setUsuarioId}// ⬅️ deshabilitado (muestra info)
-        onExportFilteredCSV={handleExportFilteredCSV}     // ✅ CSV activo
+        setUsuarioId={vm.setUsuarioId} // conserva el filtro por usuario si lo usas en charts/tablas
+        onExportFilteredCSV={handleExportFilteredCSV}
         onOpenImport={onOpenImport}
         getUserLabelById={(id) => {
           const u = usuariosById.get(String(id))
@@ -162,6 +173,9 @@ export default function SeguimientosGeneralPage() {
         getUserId={getUserId}
       />
 
+      {/* 🔹 Barra ÚNICA de filtros globales */}
+      <SeguimientosFiltersBar />
+
       {/* Gráficas */}
       <SeguimientosCharts
         rows={vm.rowsForCharts}
@@ -169,13 +183,12 @@ export default function SeguimientosGeneralPage() {
         idToLabel={idToLabel}
         getUserEmailById={(id?: string) => (id ? getUserEmail(usuariosById.get(String(id))) : '')}
         selectedUserId={vm.filtroUsuarioId}
-        selectedProjectLabel={vm.filters.proyectoTexto}
+        selectedProjectLabel={filters.proyectoTexto}                 // ← ahora del store global
         selectedStatus={vm.statusFocus}
         onSelectUser={(userId) => vm.setUsuarioId(userId)}
-        onSelectProyecto={(label) => vm.setFilters(f => ({ ...f, proyectoTexto: label }))} 
+        onSelectProyecto={(label) => setFilters({ proyectoTexto: label })} // ← set global
         onSelectStatus={(status) => vm.setStatusFocus(status)}
       />
-
 
       {/* Secciones por estatus */}
       {(vm.statusFocus ? ESTATUS_OPCIONES.filter(e => e.value === vm.statusFocus) : ESTATUS_OPCIONES).map(estatus => {
@@ -196,25 +209,14 @@ export default function SeguimientosGeneralPage() {
             orderBy={vm.orderBy}
             onRequestSort={(k:any)=>vm.handleRequestSort(k)}
             loading={loadingSeguimientos}
-            // filters row
-            usuarios={usuarios}
-            filters={vm.filters}
-            setFilters={vm.setFilters}
-            clearAllFilters={() => {
-              vm.setFilters({
-                usuarioId:'', nombre:'', correo:'', temperatura:'', unidad:'', proyectoTexto:'',
-                fechaProximo:'', fechaActualizacion:'', comentarios:''
-              })
-              vm.setUsuarioId('')
-            }}
-            setUsuarioId={vm.setUsuarioId}
-            getUserId={getUserId}
             getUserEmail={getUserEmail}
+
             // maps
             prospectosById={prospectosById}
             usuariosById={usuariosById}
             proyectos={proyectos}
             propiedades={propiedades}
+
             // acciones
             onView={handleAbrirModalVer}
             onToggleBaja={onToggleBaja}
