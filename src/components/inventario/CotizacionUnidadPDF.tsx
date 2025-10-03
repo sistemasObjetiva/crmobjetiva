@@ -312,7 +312,7 @@ function PDFFooter() {
       <Text style={styles.footerText}>
         Documento generado el {fecha} | Vigencia de la oferta: 10 días. Precios sujetos a cambio sin previo aviso.
       </Text>
-      <Text style={styles.footerText}>Consultas: ventas@objetiva.mx | (33) 1234-5678 | www.objetiva.mx</Text>
+      <Text style={styles.footerText}>Consultas: ecalderon@objetiva.mx | (33) 1850-8214 | www.objetiva.mx</Text>
       <Text style={styles.legalNote}>
         *Este documento es informativo y no representa un compromiso contractual. Las imágenes son ilustrativas.
       </Text>
