@@ -1,55 +1,86 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo } from 'react'
 import {
   Dialog, DialogTitle, DialogContent, DialogActions,
   Box, Typography, IconButton, Button
-} from '@mui/material';
-import CloseIcon from '@mui/icons-material/Close';
-import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
+} from '@mui/material'
+import CloseIcon from '@mui/icons-material/Close'
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf'
 
-import { Proyecto, Unidad, PlanPago, Seguimiento, Document } from '../../config/types';
-import SignedAvatar from '../general/SignedAvatar';
-import SignedImage from '../general/SignedImage';
-import CotizacionPDF from './CotizacionUnidadPDF';
+import { Proyecto, Unidad, PlanPago, Seguimiento, Document } from '../../config/types'
+import SignedAvatar from '../general/SignedAvatar'
+import SignedImage from '../general/SignedImage'
+import CotizacionPDF from './CotizacionUnidadPDF'
 
-import UnidadInfo from './CotizadorUnidadInfo';
-import UnidadImagenes from './CotizadorUnidadImagenes';
-import SelectorPlanPago, { CustomPayment } from './CotizadorUnidadSelectorPlant';
+import UnidadInfo from './CotizadorUnidadInfo'
+import UnidadImagenes from './CotizadorUnidadImagenes'
+import SelectorPlanPago, { CustomPayment } from './CotizadorUnidadSelectorPlant'
 
-import { pdf } from '@react-pdf/renderer';
-import { blobToDataURL, getSignedUrl } from '../../hooks/useUtilsFunctions';
+import { pdf } from '@react-pdf/renderer'
+import { blobToDataURL, getSignedUrl } from '../../hooks/useUtilsFunctions'
+import { useAuthRole } from '../../config/auth'
+import { useFetchUsuarios } from '../../hooks/useFetchFunctions'
 
 interface CotizadorModalProps {
-  proyecto: Proyecto;
-  unidad: Unidad;
-  open: boolean;
-  onClose: () => void;
-  onAsignarCotizacion?: (doc: Document) => void;
-  seguimiento?: Seguimiento;
+  proyecto: Proyecto
+  unidad: Unidad
+  open: boolean
+  onClose: () => void
+  onAsignarCotizacion?: (doc: Document) => void
+  seguimiento?: Seguimiento
 }
 
 const CotizadorModal: React.FC<CotizadorModalProps> = ({
   proyecto, unidad, open, onClose, onAsignarCotizacion,
 }) => {
-  const [selectedPlan, setSelectedPlan] = useState<PlanPago | null>(null);
-  const [isCustomPlan, setIsCustomPlan] = useState(false);
-  const [customPayments, setCustomPayments] = useState<CustomPayment[]>([]);
+  // ----------------- Estado del plan -----------------
+  const [selectedPlan, setSelectedPlan] = useState<PlanPago | null>(null)
+  const [isCustomPlan, setIsCustomPlan] = useState(false)
+  const [customPayments, setCustomPayments] = useState<CustomPayment[]>([])
   const [customPrecioPlan, setCustomPrecioPlan] = useState<number>(
     parseFloat(String(unidad.preciolista).replace(/[$,]/g, '')) || 0
-  );
-  const [customPagoInicial, setCustomPagoInicial] = useState<number>(0);
-  const [customContraEntrega, setCustomContraEntrega] = useState<number>(0);
+  )
+  const [customPagoInicial, setCustomPagoInicial] = useState<number>(0)
+  const [customContraEntrega, setCustomContraEntrega] = useState<number>(0)
 
-  const handleSelectedPlanChange = (plan: PlanPago | null) => setSelectedPlan(plan);
-  const handleIsCustomPlanChange = (val: boolean) => setIsCustomPlan(val);
+  // ----------------- Usuario actual -----------------
+  const { user } = useAuthRole()
+  const { usuarios } = useFetchUsuarios()
+
+  // Normaliza email/teléfono del vendedor según user.id y catálogo de usuarios
+  const { sellerEmail, sellerPhone } = useMemo(() => {
+    const authId = String((user as any)?.id ?? (user as any)?.uid ?? '')
+    const match = (usuarios ?? []).find(u => String(u.id) === authId)
+
+    const email =
+      match?.email ??
+      (user as any)?.email ??
+      (user as any)?.correo ??
+      (user as any)?.correoElectronico ??
+      ''
+
+    const phone =
+      match?.telefono ??
+      (user as any)?.telefono ??
+      (user as any)?.phoneNumber ??
+      (user as any)?.phone ??
+      (user as any)?.celular ??
+      ''
+
+    return { sellerEmail: (email || '').trim(), sellerPhone: (phone || '').trim() }
+  }, [user, usuarios])
+
+  // ----------------- Derivados -----------------
+  const handleSelectedPlanChange = (plan: PlanPago | null) => setSelectedPlan(plan)
+  const handleIsCustomPlanChange = (val: boolean) => setIsCustomPlan(val)
 
   const precioLista = useMemo(() => {
-    const num = parseFloat(String(unidad.preciolista).replace(/[$,]/g, ''));
-    return isNaN(num) ? 0 : num;
-  }, [unidad.preciolista]);
+    const num = parseFloat(String(unidad.preciolista).replace(/[$,]/g, ''))
+    return isNaN(num) ? 0 : num
+  }, [unidad.preciolista])
 
-  const totalCustomMonthly = customPayments.reduce((sum, p) => sum + Number(p.monto), 0);
-  const totalProgramado = customPagoInicial + customContraEntrega + totalCustomMonthly;
-  const restante = customPrecioPlan - totalProgramado;
+  const totalCustomMonthly = customPayments.reduce((sum, p) => sum + Number(p.monto), 0)
+  const totalProgramado = customPagoInicial + customContraEntrega + totalCustomMonthly
+  const restante = customPrecioPlan - totalProgramado
 
   const handlePlanSelected = (
     plan: PlanPago | null,
@@ -59,32 +90,33 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
     customPagoInicial?: number,
     customContraEntrega?: number
   ) => {
-    setSelectedPlan(plan);
-    setIsCustomPlan(isCustom);
-    setCustomPayments(customPayments || []);
-    setCustomPrecioPlan(customPrecioPlan ?? precioLista);
-    setCustomPagoInicial(customPagoInicial ?? 0);
-    setCustomContraEntrega(customContraEntrega ?? 0);
-  };
+    setSelectedPlan(plan)
+    setIsCustomPlan(isCustom)
+    setCustomPayments(customPayments || [])
+    setCustomPrecioPlan(customPrecioPlan ?? precioLista)
+    setCustomPagoInicial(customPagoInicial ?? 0)
+    setCustomContraEntrega(customContraEntrega ?? 0)
+  }
 
   // ✅ Permite descargar aunque no haya plan (cuando NO es personalizado)
   const canDownload = isCustomPlan
     ? (customPrecioPlan > 0 && restante === 0 && (customPagoInicial + customContraEntrega + customPayments.length > 0))
-    : true;
+    : true
 
+  // ----------------- Utilidades -----------------
   function buildCustomPseudoPlan(
     total: number,
     pagoInicial: number,
     contraEntrega: number,
     pagos: { mes: string; monto: number }[]
   ): PlanPago {
-    const totalSeguro = total > 0 ? total : 1;
-    const pInicialPct = (pagoInicial / totalSeguro) * 100;
-    const contraPct = (contraEntrega / totalSeguro) * 100;
+    const totalSeguro = total > 0 ? total : 1
+    const pInicialPct = (pagoInicial / totalSeguro) * 100
+    const contraPct = (contraEntrega / totalSeguro) * 100
     const parcialidades = pagos.map((p, i) => ({
       month: i + 1,
       value: (p.monto / totalSeguro) * 100,
-    }));
+    }))
 
     return {
       name: 'Personalizado',
@@ -94,68 +126,56 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
       mensualidades: pagos.length,
       months: pagos.length,
       parcialidades,
-    } as PlanPago;
+    } as PlanPago
   }
 
-  // --- Utilidad para firmar y convertir a base64 ---
+  // --- Firmar medios y convertir a base64 para @react-pdf ---
   const prepararMedios = async () => {
     const logoUrl = proyecto.logo?.path
       ? await getSignedUrl(proyecto.logo.path, proyecto.logo.bucket!)
-      : undefined;
+      : undefined
     const renderUrl = unidad.render?.path
       ? await getSignedUrl(unidad.render.path, unidad.render.bucket!)
-      : undefined;
+      : undefined
     const isoUrl = unidad.isometrico?.path
       ? await getSignedUrl(unidad.isometrico.path, unidad.isometrico.bucket!)
-      : undefined;
+      : undefined
     const planoUrl = unidad.plano?.path
       ? await getSignedUrl(unidad.plano.path, unidad.plano.bucket!)
-      : undefined;
+      : undefined
     const galeriaUrlsSigned = await Promise.all(
       (unidad.imagenes || []).map(img => getSignedUrl(img.path!, img.bucket!))
-    );
+    )
 
-    const urls = [logoUrl, renderUrl, isoUrl, planoUrl, ...galeriaUrlsSigned].filter(Boolean) as string[];
+    const urls = [logoUrl, renderUrl, isoUrl, planoUrl, ...galeriaUrlsSigned].filter(Boolean) as string[]
     const bases = await Promise.all(
       urls.map(async url => {
-        const resp = await fetch(url);
-        const blob = await resp.blob();
-        return blobToDataURL(blob);
+        const resp = await fetch(url)
+        const blob = await resp.blob()
+        return blobToDataURL(blob)
       })
-    );
-    const [logoBase, renderBase, isoBase, planoBase, ...galeriaBases] = bases;
-    return { logoBase, renderBase, isoBase, planoBase, galeriaBases };
-  };
+    )
+    const [logoBase, renderBase, isoBase, planoBase, ...galeriaBases] = bases
+    return { logoBase, renderBase, isoBase, planoBase, galeriaBases }
+  }
 
+  // ----------------- Acciones -----------------
   const handleDownloadPdf = async () => {
-    // Si es personalizado, mantenemos las validaciones
-    let planParaPdf: PlanPago | null = selectedPlan;
+    let planParaPdf: PlanPago | null = selectedPlan
 
     if (isCustomPlan) {
-      if (customPrecioPlan <= 0) {
-        alert('Define un precio total > 0 para el plan personalizado.');
-        return;
-      }
-      if (restante !== 0) {
-        alert('El total programado no coincide con el precio del plan.');
-        return;
-      }
-      const hayPagos = (customPayments.length > 0) || (customContraEntrega > 0) || (customPagoInicial > 0);
-      if (!hayPagos) {
-        alert('Agrega al menos un pago al plan personalizado.');
-        return;
-      }
-      planParaPdf = buildCustomPseudoPlan(customPrecioPlan, customPagoInicial, customContraEntrega, customPayments);
-    } else {
-      // ✅ No hay plan seleccionado: continuamos (la tabla se mostrará vacía/neutral)
-      // Si hay plan seleccionado, perfecto; si no, `planParaPdf` seguirá en null.
+      if (customPrecioPlan <= 0) { alert('Define un precio total > 0 para el plan personalizado.'); return }
+      if (restante !== 0) { alert('El total programado no coincide con el precio del plan.'); return }
+      const hayPagos = (customPayments.length > 0) || (customContraEntrega > 0) || (customPagoInicial > 0)
+      if (!hayPagos) { alert('Agrega al menos un pago al plan personalizado.'); return }
+      planParaPdf = buildCustomPseudoPlan(customPrecioPlan, customPagoInicial, customContraEntrega, customPayments)
     }
 
-    const { logoBase, renderBase, isoBase, planoBase, galeriaBases } = await prepararMedios();
+    const { logoBase, renderBase, isoBase, planoBase, galeriaBases } = await prepararMedios()
 
     const planesParaPdf = isCustomPlan && planParaPdf
       ? [...proyecto.paymentPlans, planParaPdf]
-      : proyecto.paymentPlans;
+      : proyecto.paymentPlans
 
     const blobPdf = await pdf(
       <CotizacionPDF
@@ -169,33 +189,36 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
         planoUrl={planoBase}
         galeriaUrls={galeriaBases}
         esPersonalizado={isCustomPlan}
+        userEmail={sellerEmail || undefined}
+        userPhone={sellerPhone || undefined}
+        extrasOrder={proyecto.extrasOrder}   // 👈 NUEVO
       />
-    ).toBlob();
 
-    const blobUrl = URL.createObjectURL(blobPdf);
-    const a = document.createElement('a');
-    a.href = blobUrl;
-    a.download = `${proyecto.nombre.replace(/\s+/g, '_')}_cotizacion.pdf`;
-    a.click();
-    URL.revokeObjectURL(blobUrl);
-  };
+    ).toBlob()
+
+    const blobUrl = URL.createObjectURL(blobPdf)
+    const a = document.createElement('a')
+    a.href = blobUrl
+    a.download = `${proyecto.nombre.replace(/\s+/g, '_')}_cotizacion.pdf`
+    a.click()
+    URL.revokeObjectURL(blobUrl)
+  }
 
   const handleAsignarPdf = async () => {
-    let planParaPdf: PlanPago | null = selectedPlan;
+    let planParaPdf: PlanPago | null = selectedPlan
 
     if (isCustomPlan) {
-      // Misma lógica/validaciones que arriba
-      if (customPrecioPlan <= 0 || restante !== 0) return;
-      const hayPagos = (customPayments.length > 0) || (customContraEntrega > 0) || (customPagoInicial > 0);
-      if (!hayPagos) return;
-      planParaPdf = buildCustomPseudoPlan(customPrecioPlan, customPagoInicial, customContraEntrega, customPayments);
+      if (customPrecioPlan <= 0 || restante !== 0) return
+      const hayPagos = (customPayments.length > 0) || (customContraEntrega > 0) || (customPagoInicial > 0)
+      if (!hayPagos) return
+      planParaPdf = buildCustomPseudoPlan(customPrecioPlan, customPagoInicial, customContraEntrega, customPayments)
     }
 
-    const { logoBase, renderBase, isoBase, planoBase, galeriaBases } = await prepararMedios();
+    const { logoBase, renderBase, isoBase, planoBase, galeriaBases } = await prepararMedios()
 
     const planesParaPdf = isCustomPlan && planParaPdf
       ? [...proyecto.paymentPlans, planParaPdf]
-      : proyecto.paymentPlans;
+      : proyecto.paymentPlans
 
     const blobPdf = await pdf(
       <CotizacionPDF
@@ -209,32 +232,34 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
         planoUrl={planoBase}
         galeriaUrls={galeriaBases}
         esPersonalizado={isCustomPlan}
+        userEmail={sellerEmail || undefined}
+        userPhone={sellerPhone || undefined}
+        extrasOrder={proyecto.extrasOrder}   // 👈 NUEVO
       />
-    ).toBlob();
 
-    const archivoNombre = `${proyecto.nombre.replace(/\s+/g, '_')}_cotizacion.pdf`;
-    const filePdf = new File([blobPdf], archivoNombre, { type: 'application/pdf' });
+    ).toBlob()
+
+    const archivoNombre = `${proyecto.nombre.replace(/\s+/g, '_')}_cotizacion.pdf`
+    const filePdf = new File([blobPdf], archivoNombre, { type: 'application/pdf' })
 
     const documento: Document = {
-      id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()),
+      id: (typeof crypto !== 'undefined' && (crypto as any).randomUUID) ? (crypto as any).randomUUID() : String(Date.now()),
       nombre: archivoNombre,
       file: filePdf
-    };
+    }
 
-    if (onAsignarCotizacion) onAsignarCotizacion(documento);
-    onClose();
-  };
+    if (onAsignarCotizacion) onAsignarCotizacion(documento)
+    onClose()
+  }
 
+  // ----------------- UI -----------------
   return (
     <Dialog
       open={open}
       onClose={onClose}
-      // 🔸 Más ancho
       fullWidth
       maxWidth="xl"
-      PaperProps={{
-        sx: { width: 'min(1200px, 96vw)' }
-      }}
+      PaperProps={{ sx: { width: 'min(1200px, 96vw)' } }}
     >
       <DialogTitle
         sx={{
@@ -258,15 +283,12 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
               path={proyecto.render.path!}
               bucket={proyecto.render.bucket!}
               alt="Fachada del Proyecto"
-              sx={{
-                width: 260, height: 150,
-                borderRadius: 2, boxShadow: '2px 2px 10px rgba(0,0,0,0.13)'
-              }}
+              sx={{ width: 260, height: 150, borderRadius: 2, boxShadow: '2px 2px 10px rgba(0,0,0,0.13)' }}
             />
           )}
         </Box>
 
-        <UnidadInfo unidad={unidad} />
+        <UnidadInfo unidad={unidad} extrasOrder={proyecto.extrasOrder} />
         <UnidadImagenes unidad={unidad} />
 
         <SelectorPlanPago
@@ -314,7 +336,7 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
         <Button onClick={onClose}>Cerrar</Button>
       </DialogActions>
     </Dialog>
-  );
-};
+  )
+}
 
-export default CotizadorModal;
+export default CotizadorModal

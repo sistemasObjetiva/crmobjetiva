@@ -81,6 +81,7 @@ export interface Proyecto {
   fechaEntrega:string;
   estatus?: 'activo' | 'inactivo';
   stacking?: StackingState;
+  extrasOrder?: string[];
 }
 export interface Unidad {
   id:string;

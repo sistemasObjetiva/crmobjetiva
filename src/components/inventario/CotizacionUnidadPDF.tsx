@@ -17,23 +17,51 @@ function styleArr(...args: any[]): any[] {
 
 /* ---------------------- Secciones ---------------------- */
 
-function PDFHeader({ logoUrl, proyecto }: { logoUrl?: string; proyecto: Proyecto }) {
+function PDFHeader({
+  logoUrl,
+  proyecto,
+  userEmail,
+  userPhone,
+}: {
+  logoUrl?: string;
+  proyecto: Proyecto;
+  userEmail?: string;
+  userPhone?: string;
+}) {
+  // línea de contacto: si hay datos del vendedor úsalos; si no, el fallback corporativo
+  const contactLine = (userEmail || userPhone)
+    ? [userEmail, userPhone].filter(Boolean).join('  |  ')
+    : 'www.objetiva.mx  |  contacto@objetiva.mx';
+
   return (
     <View style={styles.header} wrap={false}>
       {logoUrl ? <Image src={logoUrl} style={styles.logo} /> : null}
       <View style={styles.headerMain}>
         <Text style={styles.title}>Cotización de Unidad</Text>
         <Text style={styles.projectName}>{proyecto.nombre}</Text>
-        <Text style={styles.headerContact}>www.objetiva.mx  |  contacto@objetiva.mx</Text>
+        <Text style={styles.headerContact}>{contactLine}</Text>
       </View>
     </View>
   );
 }
 
-function PDFInfoUnidad({ unidad }: { unidad: Unidad }) {
+function PDFInfoUnidad({
+  unidad,
+  extrasOrder,
+}: {
+  unidad: Unidad;
+  /** Orden deseado para extras (proyecto.extrasOrder) */
+  extrasOrder?: string[];
+}) {
   const precioLista = Number(String(unidad.preciolista).replace(/[$,]/g, '')) || 0;
   const fmt = (n: number) =>
     formatoMoneda ? formatoMoneda(n) : '$' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+  // Ordenar extras según extrasOrder, mostrando solo los que existan en esta unidad
+  const extras = unidad.extras || {};
+  const keysOrdenadas = (extrasOrder?.length ? extrasOrder : Object.keys(extras))
+    .filter(k => k in extras)
+    .filter(k => String((extras as any)[k] ?? '').trim() !== '');
 
   return (
     <View style={styles.detailsBox}>
@@ -54,14 +82,14 @@ function PDFInfoUnidad({ unidad }: { unidad: Unidad }) {
         <Text style={styles.value}>{fmt(precioLista)}</Text>
       </View>
 
-      {unidad.extras && Object.keys(unidad.extras).length > 0 ? (
+      {keysOrdenadas.length > 0 ? (
         <>
           <Text style={styles.otrosDetallesTitle}>Otros Detalles</Text>
           <View style={styles.otrosDetallesTable}>
-            {Object.entries(unidad.extras).map(([k, v]) => (
+            {keysOrdenadas.map((k) => (
               <View key={k} style={styles.otrosDetallesRow}>
                 <Text style={styles.otrosDetallesCol1}>{k}:</Text>
-                <Text style={styles.otrosDetallesCol2}>{String(v)}</Text>
+                <Text style={styles.otrosDetallesCol2}>{String((extras as any)[k])}</Text>
               </View>
             ))}
           </View>
@@ -199,17 +227,33 @@ function PDFTablaPlanes({
   filas,
   selectedName,
   esPersonalizado,
+  precioListaFmt,
 }: {
   columnas: any[];
   filas: any[];
   selectedName?: string;
   esPersonalizado?: boolean;
+  precioListaFmt?: string;
 }) {
   if (!columnas || columnas.length === 0) return null;
 
   return (
     <View style={styles.plansWrapper} wrap={false}>
       <Text style={styles.plansTitle}>Comparativa de Planes</Text>
+
+      {precioListaFmt ? (
+        <Text
+          style={{
+            fontSize: 11,
+            color: '#065f46',
+            marginTop: 2,
+            marginBottom: 6,
+            fontWeight: 700,
+          }}
+        >
+          Precio de lista de la unidad: {precioListaFmt}
+        </Text>
+      ) : null}
 
       <View style={styles.matrixHeaderRow}>
         <Text style={[styles.matrixHeaderCell, styles.conceptHeaderCell]}>Concepto</Text>
@@ -291,6 +335,13 @@ export interface PDFProps {
   planoUrl?: string;
   galeriaUrls?: string[];
   esPersonalizado?: boolean;
+
+  /** Nuevo: info del vendedor para el header */
+  userEmail?: string;
+  userPhone?: string;
+
+  /** Nuevo: orden de extras */
+  extrasOrder?: string[];
 }
 
 const CotizacionPDF: React.FC<PDFProps> = ({
@@ -304,6 +355,9 @@ const CotizacionPDF: React.FC<PDFProps> = ({
   planoUrl,
   galeriaUrls = [],
   esPersonalizado,
+  userEmail,
+  userPhone,
+  extrasOrder,
 }) => {
   // Precio base
   const precioLista = Number(String(unidad.preciolista).replace(/[$,]/g, '')) || 0;
@@ -358,33 +412,48 @@ const CotizacionPDF: React.FC<PDFProps> = ({
   const filas =
     columnas.length === 0
       ? []
-      : [
-          {
+      : (() => {
+          const filaDescuento = {
             label: 'Descuento (%)',
             render: (c: any) => (c.descuento ? c.descuento.toFixed(2) + '%' : '—'),
-          },
-          {
+          };
+
+          const filaPrecioConDescuento = {
+            label: 'Precio con Descuento',
+            render: (c: any) => fmt(c.base),
+          };
+
+          const filaEnganche = {
             label: 'Enganche (% / $)',
             render: (c: any) => `${c.engPct.toFixed(2)}% / ${fmt(c.engancheMonto)}`,
-          },
-          {
-            label: 'Contraentrega (% / $)',
-            render: (c: any) => `${c.contraPct.toFixed(2)}% / ${fmt(c.contraMonto)}`,
-          },
-          ...mensualidadLabels.map((monthLabel, idx) => ({
+          };
+
+          const filasMensualidades = mensualidadLabels.map((monthLabel, idx) => ({
             label: `Mensualidad ${idx + 1} (${monthLabel})`,
             render: (c: any) =>
               c.pagosArray && c.pagosArray[idx] !== undefined ? fmt(c.pagosArray[idx]) : '—',
-          })),
-          {
+          }));
+
+          const filaTotalMensualidades = {
             label: 'Total Mensualidades',
             render: (c: any) => (c.mensualidades ? fmt(c.sumaMensualidades) : '—'),
-          },
-          {
-            label: 'Total con Descuento',
-            render: (c: any) => fmt(c.base),
-          },
-        ];
+          };
+
+          const filaContraentrega = {
+            label: 'Contraentrega (% / $)',
+            render: (c: any) => `${c.contraPct.toFixed(2)}% / ${fmt(c.contraMonto)}`,
+          };
+
+          // Orden solicitado:
+          return [
+            filaDescuento,
+            filaPrecioConDescuento,
+            filaEnganche,
+            ...filasMensualidades,
+            filaTotalMensualidades,
+            filaContraentrega,
+          ];
+        })();
 
   return (
     <PDFDocument>
@@ -393,11 +462,11 @@ const CotizacionPDF: React.FC<PDFProps> = ({
         {logoUrl ? <Image src={logoUrl} style={styles.watermark} /> : null}
 
         {/* Header */}
-        <PDFHeader logoUrl={logoUrl} proyecto={proyecto} />
+        <PDFHeader logoUrl={logoUrl} proyecto={proyecto} userEmail={userEmail} userPhone={userPhone} />
 
         {/* Bloque superior: detalles + imagen principal */}
         <View style={styles.topSection} wrap>
-          <PDFInfoUnidad unidad={unidad} />
+          <PDFInfoUnidad unidad={unidad} extrasOrder={extrasOrder} />
           <PDFImagenPrincipal
             renderUrl={renderUrl}
             isometricoUrl={isometricoUrl}
@@ -420,6 +489,7 @@ const CotizacionPDF: React.FC<PDFProps> = ({
           filas={filas}
           selectedName={selectedName}
           esPersonalizado={esPersonalizado}
+          precioListaFmt={fmt(precioLista)}
         />
 
         {/* Footer */}

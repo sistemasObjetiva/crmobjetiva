@@ -5,9 +5,18 @@ import { formatoMoneda } from "../../hooks/useUtilsFunctions";
 
 interface UnidadInfoProps {
   unidad: Unidad;
+  /** Orden de los extras proveniente del proyecto */
+  extrasOrder?: string[];
 }
 
-const UnidadInfo: React.FC<UnidadInfoProps> = ({ unidad }) => {
+const UnidadInfo: React.FC<UnidadInfoProps> = ({ unidad, extrasOrder }) => {
+  const extras = unidad.extras || {};
+  const keysOrdenadas = (extrasOrder?.length ? extrasOrder : Object.keys(extras))
+    // solo mantenemos claves que existan en esta unidad
+    .filter(k => k in extras)
+    // opcional: si quieres esconder valores vacíos
+    .filter(k => String(extras[k] ?? "").trim() !== "");
+
   return (
     <Box
       sx={{
@@ -30,16 +39,17 @@ const UnidadInfo: React.FC<UnidadInfoProps> = ({ unidad }) => {
         <Typography sx={{ color: "var(--primary-color)", fontWeight: 500 }}>
           Precio de lista: <b>{formatoMoneda(unidad.preciolista)}</b>
         </Typography>
-        {unidad.extras && Object.keys(unidad.extras).length > 0 && (
+
+        {keysOrdenadas.length > 0 && (
           <Box sx={{ mt: 2 }}>
             <Typography variant="subtitle2" sx={{ color: "var(--primary-color)", fontWeight: 700 }}>
               Características adicionales:
             </Typography>
             <Stack spacing={0.5} sx={{ ml: 1 }}>
-              {Object.entries(unidad.extras).map(([label, value]) => (
+              {keysOrdenadas.map((label) => (
                 <Typography key={label}>
                   <b>{label}: </b>
-                  {String(value)}
+                  {String(extras[label])}
                 </Typography>
               ))}
             </Stack>

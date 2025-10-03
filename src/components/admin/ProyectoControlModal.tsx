@@ -51,9 +51,26 @@ const ProyectoControlModal: React.FC<ProyectoModalProps> = ({ proyecto, open, on
     setSelectedTab(newValue);
   };
 
+  const moveIndex = <T,>(arr: T[], from: number, to: number) => {
+    const copy = [...arr];
+    const [item] = copy.splice(from, 1);
+    copy.splice(to, 0, item);
+    return copy;
+  };
 
-  const [extrasKeys, setExtrasKeys] = useState<string[]>([]);
-  
+  const deriveExtrasOrder = (p: Proyecto): string[] => {
+    if (p.extrasOrder?.length) return p.extrasOrder;
+    const keys = new Set<string>();
+    (p.unidades ?? []).forEach(u => Object.keys(u.extras ?? {}).forEach(k => keys.add(k)));
+    return Array.from(keys);
+  };
+
+  // dentro del componente:
+  const extrasKeys = React.useMemo<string[]>(
+    () => (proyecto ? deriveExtrasOrder(proyecto) : []),
+    [proyecto]
+  );
+
 
   const handleAddUnidad = () => {
     if (!proyecto || !unidad) return
@@ -94,22 +111,28 @@ const ProyectoControlModal: React.FC<ProyectoModalProps> = ({ proyecto, open, on
     setUnidad({ ...proyecto.unidades[index] });
   };
 
-  useEffect(() => {
-    if (proyecto && proyecto.unidades?.length > 0) {
-      const allExtraKeys = new Set<string>();
-      proyecto.unidades.forEach((unidad) => {
-        if (unidad.extras) {
-          Object.keys(unidad.extras).forEach((key) => allExtraKeys.add(key));
-        }
-      });
-      setExtrasKeys(Array.from(allExtraKeys));
-    }
-  }, [proyecto]);
 
-  const handleAddExtraKey = (event?: React.MouseEvent<HTMLButtonElement>) => {
-    event?.preventDefault();
-    setExtrasKeys([...extrasKeys, `extra_${extrasKeys.length}`]);
+
+  const handleAddExtraKey = () => {
+    setProyecto(prev => {
+      if (!prev) return prev;
+      const order = deriveExtrasOrder(prev);
+      const newKey = `extra_${order.length + 1}`;
+      return { ...prev, extrasOrder: [...order, newKey] };
+    });
   };
+
+
+const handleReorderExtraKeys = (from: number, to: number) => {
+    setProyecto(prev => {
+      if (!prev) return prev;
+      const order = deriveExtrasOrder(prev);
+      const clampedTo = Math.max(0, Math.min(to, order.length - 1));
+      const next = moveIndex(order, from, clampedTo);
+      return { ...prev, extrasOrder: next };
+    });
+  };
+
  const handleChangeUnidad = <K extends keyof Unidad>(field: K, value: Unidad[K]) => {
   setUnidad(prevUnidad => {
     if (!prevUnidad) return prevUnidad
@@ -121,22 +144,24 @@ const ProyectoControlModal: React.FC<ProyectoModalProps> = ({ proyecto, open, on
 }
 
   const handleChangeExtraKey = (index: number, newKey: string) => {
-    setExtrasKeys((prevKeys) => {
-      const updatedKeys = [...prevKeys];
-      const oldKey = updatedKeys[index];
-      updatedKeys[index] = newKey;
-      setUnidad((prevUnidad) => {
-        if (!prevUnidad) return prevUnidad;
-        const updatedExtras = { ...prevUnidad.extras };
-        if (oldKey in updatedExtras) {
-          updatedExtras[newKey] = updatedExtras[oldKey];
-          delete updatedExtras[oldKey];
-        }
-        return { ...prevUnidad, extras: updatedExtras };
+    setProyecto(prev => {
+      if (!prev) return prev;
+      const currentOrder = deriveExtrasOrder(prev);
+      const oldKey = currentOrder[index];
+      const nextOrder = [...currentOrder];
+      nextOrder[index] = newKey;
+
+      // renombrar en todas las unidades
+      const nextUnidades = prev.unidades.map(u => {
+        if (!u.extras || !(oldKey in u.extras)) return u;
+        const { [oldKey]: val, ...rest } = u.extras;
+        return { ...u, extras: { ...rest, [newKey]: val } };
       });
-      return updatedKeys;
+
+      return { ...prev, unidades: nextUnidades, extrasOrder: nextOrder };
     });
   };
+
 
  const handleChangeExtraValue = (key: string, value: string) => {
   setUnidad(prevUnidad => {
@@ -155,21 +180,22 @@ const ProyectoControlModal: React.FC<ProyectoModalProps> = ({ proyecto, open, on
 
 
   const handleRemoveExtraKey = (index: number) => {
-  setUnidad(prevUnidad => {
-    if (!prevUnidad) return prevUnidad
-    const keys = Object.keys(prevUnidad.extras)
-    const keyToRemove = keys[index]
-    if (!keyToRemove) return prevUnidad
-    const updatedExtras = { ...prevUnidad.extras }
-    delete updatedExtras[keyToRemove]
+    setProyecto(prev => {
+      if (!prev) return prev;
+      const currentOrder = deriveExtrasOrder(prev);
+      const key = currentOrder[index];
+      const nextOrder = currentOrder.filter((_, i) => i !== index);
 
-    return {
-      ...prevUnidad,
-      extras: updatedExtras
-    }
-  })
-  setExtrasKeys(prevKeys => prevKeys.filter((_, i) => i !== index))
-}
+      const nextUnidades = prev.unidades.map(u => {
+        if (!u.extras || !(key in u.extras)) return u;
+        const { [key]: _drop, ...rest } = u.extras;
+        return { ...u, extras: rest };
+      });
+
+      return { ...prev, unidades: nextUnidades, extrasOrder: nextOrder };
+    });
+  };
+
 
 
 
@@ -485,6 +511,7 @@ useEffect(() => {
               handleAddUnidad={handleAddUnidad}
               handleEditUnidad={handleEditUnidad}
               handleDeleteUnidad={handleDeleteUnidad}
+              handleReorderExtraKeys={handleReorderExtraKeys}
               userid={userid}
               setProyecto={setProyecto}
             />

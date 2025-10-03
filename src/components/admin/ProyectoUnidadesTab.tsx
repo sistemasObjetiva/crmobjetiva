@@ -36,6 +36,10 @@ import {
 import AddCircleIcon from '@mui/icons-material/AddCircle';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward'
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward'
+
+
 import FileUploadPreview from '../general/FileUploadPreviewFiles';
 import FileUploadCarouselPreview from '../general/FileUploadCarouselPreview';
 import SignedImageCarousel from '../general/SinedImageCarousel';
@@ -55,6 +59,7 @@ interface ProyectoUnidadesTabProps {
   handleChangeExtraKey: (index: number, newKey: string) => void;
   handleChangeExtraValue: (key: string, value: string) => void;
   handleRemoveExtraKey: (index: number) => void;
+  handleReorderExtraKeys: (from: number, to: number) => void;
   handleFileChange: (
     unidadId: string,
     field: keyof Pick<Unidad, 'render' | 'isometrico' | 'plano' | 'imagenes'>,
@@ -91,6 +96,7 @@ const ProyectoUnidadesTab: React.FC<ProyectoUnidadesTabProps> = ({
   handleAddUnidad,
   handleEditUnidad,
   handleDeleteUnidad,
+  handleReorderExtraKeys,
   setProyecto,
   userid,
 }) => {
@@ -108,6 +114,8 @@ const ProyectoUnidadesTab: React.FC<ProyectoUnidadesTabProps> = ({
   const [importMode, setImportMode] = React.useState<ImportMode>('append');
   const [importWarnings, setImportWarnings] = React.useState<string[]>([]);
 
+  const [importExtrasOrder, setImportExtrasOrder] = React.useState<string[] | null>(null);
+
   // ---- Helpers ----
   const requiredOk = (u?: Unidad | null) =>
     !!u?.numerounidad &&
@@ -119,6 +127,7 @@ const ProyectoUnidadesTab: React.FC<ProyectoUnidadesTabProps> = ({
     setSavedFlash(true);
     setTimeout(() => setSavedFlash(false), 1200);
   };
+
 
   const upsertUnidadIntoProyecto = React.useCallback(
     (u: Unidad) => {
@@ -148,35 +157,29 @@ const ProyectoUnidadesTab: React.FC<ProyectoUnidadesTabProps> = ({
 
   // ---- Importación por Excel/CSV ----
   const downloadUnidadesTemplate = () => {
-    const wsData = [
-      ['numerounidad', 'unidadprivativa', 'preciolista', 'estatus'],
-      ['Ej: 101', 'Ej: 1', '1000000', 'disponible'],
-    ];
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Unidades');
-    XLSX.writeFile(wb, 'plantilla_unidades.xlsx');
-  };
+  const base = ['numerounidad', 'unidadprivativa', 'preciolista', 'estatus'];
+  const extrasHeader = proyecto.extrasOrder?.length ? proyecto.extrasOrder : extrasKeys;
+  const header = [...base, ...extrasHeader];
 
-  function tryToNumberLoose(v: any): number | null {
-    if (typeof v === 'number' && Number.isFinite(v)) return v;
-    if (typeof v === 'string') {
-      const trimmed = v.trim();
-      if (!trimmed) return null;
-      // Extrae primer número válido (soporta comas)
-      const m = trimmed.replace(/,/g, '').match(/-?\d+(\.\d+)?/);
-      if (!m) return null;
-      const n = Number(m[0]);
-      return Number.isFinite(n) ? n : null;
-    }
-    return null;
-  }
+  const wsData = [
+    header,
+    // fila de ejemplo
+    ['Ej: 101', 'Ej: 1', '1000000', 'disponible', ...extrasHeader.map(() => '')],
+  ];
+
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Unidades');
+  XLSX.writeFile(wb, 'plantilla_unidades.xlsx');
+};
+
+
 
   function unidadesFromExcel(
     file: File,
     userId: string,
     proyectoId: string
-  ): Promise<{ unidades: Unidad[]; warnings: string[] }> {
+  ): Promise<{ unidades: Unidad[]; warnings: string[]; extrasOrder: string[] }> {
     return new Promise((resolve, reject) => {
       const isCsv =
         file.name.toLowerCase().endsWith('.csv') ||
@@ -185,32 +188,55 @@ const ProyectoUnidadesTab: React.FC<ProyectoUnidadesTabProps> = ({
       const reader = new FileReader();
       reader.onload = e => {
         try {
+          // 1) Leer el workbook
           const wb = isCsv
             ? XLSX.read(String(e.target?.result || ''), { type: 'string' })
             : XLSX.read(new Uint8Array(e.target?.result as ArrayBuffer), { type: 'array' });
 
           const sheet = wb.Sheets[wb.SheetNames[0]];
-          const json = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+          // 2) Encabezados en orden (AOA)
+          const aoa = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1, defval: '' }) as any[];
+          const headerRow: string[] = Array.isArray(aoa?.[0]) ? aoa[0].map(String) : [];
 
           const COLUMNAS_BASE = ['numerounidad', 'unidadprivativa', 'preciolista', 'estatus'];
-          const warnings: string[] = [];
 
+          // 3) Orden de extras proveniente del archivo
+          const extrasOrder = headerRow.filter(h => h && !COLUMNAS_BASE.includes(h));
+
+          // 4) Datos por filas (objetos)
+          const json = XLSX.utils.sheet_to_json<any>(sheet, { defval: '' });
+
+          const warnings: string[] = [];
           const unidades: Unidad[] = (json as any[]).map((row, idx) => {
             const base: any = {};
             const extras: any = {};
+
             for (const key in row) {
               if (COLUMNAS_BASE.includes(key)) base[key] = row[key];
               else extras[key] = row[key];
             }
 
-            // Intentar convertir unidadprivativa a número
-            const upNum = tryToNumberLoose(base.unidadprivativa);
-            let unidadprivativaFinal = base.unidadprivativa ?? '';
+            // Convertir unidadprivativa a número si se puede
+            const upNum = (() => {
+              const v = base.unidadprivativa;
+              if (typeof v === 'number' && Number.isFinite(v)) return v;
+              if (typeof v === 'string') {
+                const trimmed = v.trim();
+                if (!trimmed) return null;
+                const m = trimmed.replace(/,/g, '').match(/-?\d+(\.\d+)?/);
+                if (!m) return null;
+                const n = Number(m[0]);
+                return Number.isFinite(n) ? n : null;
+              }
+              return null;
+            })();
 
+            let unidadprivativaFinal = base.unidadprivativa ?? '';
             if (upNum !== null) {
               unidadprivativaFinal = String(upNum);
             } else if (String(unidadprivativaFinal).trim() !== '') {
-              const fila = idx + 2; // +2: asumiendo cabecera en fila 1
+              const fila = idx + 2; // cabecera en 1
               warnings.push(
                 `Fila ${fila}: "unidadprivativa" = "${String(unidadprivativaFinal)}" no es numérica; se conservó sin cambios.`
               );
@@ -229,7 +255,7 @@ const ProyectoUnidadesTab: React.FC<ProyectoUnidadesTabProps> = ({
             } as Unidad;
           });
 
-          resolve({ unidades, warnings });
+          resolve({ unidades, warnings, extrasOrder });
         } catch (err) {
           reject(err);
         }
@@ -241,61 +267,93 @@ const ProyectoUnidadesTab: React.FC<ProyectoUnidadesTabProps> = ({
     });
   }
 
+
+  
+
+  // en handleExcelSelected:
   const handleExcelSelected = async (file?: File) => {
     if (!file || !proyecto) return;
     try {
-      const { unidades, warnings } = await unidadesFromExcel(file, userid, proyecto.id);
+      const { unidades, warnings, extrasOrder } = await unidadesFromExcel(file, userid, proyecto.id);
       setImportPreview(unidades);
       setImportMode('append');
       setImportWarnings(warnings || []);
+      setImportExtrasOrder(extrasOrder ?? []);
       setOpenImportDialog(true);
     } catch (err) {
       alert('Error leyendo archivo: ' + err);
     }
   };
+  // helper para fusionar órdenes (prioriza el orden importado y conserva los existentes al final)
+const mergeExtrasOrder = (current: string[], incoming: string[]) => {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const pushAll = (arr: string[]) => arr.forEach(k => {
+    const kk = String(k || '').trim();
+    if (kk && !seen.has(kk)) { seen.add(kk); out.push(kk); }
+  });
+  pushAll(incoming);
+  pushAll(current);
+  return out;
+};
 
-  const applyImport = () => {
-    if (!importPreview.length) {
-      setOpenImportDialog(false);
-      setImportWarnings([]);
-      return;
-    }
-
-    if (importMode === 'replace') {
-      setProyecto(prev => (prev ? { ...prev, unidades: [...importPreview] } : prev));
-    } else if (importMode === 'append') {
-      setProyecto(prev => (prev ? { ...prev, unidades: [...prev.unidades, ...importPreview] } : prev));
-    } else if (importMode === 'merge') {
-      setProyecto(prev => {
-        if (!prev) return prev;
-        const byNum = new Map(prev.unidades.map(u => [String(u.numerounidad).trim(), u]));
-        const merged: Unidad[] = [...prev.unidades];
-
-        for (const nu of importPreview) {
-          const key = String(nu.numerounidad).trim();
-          if (byNum.has(key)) {
-            const current = byNum.get(key)!;
-            const updated: Unidad = {
-              ...current,
-              unidadprivativa: nu.unidadprivativa ?? current.unidadprivativa,
-              preciolista: nu.preciolista ?? current.preciolista,
-              estatus: nu.estatus ?? current.estatus,
-              extras: { ...current.extras, ...nu.extras },
-            };
-            const idx = merged.findIndex(x => x.id === current.id);
-            if (idx >= 0) merged[idx] = updated;
-          } else {
-            merged.push(nu);
-          }
-        }
-        return { ...prev, unidades: merged };
-      });
-    }
-
+const applyImport = () => {
+  if (!importPreview.length) {
     setOpenImportDialog(false);
-    setImportPreview([]);
     setImportWarnings([]);
-  };
+    return;
+  }
+
+  setProyecto(prev => {
+    if (!prev) return prev;
+
+    let nextUnidades: Unidad[] = prev.unidades;
+    if (importMode === 'replace') {
+      nextUnidades = [...importPreview];
+    } else if (importMode === 'append') {
+      nextUnidades = [...prev.unidades, ...importPreview];
+    } else if (importMode === 'merge') {
+      const byNum = new Map(prev.unidades.map(u => [String(u.numerounidad).trim(), u]));
+      const merged: Unidad[] = [...prev.unidades];
+      for (const nu of importPreview) {
+        const key = String(nu.numerounidad).trim();
+        if (byNum.has(key)) {
+          const current = byNum.get(key)!;
+          const updated: Unidad = {
+            ...current,
+            unidadprivativa: nu.unidadprivativa ?? current.unidadprivativa,
+            preciolista: nu.preciolista ?? current.preciolista,
+            estatus: nu.estatus ?? current.estatus,
+            extras: { ...current.extras, ...nu.extras },
+          };
+          const idx = merged.findIndex(x => x.id === current.id);
+          if (idx >= 0) merged[idx] = updated;
+        } else {
+          merged.push(nu);
+        }
+      }
+      nextUnidades = merged;
+    }
+
+    // Actualiza extrasOrder
+    const currentOrder = prev.extrasOrder ?? [];
+    const incomingOrder = importExtrasOrder ?? [];
+
+    let nextExtrasOrder: string[];
+    if (importMode === 'replace') {
+      nextExtrasOrder = incomingOrder.length ? incomingOrder : currentOrder;
+    } else {
+      nextExtrasOrder = mergeExtrasOrder(currentOrder, incomingOrder);
+    }
+
+    return { ...prev, unidades: nextUnidades, extrasOrder: nextExtrasOrder };
+  });
+
+  setOpenImportDialog(false);
+  setImportPreview([]);
+  setImportWarnings([]);
+  setImportExtrasOrder(null);
+};
 
   // ---- Aumentar precios ----
   const handleAumentarPrecios = () => {
@@ -569,17 +627,48 @@ const ProyectoUnidadesTab: React.FC<ProyectoUnidadesTabProps> = ({
             )}
 
             {extrasKeys.map((key, idx) => (
-              <Stack key={idx} direction={{ xs: 'column', md: 'row' }} gap={1} sx={{ mb: 1 }}>
-                <TextField fullWidth label="Variable" value={key} onChange={e => handleChangeExtraKey(idx, e.target.value)} />
+              <Stack key={`${key}-${idx}`} direction={{ xs: 'column', md: 'row' }} gap={1} sx={{ mb: 1 }}>
+                <TextField
+                  fullWidth
+                  label="Variable"
+                  value={key}
+                  onChange={e => handleChangeExtraKey(idx, e.target.value)}
+                />
                 <TextField
                   fullWidth
                   label="Valor"
                   value={unidad?.extras[key] || ''}
                   onChange={e => handleChangeExtraValue(key, e.target.value)}
                 />
-                <IconButton onClick={() => handleRemoveExtraKey(idx)}>
-                  <DeleteIcon />
-                </IconButton>
+                <Stack direction="row" alignItems="center" sx={{ minWidth: 112 }}>
+                  <Tooltip title="Subir">
+                    <span>
+                      <IconButton
+                        size="small"
+                        disabled={idx === 0}
+                        onClick={() => handleReorderExtraKeys(idx, idx - 1)}
+                      >
+                        <ArrowUpwardIcon fontSize="small" />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                  <Tooltip title="Bajar">
+                    <span>
+                      <IconButton
+                        size="small"
+                        disabled={idx === extrasKeys.length - 1}
+                        onClick={() => handleReorderExtraKeys(idx, idx + 1)}
+                      >
+                        <ArrowDownwardIcon fontSize="small" />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                  <Tooltip title="Eliminar">
+                    <IconButton onClick={() => handleRemoveExtraKey(idx)}>
+                      <DeleteIcon />
+                    </IconButton>
+                  </Tooltip>
+                </Stack>
               </Stack>
             ))}
           </Box>
