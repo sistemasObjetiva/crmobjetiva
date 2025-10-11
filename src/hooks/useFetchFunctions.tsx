@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import type { Proyecto,Document, User, Empresa, Propiedad, Unidad, Prospecto, Seguimiento, SeguimientoHistorial,  } from '../config/types';
 import { supabase } from '../config/supabase';
 
@@ -51,7 +51,6 @@ export function useFetchUsuarios() {
 
 export const actualizarUsuario = async (usuario: User): Promise<void> => {
   const { id, email, telefono, role, nombre, empresaid, estatus } = usuario;
-  console.log(usuario,"se intenta subir usuario")
 
   try {
     let userId = id;
@@ -87,7 +86,6 @@ export const actualizarUsuario = async (usuario: User): Promise<void> => {
     if (error) throw error;
 
   } catch (err: any) {
-    console.error("❌ Error en actualizarUsuario:", err.message);
     throw err;
   }
 };
@@ -97,12 +95,10 @@ export const eliminarUsuario = async (
   userId: string
 ): Promise<void> => {
   if (!projectId || !userId) {
-    console.error("❌ Error: faltan projectId o userId");
     return;
   }
 
   try {
-    console.log(`🛠️ Eliminando usuario ${userId} del proyecto ${projectId}`);
     const response = await fetch(
       `${API_BASE}/delete-nuser/${projectId}/${userId}`,
       {
@@ -119,7 +115,6 @@ export const eliminarUsuario = async (
     }
 
   } catch (error: any) {
-    console.error("❌ Error eliminando usuario:", error.message);
   }
 };
 
@@ -488,7 +483,6 @@ export async function upsertPropiedad(propiedad: Propiedad, bucket: string = "pr
 
     return data?.[0];
   } catch (e) {
-    console.error("Error en upsertPropiedad", e);
     throw e;
   }
 }
@@ -531,7 +525,7 @@ export const useFetchProspectos = () => {
 
   return { prospectos, loading, error, fetch };
 };
-export const useFetchProspectosUser = (userid: string) => {console.log(userid)
+export const useFetchProspectosUser = (userid: string) => {
   const [prospectos, setProspectos] = useState<Prospecto[]>([])
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<string | null>(null)
@@ -721,3 +715,33 @@ export async function updateSeguimiento(seguimiento: Seguimiento) {
   if (error) throw error
   return { data }
 }
+
+export function useFiltradoPorRol<T extends { [k: string]: any }>(
+  data: T[],
+  userid?: string,
+  isUsuario?: boolean
+) {
+  return useMemo(
+    () => (isUsuario ? data.filter((x) => belongsToUser(x as any, userid)) : data),
+    [data, userid, isUsuario]
+  )
+}
+
+export function indexById<T extends { [k: string]: any }>(items: T[], key: string = 'id') {
+  return useMemo(() => {
+    const m = new Map<any, T>()
+    for (const it of items) m.set((it as any)[key], it)
+    return m
+  }, [items, key])
+}
+
+type WithOwner = { [K in 'userid' | 'vendedorid' | 'asignadoA']?: string | number }
+
+export function belongsToUser<T extends WithOwner>(obj: T, userid?: string): obj is T {
+  if (!userid || !obj) return false
+  return ['userid','vendedorid','asignadoA'].some((k) => {
+    const v = obj[k as keyof WithOwner]
+    return (typeof v === 'string' && v === userid) || (typeof v === 'number' && String(v) === String(userid))
+  })
+}
+4

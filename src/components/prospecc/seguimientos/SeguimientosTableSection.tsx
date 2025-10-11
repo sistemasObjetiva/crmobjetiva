@@ -163,11 +163,19 @@ export default function SeguimientosTableSection({
                     <TableCell>{getEstatusChip(s.estatusSeguimiento)}</TableCell>
                     <TableCell>{s.temperaturaInteres}</TableCell>
                     <TableCell>
-                      <ProyectosInteresChips
-                        ids={prospecto?.proyectosInteres}
-                        proyectos={proyectos}
-                        propiedades={propiedades}
-                      />
+                      <TableCell>
+                        <ProyectosInteresChips
+                          ids={
+                            Array.isArray(s.proyectoInteres)
+                              ? s.proyectoInteres.map((x: string | number) => String(x))
+                              : s.proyectoInteres
+                                ? [String(s.proyectoInteres)]
+                                : []
+                          }
+                          proyectos={proyectos}
+                          propiedades={propiedades}
+                        />
+                      </TableCell>
                     </TableCell>
                     <TableCell>{fmtDate(s.fechaProximoSeguimiento)}</TableCell>
                     <TableCell>{fmtDate(s.fechaActualizacion)}</TableCell>

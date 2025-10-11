@@ -813,6 +813,7 @@ const ReportesGerentes: React.FC = () => {
         seguimientos={detalleSeg}
         prospectos={detallePros}
         getEstatus={getSeguimientoEstatus}
+        users={usuarios}
       />
     </Box>
   )

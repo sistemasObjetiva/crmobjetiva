@@ -36,9 +36,10 @@ type OrderByKey =
   | 'correoElectronico'
   | 'celular'
   | 'clasificacionCliente'
-  | 'proyectosInteres'
+  | 'proyectos'
   | 'usuario'
   | 'fechaCreacion'
+  
 
 // mapping entre columnas del Grid y tus keys
 const fieldToOrderKey: Record<string, OrderByKey> = {
@@ -55,7 +56,7 @@ const orderKeyToField: Record<OrderByKey, string> = {
   correoElectronico: 'correoElectronico',
   celular: 'celular',
   clasificacionCliente: 'clasificacionCliente',
-  proyectosInteres: 'proyectosInteres', // no sortable, lo dejamos mapeado
+  proyectos: 'proyectos', // no sortable, lo dejamos mapeado
   usuario: 'ownerEmail',
   fechaCreacion: 'fechaCreacionFmt'
 }
@@ -223,7 +224,7 @@ const ProspectosGeneralTab: React.FC<ProspectosTabProps> = ({ }) => {
       case 'clasificacionCliente':
         cmp = compare(normalize(a.clasificacionCliente), normalize(b.clasificacionCliente))
         break
-      case 'proyectosInteres':
+      case 'proyectos':
         cmp = compare(a.proyectosInteres?.length ?? 0, b.proyectosInteres?.length ?? 0)
         break
       case 'usuario': {

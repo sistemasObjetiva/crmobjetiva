@@ -29,7 +29,7 @@ type OrderByKey =
   | 'celular'
   | 'clasificacionCliente'
   | 'fechaCreacion'
-  | 'proyectosInteres' // ordena por cantidad de intereses
+  | 'proyectos' // ordena por cantidad de intereses
 
 const ROW_HEIGHT = 56
 
@@ -164,7 +164,7 @@ const ProspectosTab: React.FC<ProspectosTabProps> = ({ userid }) => {
       case 'clasificacionCliente':
         cmp = compare(normalize(a.clasificacionCliente), normalize(b.clasificacionCliente))
         break
-      case 'proyectosInteres':
+      case 'proyectos':
         cmp = compare(a.proyectosInteres?.length ?? 0, b.proyectosInteres?.length ?? 0)
         break
       case 'fechaCreacion':
@@ -280,7 +280,7 @@ const ProspectosTab: React.FC<ProspectosTabProps> = ({ userid }) => {
     correoElectronico: 'correoElectronico',
     celular: 'celular',
     clasificacionCliente: 'clasificacionCliente',
-    proyectosInteres: 'proyectosInteres', // no sortable en grid
+    proyectos: 'proyectosInteres', // no sortable en grid
     fechaCreacion: 'fechaCreacion',
   }
 

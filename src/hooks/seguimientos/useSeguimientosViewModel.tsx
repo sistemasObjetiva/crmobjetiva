@@ -11,6 +11,7 @@ export type OrderByKey =
   | 'unidad'
   | 'fechaProximo'
   | 'fechaActualizacion'
+  | 'proyectos'
 
 type PagingState = Record<string, { page: number; rowsPerPage: number }>
 

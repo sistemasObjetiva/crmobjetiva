@@ -69,35 +69,41 @@ useEffect(() => {
 
   // ------- Exportadores (solo CSV) -------
   const handleExportFilteredCSV = () => {
-    const header = [
-      'Consecutivo','Fecha Registro','Nombre Completo Cliente','Celular Cliente','Correo Electrónico Cliente',
-      'Ocupación Cliente','Medio de Captación','Vendedor','Ultimo seguimiento','Última fecha de seguimiento','Razón','Estatus',
-    ]
-    const rowsAOA: (string | number)[][] = [header]
+  const header = [
+    'Consecutivo','Fecha Registro','Nombre Completo Cliente','Celular Cliente','Correo Electrónico Cliente',
+    'Ocupación Cliente','Medio de Captación','Vendedor','Ultimo seguimiento','Última fecha de seguimiento','Razón','Estatus',
+  ];
 
-    vm.rowsForCharts.forEach((s, idx) => {
-      const p = (prospectos ?? []).find(pp => pp.id === s.idprospecto)
-      const u = usuariosById.get(String(s.userid))
+  // 1) Construimos filas con una clave de ordenamiento (lastDate)
+  const rowsWithSortKey = vm.rowsForCharts.map((s) => {
+    const p = (prospectos ?? []).find(pp => pp.id === s.idprospecto);
+    const u = usuariosById.get(String(s.userid));
 
-      const lastHist = [...(s.historialSeguimiento ?? [])]
-        .sort((a, b) => new Date(a.fechaCreacion).getTime() - new Date(b.fechaCreacion).getTime())
-        .at(-1)
+    const lastHist = [...(s.historialSeguimiento ?? [])]
+      .sort((a, b) => new Date(a.fechaCreacion).getTime() - new Date(b.fechaCreacion).getTime())
+      .at(-1);
 
-      const fechaReg = s.fechaCreacion ? new Date(s.fechaCreacion).toLocaleDateString('es-MX') : ''
-      const vendedor = getUserName(u) || getUserEmail(u)
+    const fechaReg = s.fechaCreacion ? new Date(s.fechaCreacion) : null;
+    const vendedor = getUserName(u) || getUserEmail(u);
 
-      const ultimaFechaSeg =
-        lastHist?.fechaCreacion
-          ? new Date(lastHist.fechaCreacion).toLocaleString('es-MX')
-          : s.fechaActualizacion
-            ? new Date(s.fechaActualizacion).toLocaleString('es-MX')
-            : s.fechaCreacion
-              ? new Date(s.fechaCreacion).toLocaleString('es-MX')
-              : ''
+    const lastDateObj =
+      lastHist?.fechaCreacion
+        ? new Date(lastHist.fechaCreacion)
+        : s.fechaActualizacion
+          ? new Date(s.fechaActualizacion)
+          : s.fechaCreacion
+            ? new Date(s.fechaCreacion)
+            : null;
 
-      rowsAOA.push([
-        idx + 1,
-        fechaReg,
+    const ultimaFechaSegStr = lastDateObj
+      ? lastDateObj.toLocaleString('es-MX')
+      : '';
+
+    return {
+      sortKey: lastDateObj ? lastDateObj.getTime() : -Infinity, // filas sin fecha al principio
+      data: [
+        0, // Consecutivo (lo llenamos después del sort)
+        fechaReg ? fechaReg.toLocaleDateString('es-MX') : '',
         p?.nombreCompleto ?? '',
         p?.celular ?? '',
         p?.correoElectronico ?? '',
@@ -105,22 +111,38 @@ useEffect(() => {
         '', // Medio de Captación
         vendedor,
         (lastHist?.comentarios || s.comentarios || '').toString(),
-        ultimaFechaSeg,
+        ultimaFechaSegStr,
         Array.isArray(s.motivo) ? s.motivo.join(' | ') : (s as any)?.razon ?? '',
         s.estatusSeguimiento ?? '',
-      ])
-    })
+      ] as (string | number)[],
+    };
+  });
 
-    if (rowsAOA.length === 1) { showStatus('No hay filas con los filtros actuales', 'warning'); return }
-    const csv = Papa.unparse(rowsAOA)
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'seguimientos_filtrados.csv'
-    a.click()
-    URL.revokeObjectURL(url)
+  // 2) Ordenamos ASC por la clave (menor a mayor) -> últimos más recientes quedan abajo
+  rowsWithSortKey.sort((a, b) => a.sortKey - b.sortKey);
+
+  if (rowsWithSortKey.length === 0) {
+    showStatus('No hay filas con los filtros actuales', 'warning');
+    return;
   }
+
+  // 3) Reasignamos consecutivo con el orden final
+  const rowsAOA: (string | number)[][] = [header];
+  rowsWithSortKey.forEach((row, idx) => {
+    row.data[0] = idx + 1; // Consecutivo
+    rowsAOA.push(row.data);
+  });
+
+  // 4) Exportar CSV
+  const csv = Papa.unparse(rowsAOA);
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'seguimientos_filtrados.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+};
 
   // ------- Modal ver/editar -------
   const [modalOpen, setModalOpen] = useState(false)

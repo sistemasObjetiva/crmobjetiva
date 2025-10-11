@@ -353,7 +353,6 @@ const handleUnidadFileChange = (
 };
 
 
-console.log(unidad)
 /**
  * Súper‐handler para eliminar un documento de cualquiera
  * de los campos de imagen de Unidad.

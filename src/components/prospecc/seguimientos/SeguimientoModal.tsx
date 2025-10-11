@@ -28,7 +28,7 @@ import {
   Avatar,
   Paper,
   Tooltip,
-  FormHelperText, // ⬅️ para mensajes de error
+  FormHelperText,
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong'
@@ -66,7 +66,7 @@ interface Props {
   readOnly?: boolean
 }
 
-// ---------- helpers ----------
+/* ---------------- helpers ---------------- */
 const formatDateFull = (iso?: string) => {
   if (!iso) return '—'
   try {
@@ -84,6 +84,24 @@ const formatDateFull = (iso?: string) => {
   } catch {
     return iso || '—'
   }
+}
+
+// Normaliza proyectoInteres a string[]
+const normalizeProyectoInteres = (input: unknown): string[] => {
+  if (Array.isArray(input)) return input.map(x => String(x)).filter(Boolean)
+  if (typeof input === 'string') {
+    const s = input.trim()
+    if (!s) return []
+    // intenta parsear JSON ["id1","id2"]
+    try {
+      const parsed = JSON.parse(s)
+      if (Array.isArray(parsed)) return parsed.map(x => String(x)).filter(Boolean)
+    } catch {
+      // no era JSON → id suelto
+      return [s]
+    }
+  }
+  return []
 }
 
 const SectionCard: React.FC<{ title: React.ReactNode; right?: React.ReactNode; children: React.ReactNode }>
@@ -108,7 +126,7 @@ const SeguimientoModal: React.FC<Props> = ({
   propiedades,
   readOnly = false,
 }) => {
-  // --- ESTADOS PARA EL FLUJO DE COTIZADOR ---
+  // --- ESTADOS PARA COTIZADOR ---
   const [cotizadorSelectorOpen, setCotizadorSelectorOpen] = useState(false)
   const [cotizadorSeleccionado, setCotizadorSeleccionado] = useState<any>(null)
   const [openCotizadorPropiedad, setOpenCotizadorPropiedad] = useState(false)
@@ -120,7 +138,7 @@ const SeguimientoModal: React.FC<Props> = ({
   // --- COMENTARIO: último guardado (solo lectura) + nuevo comentario (draft)
   const [comentarioInput, setComentarioInput] = useState('')
   useEffect(() => {
-    if (open) setComentarioInput('') // siempre limpio al abrir o cambiar seguimiento
+    if (open) setComentarioInput('') // limpia al abrir/cambiar seguimiento
   }, [open, seguimiento?.id])
 
   const ultimoComentarioGuardado = useMemo(() => {
@@ -133,7 +151,6 @@ const SeguimientoModal: React.FC<Props> = ({
   const [motivosDescDraft, setMotivosDescDraft] = useState<string[]>([])
   const [motivosInterDraft, setMotivosInterDraft] = useState<string[]>([])
 
-  // Al cargar/cambiar seguimiento, inicializa borradores desde lo que traiga 'motivo'
   useEffect(() => {
     const current = (seguimiento?.motivo as string[] | undefined) ?? []
     setMotivosDescDraft(current.filter(m => (MOTIVOS_DESCARTE as readonly string[]).includes(m)))
@@ -167,19 +184,20 @@ const SeguimientoModal: React.FC<Props> = ({
     ...propiedades.map(p => ({ ...p, tipo: 'propiedad' as const }))
   ]
 
+  // PDFs combinados (únicos por id)
   const allPdfsArr: Document[] = [
     ...(seguimiento?.pdfCotizaciones ?? []),
     ...(seguimiento?.historialSeguimiento?.flatMap(h => h.pdfCotizaciones ?? []) ?? [])
   ]
   const allPdfs: Document[] = Array.from(new Map(allPdfsArr.map(doc => [doc.id, doc])).values())
 
-  const selectedOptions = allOptions.filter(opt =>
-    (Array.isArray(seguimiento?.proyectoInteres)
-      ? (seguimiento?.proyectoInteres ?? []).includes(opt.id)
-      : seguimiento?.proyectoInteres === opt.id)
-  )
+  // ---- Valor seleccionado (ids normalizados → objetos)
+  const selectedOptions = useMemo(() => {
+    const ids = new Set(normalizeProyectoInteres(seguimiento?.proyectoInteres))
+    return allOptions.filter(opt => ids.has(String((opt as any).id)))
+  }, [allOptions, seguimiento?.proyectoInteres])
 
-  // --- Fechas (acepta created_at/updated_at o fechaCreacion/fechaActualizacion) ---
+  // --- Fechas (acepta created_at/updated_at o fechaCreacion/fechaActualizacion)
   const creado = formatDateFull((seguimiento as any)?.fechaCreacion || (seguimiento as any)?.created_at)
   const actualizado = formatDateFull(
     (seguimiento as any)?.fechaActualizacion ||
@@ -225,7 +243,7 @@ const SeguimientoModal: React.FC<Props> = ({
       ? (seguimiento?.capacidadDePago || '')
       : (CAPACIDAD_MAP_OLD_TO_NEW[seguimiento?.capacidadDePago || ''] || (seguimiento?.capacidadDePago || ''))
 
-  // ======== VALIDACIÓN (estatus + motivo obligatorios) ========
+  // ======== VALIDACIÓN ========
   const estatusValue = seguimiento?.estatusSeguimiento ?? ''
   const motivosValue = Array.isArray(seguimiento?.motivo) ? (seguimiento!.motivo as string[]) : []
   const isEstatusValid = !!estatusValue
@@ -292,25 +310,29 @@ const SeguimientoModal: React.FC<Props> = ({
                   value={prospectos.find(p => p.id === seguimiento?.idprospecto) ?? null}
                   onChange={(_, value) => onChange('idprospecto', value ? value.id : '')}
                   getOptionLabel={option => option.nombreCompleto}
+                  isOptionEqualToValue={(opt, val) => String(opt.id) === String(val.id)}
                   disabled={readOnly}
-                  renderOption={(props, option) => (
-                    <li {...props}>
-                      <Avatar sx={{ width: 28, height: 28, mr: 1, bgcolor: 'primary.main', fontWeight: 700 }}>
-                        {option.nombreCompleto?.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)}
-                      </Avatar>
-                      <span style={{ fontWeight: 600 }}>{option.nombreCompleto}</span>
-                      {option.correoElectronico && (
-                        <span style={{ color: '#8a8a8a', marginLeft: 6, fontSize: 13 }}>{option.correoElectronico}</span>
-                      )}
-                    </li>
-                  )}
+                  renderOption={(props, option) => {
+                    const { key, ...liProps } = props as any
+                    return (
+                      <li key={key} {...liProps}>
+                        <Avatar sx={{ width: 28, height: 28, mr: 1, bgcolor: 'primary.main', fontWeight: 700 }}>
+                          {option.nombreCompleto?.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)}
+                        </Avatar>
+                        <span style={{ fontWeight: 600 }}>{option.nombreCompleto}</span>
+                        {option.correoElectronico && (
+                          <span style={{ color: '#8a8a8a', marginLeft: 6, fontSize: 13 }}>{option.correoElectronico}</span>
+                        )}
+                      </li>
+                    )
+                  }}
                   renderInput={params => (
                     <TextField {...params} label="Prospecto" fullWidth required />
                   )}
                 />
 
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                  {/* Forma de pago desde ListasDesplegables */}
+                  {/* Forma de pago */}
                   <FormControl fullWidth>
                     <InputLabel>Forma de Pago</InputLabel>
                     <Select
@@ -326,7 +348,7 @@ const SeguimientoModal: React.FC<Props> = ({
                     </Select>
                   </FormControl>
 
-                  {/* Temperatura de interés desde ListasDesplegables */}
+                  {/* Temperatura */}
                   <FormControl fullWidth>
                     <InputLabel>Temperatura de Interés</InputLabel>
                     <Select
@@ -344,7 +366,7 @@ const SeguimientoModal: React.FC<Props> = ({
                 </Stack>
 
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                  {/* Capacidad de pago desde ListasDesplegables */}
+                  {/* Capacidad de pago */}
                   <FormControl fullWidth>
                     <InputLabel>Capacidad de Pago</InputLabel>
                     <Select
@@ -385,7 +407,7 @@ const SeguimientoModal: React.FC<Props> = ({
                     )}
                   </FormControl>
 
-                  {/* Motivos (OBLIGATORIO según estatus) */}
+                  {/* Motivos (según estatus) */}
                   {seguimiento?.estatusSeguimiento === 'descartado' ? (
                     <Autocomplete
                       multiple
@@ -442,52 +464,63 @@ const SeguimientoModal: React.FC<Props> = ({
                     disableCloseOnSelect
                     options={allOptions}
                     value={selectedOptions}
-                    getOptionLabel={option => (option.tipo === 'proyecto' ? option.nombre : option.tituloPropiedad)}
-                    onChange={(_, newValue) => onChange('proyectoInteres', newValue.map(opt => opt.id))}
+                    getOptionLabel={option => (option as any).tipo === 'proyecto' ? (option as any).nombre : (option as any).tituloPropiedad}
+                    isOptionEqualToValue={(opt, val) => String((opt as any).id) === String((val as any).id)}
+                    onChange={(_, newValue) => {
+                      const ids = (newValue ?? []).map(opt => String((opt as any).id))
+                      onChange('proyectoInteres', ids) // guarda SIEMPRE como string[]
+                    }}
                     disabled={readOnly}
-                    renderOption={(props, option, { selected }) => (
-                      <li {...props}>
-                        <Checkbox checked={selected} disabled={readOnly} sx={{ mr: 1 }} />
-                        {option.tipo === 'proyecto' && option.logo ? (
-                          <SignedAvatar value={option.logo} alt={option.nombre} sx={{ width: 32, height: 32, mr: 1, display: 'inline-flex' }} />
-                        ) : null}
-                        {option.tipo === 'propiedad' && option.imagenes?.length ? (
-                          <SignedAvatar value={option.imagenes[0]} alt={option.tituloPropiedad} sx={{ width: 32, height: 32, mr: 1, display: 'inline-flex' }} />
-                        ) : null}
-                        <ListItemText
-                          primary={
-                            <>
-                              {option.tipo === 'proyecto' ? option.nombre : option.tituloPropiedad}
-                              <span style={{ fontSize: 12, marginLeft: 8, color: option.tipo === 'proyecto' ? 'var(--primary-color)' : 'var(--secondary-color)', fontWeight: 600 }}>
-                                {option.tipo === 'proyecto' ? 'Proyecto' : 'Propiedad'}
-                              </span>
-                            </>
-                          }
-                        />
-                      </li>
-                    )}
+                    renderOption={(props, option, { selected }) => {
+                      const { key, ...liProps } = props as any
+                      const o = option as any
+                      return (
+                        <li key={key} {...liProps}>
+                          <Checkbox checked={selected} disabled={readOnly} sx={{ mr: 1 }} />
+                          {o.tipo === 'proyecto' && o.logo ? (
+                            <SignedAvatar value={o.logo} alt={o.nombre} sx={{ width: 32, height: 32, mr: 1, display: 'inline-flex' }} />
+                          ) : null}
+                          {o.tipo === 'propiedad' && o.imagenes?.length ? (
+                            <SignedAvatar value={o.imagenes[0]} alt={o.tituloPropiedad} sx={{ width: 32, height: 32, mr: 1, display: 'inline-flex' }} />
+                          ) : null}
+                          <ListItemText
+                            primary={
+                              <>
+                                {o.tipo === 'proyecto' ? o.nombre : o.tituloPropiedad}
+                                <span style={{ fontSize: 12, marginLeft: 8, color: o.tipo === 'proyecto' ? 'var(--primary-color)' : 'var(--secondary-color)', fontWeight: 600 }}>
+                                  {o.tipo === 'proyecto' ? 'Proyecto' : 'Propiedad'}
+                                </span>
+                              </>
+                            }
+                          />
+                        </li>
+                      )
+                    }}
                     renderTags={(tagValue, getTagProps) =>
-                      tagValue.map((option, index) => (
-                        <Chip
-                          {...getTagProps({ index })}
-                          label={
-                            <>
-                              {option.tipo === 'proyecto' ? option.nombre : option.tituloPropiedad}
-                              <span style={{ fontSize: 11, color: option.tipo === 'proyecto' ? 'var(--primary-color)' : 'var(--secondary-color)', marginLeft: 4, fontWeight: 700 }}>
-                                {option.tipo === 'proyecto' ? 'P' : 'U'}
-                              </span>
-                            </>
-                          }
-                          avatar={
-                            option.tipo === 'proyecto' && option.logo ? (
-                              <SignedAvatar value={option.logo} alt={option.nombre} sx={{ width: 24, height: 24 }} />
-                            ) : option.tipo === 'propiedad' && option.imagenes?.length ? (
-                              <SignedAvatar value={option.imagenes[0]} alt={option.tituloPropiedad} sx={{ width: 24, height: 24 }} />
-                            ) : undefined
-                          }
-                          key={option.id}
-                        />
-                      ))
+                      tagValue.map((option, index) => {
+                        const o = option as any
+                        return (
+                          <Chip
+                            {...getTagProps({ index })}
+                            label={
+                              <>
+                                {o.tipo === 'proyecto' ? o.nombre : o.tituloPropiedad}
+                                <span style={{ fontSize: 11, color: o.tipo === 'proyecto' ? 'var(--primary-color)' : 'var(--secondary-color)', marginLeft: 4, fontWeight: 700 }}>
+                                  {o.tipo === 'proyecto' ? 'P' : 'U'}
+                                </span>
+                              </>
+                            }
+                            avatar={
+                              o.tipo === 'proyecto' && o.logo ? (
+                                <SignedAvatar value={o.logo} alt={o.nombre} sx={{ width: 24, height: 24 }} />
+                              ) : o.tipo === 'propiedad' && o.imagenes?.length ? (
+                                <SignedAvatar value={o.imagenes[0]} alt={o.tituloPropiedad} sx={{ width: 24, height: 24 }} />
+                              ) : undefined
+                            }
+                            key={String(o.id)}
+                          />
+                        )
+                      })
                     }
                     renderInput={params => (
                       <TextField
@@ -512,7 +545,6 @@ const SeguimientoModal: React.FC<Props> = ({
 
             {/* --- NOTAS --- */}
             <SectionCard title="Notas y próxima acción">
-              {/* SOLO LECTURA: Último comentario guardado */}
               <TextField
                 label="Último comentario (no se guarda)"
                 value={ultimoComentarioGuardado}
@@ -523,7 +555,6 @@ const SeguimientoModal: React.FC<Props> = ({
                 sx={{ mb: 1 }}
               />
 
-              {/* NUEVO comentario (se guarda) */}
               <TextField
                 label="Nuevo comentario"
                 value={comentarioInput}
@@ -644,31 +675,47 @@ const SeguimientoModal: React.FC<Props> = ({
         <DialogContent>
           <Autocomplete
             options={cotizadorOptions}
-            groupBy={option => option.tipo === 'propiedad' ? 'Propiedades' : option.tipo === 'unidad' ? 'Unidades' : 'Proyectos'}
-            getOptionLabel={option => option.tipo === 'propiedad' ? option.tituloPropiedad : option.tipo === 'unidad' ? `${option.proyectoObj?.nombre || ''} / ${option.numerounidad || ''}`.trim() : option.nombre}
-            renderOption={(props, option) => (
-              <li {...props}>
-                <Box display="flex" alignItems="center">
-                  {option.tipo === 'propiedad' && Array.isArray(option.imagenes) && option.imagenes.length > 0 && (
-                    <SignedAvatar value={option.imagenes[0]} alt={option.tituloPropiedad} sx={{ width: 28, height: 28, mr: 1 }} />
-                  )}
-                  {option.tipo !== 'propiedad' && option.proyectoObj.logo && (
-                    <SignedAvatar value={option.proyectoObj.logo} alt={option.proyectoObj.nombre} sx={{ width: 28, height: 28, mr: 1 }} />
-                  )}
-                  <Typography fontWeight={600} fontSize={15}>
-                    {option.tipo === 'propiedad' ? option.tituloPropiedad : option.tipo === 'unidad' ? `${option.proyectoObj?.nombre || ''} / ${option.numerounidad || ''}` : option.nombre}
-                  </Typography>
-                  <Chip size="small" label={option.tipo === 'propiedad' ? 'Propiedad' : option.tipo === 'unidad' ? 'Unidad' : 'Proyecto'} sx={{ ml: 2, bgcolor: option.tipo === 'propiedad' ? 'secondary.main' : 'primary.main', color: '#fff', fontWeight: 700 }} />
-                </Box>
-              </li>
-            )}
+            groupBy={option => (option as any).tipo === 'propiedad' ? 'Propiedades' : (option as any).tipo === 'unidad' ? 'Unidades' : 'Proyectos'}
+            getOptionLabel={option => {
+              const o = option as any
+              return o.tipo === 'propiedad'
+                ? o.tituloPropiedad
+                : o.tipo === 'unidad'
+                  ? `${o.proyectoObj?.nombre || ''} / ${o.numerounidad || ''}`.trim()
+                  : o.nombre
+            }}
+            renderOption={(props, option) => {
+              const { key, ...liProps } = props as any
+              const o = option as any
+              return (
+                <li key={key} {...liProps}>
+                  <Box display="flex" alignItems="center">
+                    {o.tipo === 'propiedad' && Array.isArray(o.imagenes) && o.imagenes.length > 0 && (
+                      <SignedAvatar value={o.imagenes[0]} alt={o.tituloPropiedad} sx={{ width: 28, height: 28, mr: 1 }} />
+                    )}
+                    {o.tipo !== 'propiedad' && o.proyectoObj?.logo && (
+                      <SignedAvatar value={o.proyectoObj.logo} alt={o.proyectoObj.nombre} sx={{ width: 28, height: 28, mr: 1 }} />
+                    )}
+                    <Typography fontWeight={600} fontSize={15}>
+                      {o.tipo === 'propiedad' ? o.tituloPropiedad : o.tipo === 'unidad' ? `${o.proyectoObj?.nombre || ''} / ${o.numerounidad || ''}` : o.nombre}
+                    </Typography>
+                    <Chip
+                      size="small"
+                      label={o.tipo === 'propiedad' ? 'Propiedad' : o.tipo === 'unidad' ? 'Unidad' : 'Proyecto'}
+                      sx={{ ml: 2, bgcolor: o.tipo === 'propiedad' ? 'secondary.main' : 'primary.main', color: '#fff', fontWeight: 700 }}
+                    />
+                  </Box>
+                </li>
+              )
+            }}
             renderInput={params => <TextField {...params} label="Buscar" fullWidth />}
             onChange={(_, value) => {
               setCotizadorSeleccionado(value)
               setCotizadorSelectorOpen(false)
               if (value) {
-                if (value.tipo === 'propiedad') setOpenCotizadorPropiedad(true)
-                else if (value.tipo === 'unidad') setOpenCotizadorUnidad(true)
+                const o = value as any
+                if (o.tipo === 'propiedad') setOpenCotizadorPropiedad(true)
+                else if (o.tipo === 'unidad') setOpenCotizadorUnidad(true)
               }
             }}
             autoHighlight

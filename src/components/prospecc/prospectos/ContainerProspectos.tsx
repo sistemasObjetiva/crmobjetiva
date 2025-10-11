@@ -12,8 +12,7 @@ interface ContainerProspectosProps {
 type TabKey = 'pros' | 'pros_gen'
 
 const ContainerProspectos: React.FC<ContainerProspectosProps> = ({ userid, userRole }) => {
-  // Si no te pasan el rol, asume que NO es "usuario" para no bloquear por defecto
-  console.log(userRole)
+
   const canViewGeneral = (userRole ?? '').toLowerCase() !== 'usuario'
 
   const tabs = useMemo(

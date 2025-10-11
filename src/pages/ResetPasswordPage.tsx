@@ -1,21 +1,14 @@
 // src/components/ResetPasswordPage.tsx
-import React, { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import React, { useState, } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../config/supabase';
 
 const ResetPasswordPage: React.FC = () => {
   const [newPassword, setNewPassword] = useState('');
   const [message, setMessage] = useState('');
-  const location = useLocation();
   const navigate = useNavigate();
 
-  // Extraer el token del hash de la URL (opcional, ya que Supabase lo procesa internamente)
-  useEffect(() => {
-    // Podrías loguear el contenido del hash para verificar que existe
-    if (location.hash) {
-      console.log('Token recibido:', location.hash);
-    }
-  }, [location]);
+
 
   // Función para actualizar la contraseña del usuario
   const handlePasswordReset = async () => {

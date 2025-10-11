@@ -10,7 +10,6 @@ const InventarioGeneralPage: React.FC = () => {
   const { user } = useAuthRole()
   const [selectedView, setSelectedView] = useState(0)
 
-console.log(user!)
   if (!user) {
     return (
       <Spinner open={true}/>

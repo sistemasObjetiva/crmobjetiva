@@ -48,7 +48,7 @@ const ProspeccionPage: React.FC = () => {
       {tab === 2 && (
         <ContainerSeguimientos userid={userid} userRole={userRole} />
       )}
-      {tab === 3 && jerarquia < 2 && <ReportesGerentes />}
+      {tab === 3 && jerarquia <= 2 && <ReportesGerentes />}
     </Box>
   )
 }
