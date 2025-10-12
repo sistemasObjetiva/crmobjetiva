@@ -9,7 +9,7 @@ import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf'
 import { Proyecto, Unidad, PlanPago, Seguimiento, Document } from '../../config/types'
 import SignedAvatar from '../general/SignedAvatar'
 import SignedImage from '../general/SignedImage'
-import CotizacionPDF from './CotizacionUnidadPDF'
+import CotizacionPDF from './pdf/CotizacionUnidadPDF'
 
 import UnidadInfo from './CotizadorUnidadInfo'
 import UnidadImagenes from './CotizadorUnidadImagenes'

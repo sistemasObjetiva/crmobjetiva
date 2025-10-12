@@ -56,6 +56,20 @@ export default function SeguimientosTableSection({
   const start = page * rowsPerPage
   const pageRows = allRows.slice(start, start + rowsPerPage)
 
+
+  const parseProyectoIds = (v: any): string[] => {
+    if (Array.isArray(v)) return v.map(String)
+    if (typeof v === 'string') {
+      try {
+        const maybe = JSON.parse(v)
+        if (Array.isArray(maybe)) return maybe.map(String)
+      } catch { /* no es JSON, sigue */ }
+      return v.trim() ? [v] : []
+    }
+    return v != null ? [String(v)] : []
+  }
+
+
   return (
     <Box mb={4}>
       <Box
@@ -143,7 +157,7 @@ export default function SeguimientosTableSection({
                 const isBaja = Boolean(prospecto?.estatusBaja)
 
                 return (
-                  <TableRow
+                 <TableRow
                     key={s.id}
                     sx={
                       isBaja
@@ -156,26 +170,20 @@ export default function SeguimientosTableSection({
                           }
                         : undefined
                     }
+                    onClick={() => console.log('Seguimiento:', s)}
                   >
+
                     <TableCell>{getUserEmail(usuario)}</TableCell>
                     <TableCell>{prospecto?.nombreCompleto ?? ''}</TableCell>
                     <TableCell>{prospecto?.correoElectronico ?? ''}</TableCell>
                     <TableCell>{getEstatusChip(s.estatusSeguimiento)}</TableCell>
                     <TableCell>{s.temperaturaInteres}</TableCell>
                     <TableCell>
-                      <TableCell>
-                        <ProyectosInteresChips
-                          ids={
-                            Array.isArray(s.proyectoInteres)
-                              ? s.proyectoInteres.map((x: string | number) => String(x))
-                              : s.proyectoInteres
-                                ? [String(s.proyectoInteres)]
-                                : []
-                          }
-                          proyectos={proyectos}
-                          propiedades={propiedades}
-                        />
-                      </TableCell>
+                      <ProyectosInteresChips
+                        ids={parseProyectoIds(s.proyectoInteres)}
+                        proyectos={proyectos ?? []}
+                        propiedades={propiedades ?? []}
+                      />
                     </TableCell>
                     <TableCell>{fmtDate(s.fechaProximoSeguimiento)}</TableCell>
                     <TableCell>{fmtDate(s.fechaActualizacion)}</TableCell>
