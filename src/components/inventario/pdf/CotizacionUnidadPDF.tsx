@@ -7,7 +7,7 @@ import { getMonthLabels, safeMoney } from './helper'
 
 import PDFHeader from './PDFHeader'
 import PDFInfoUnidad from './PDFInfoUnidad'
-import PDFGaleriaOnePage from './PDFGaleriaSecundaria'
+import PDFGaleriaCompacta from './PDFGaleriaMejorada'
 import PDFTablaPlanesOnePage from './PDFTablaPlanesPaged'
 
 type PDFPageSize = PageProps['size']
@@ -29,7 +29,7 @@ export interface PDFProps {
   pageSize?: PDFPageSize
 }
 
-const CotizacionPDFTwoPages: React.FC<PDFProps> = ({
+const CotizacionPDFCompacto: React.FC<PDFProps> = ({
   proyecto,
   unidad,
   planSeleccionado,
@@ -96,26 +96,27 @@ const CotizacionPDFTwoPages: React.FC<PDFProps> = ({
   /* ==================== RENDER ==================== */
   return (
     <PDFDocument>
-      {/* --------- PÁGINA 1 (siempre) --------- */}
+      {/* --------- PÁGINA 1: Solo Información --------- */}
       <Page size={pageSize} style={styles.page}>
         {logoUrl ? <Image src={logoUrl} style={styles.watermark} /> : null}
 
         <PDFHeader logoUrl={logoUrl} proyecto={proyecto} userEmail={userEmail} userPhone={userPhone} />
 
-        {/* Detalles full-width (el componente ya maneja flujo vertical) */}
+        {/* Solo detalles de unidad - página completa para información */}
         <PDFInfoUnidad unidad={unidad} extrasOrder={extrasOrder} />
+      </Page>
 
-        {/* Galería en UNA SOLA PÁGINA (auto-limita cantidad para que todo quepa) */}
-        <PDFGaleriaOnePage
+      {/* --------- PÁGINA 2: Solo Imágenes Grandes --------- */}
+      <Page size={pageSize} style={styles.page}>
+        <PDFGaleriaCompacta
           renderUrl={renderUrl}
           isometricoUrl={isometricoUrl}
           planoUrl={planoUrl}
           galeriaUrls={galeriaUrls}
-          pageSize={pageSize}
         />
       </Page>
 
-      {/* --------- PÁGINA 2 (siempre) --------- */}
+      {/* --------- PÁGINA 3: Solo Tabla de Planes + Footer --------- */}
       <Page size={pageSize} style={styles.page}>
         <PDFTablaPlanesOnePage
           columnas={columnas}
@@ -126,7 +127,7 @@ const CotizacionPDFTwoPages: React.FC<PDFProps> = ({
           pageSize={pageSize}
         />
 
-        {/* Footer SOLO en la página 2 */}
+        {/* Footer en la página de planes */}
         <View style={styles.footerSection}>
           <Text style={styles.footerText}>
             Documento generado el {new Date().toLocaleDateString('es-MX')} {new Date().toLocaleTimeString('es-MX')} | Vigencia de la oferta: 10 días. Precios sujetos a cambio sin previo aviso.
@@ -141,4 +142,4 @@ const CotizacionPDFTwoPages: React.FC<PDFProps> = ({
   )
 }
 
-export default CotizacionPDFTwoPages
+export default CotizacionPDFCompacto
