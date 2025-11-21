@@ -186,4 +186,12 @@ const CardProyecto: React.FC<CardProyectoProps> = ({ proyecto, onEdit, onDelete 
   )
 }
 
-export default CardProyecto
+export default React.memo(CardProyecto, (prevProps, nextProps) => {
+  // Solo re-renderizar si cambian estas propiedades críticas
+  return (
+    prevProps.proyecto.id === nextProps.proyecto.id &&
+    prevProps.proyecto.estatus === nextProps.proyecto.estatus &&
+    prevProps.proyecto.nombre === nextProps.proyecto.nombre &&
+    prevProps.proyecto.unidades?.length === nextProps.proyecto.unidades?.length
+  )
+})

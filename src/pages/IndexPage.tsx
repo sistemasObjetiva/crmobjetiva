@@ -21,6 +21,7 @@ import {
   useFetchSeguimientos,
 } from '../hooks/useFetchFunctions'
 import type { Proyecto, Propiedad, Seguimiento } from '../config/types'
+import { belongsToUser } from '../config/ownership'
 import SignedImage from '../components/general/SignedImage'
 import SeguimientosCalendar from '../components/prospecc/seguimientos/SeguimientosCalendar'
 
@@ -70,18 +71,6 @@ const CHART_COLORS = [
 ]
 
 const AUTOPLAY_INTERVAL = 4200
-
-/* ------------ helpers: pertenencia por usuario ----------- */
-const OWNER_FIELDS = ['userid', 'vendedorid', 'asignadoA'] as const
-function belongsToUser(obj: Record<string, any>, userid?: string) {
-  if (!userid) return false
-  for (const f of OWNER_FIELDS) {
-    const v = obj?.[f]
-    if (typeof v === 'string' && v === userid) return true
-    if (typeof v === 'number' && String(v) === String(userid)) return true
-  }
-  return false
-}
 
 const IndexPage: React.FC = () => {
   const { user, loading } = useAuthRole()

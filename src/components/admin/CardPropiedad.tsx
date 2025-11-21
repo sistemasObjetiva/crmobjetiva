@@ -189,4 +189,9 @@ const CardPropiedad: React.FC<CardPropiedadProps> = ({
   );
 };
 
-export default CardPropiedad;
+export default React.memo(CardPropiedad, (prevProps, nextProps) => {
+  return (
+    prevProps.propiedad.id === nextProps.propiedad.id &&
+    prevProps.propiedad.estatus === nextProps.propiedad.estatus
+  )
+});

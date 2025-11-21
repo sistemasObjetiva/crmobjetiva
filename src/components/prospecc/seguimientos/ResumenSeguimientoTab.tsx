@@ -21,6 +21,7 @@ import {
 import { Temporal } from '@js-temporal/polyfill'
 
 import type { Seguimiento, Prospecto } from '../../../config/types'
+import { belongsToUser } from '../../../config/ownership'
 import { useFetchSeguimientos, useFetchProspectos } from '../../../hooks/useFetchFunctions'
 
 // ✅ Constantes y helpers compartidos
@@ -39,18 +40,6 @@ interface Props {
 }
 
 // ====== Helpers de filtrado ======
-const OWNER_FIELDS = ['userid', 'vendedorid', 'asignadoA'] as const
-
-function belongsToUser(obj: Record<string, any>, userid?: string) {
-  if (!userid) return false
-  for (const f of OWNER_FIELDS) {
-    const v = obj?.[f]
-    if (typeof v === 'string' && v === userid) return true
-    if (typeof v === 'number' && String(v) === String(userid)) return true
-  }
-  return false
-}
-
 const perteneceAlUsuario = (s: Seguimiento, userid?: string) =>
   belongsToUser(s as any, userid)
 

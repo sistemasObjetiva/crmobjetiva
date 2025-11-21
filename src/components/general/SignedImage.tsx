@@ -85,4 +85,9 @@ const SignedImage: React.FC<SignedImageProps> = ({ path, bucket, alt, sx, onClic
   );
 };
 
-export default SignedImage;
+export default React.memo(SignedImage, (prevProps, nextProps) => {
+  return (
+    prevProps.path === nextProps.path &&
+    prevProps.bucket === nextProps.bucket
+  )
+});
