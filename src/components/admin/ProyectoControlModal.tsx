@@ -22,6 +22,7 @@ import ProyectoPlanesPagoTab from './ProyectoPlanesPAgoTabs';
 import { eliminarProyecto } from '../../hooks/useFetchFunctions';
 import { useStatusChip } from '../../config/context/useStatusChip';
 import ProyectoStackingTab from './ProyectoStackingTab';
+import ProyectoWizard from './ProyectoWizard';
 
 interface ProyectoModalProps {
   proyecto: Proyecto | null;
@@ -46,6 +47,9 @@ const ProyectoControlModal: React.FC<ProyectoModalProps> = ({ proyecto, open, on
   const { showStatus } = useStatusChip()
   const [selectedTab, setSelectedTab] = useState<number>(0);
   const [unidad, setUnidad] = useState<Unidad|null>(null);
+  
+  // Determinar si es un proyecto nuevo (sin unidades y apenas creado)
+  const isNewProyecto = !proyecto?.unidades || proyecto.unidades.length === 0;
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setSelectedTab(newValue);
@@ -439,6 +443,35 @@ useEffect(() => {
     setUnidad(makeInitialUnidad(userid, proyecto.id));
   }
 }, [selectedTab, unidad, proyecto, userid]);
+
+  // Si es proyecto nuevo, usar Wizard
+  if (isNewProyecto) {
+    return (
+      <ProyectoWizard
+        proyecto={proyecto!}
+        open={open}
+        onClose={onClose}
+        onSave={onSave}
+        setProyecto={setProyecto}
+        userid={userid}
+        unidad={unidad}
+        extrasKeys={extrasKeys}
+        handleChangeUnidad={handleChangeUnidad}
+        handleAddExtraKey={handleAddExtraKey}
+        handleChangeExtraKey={handleChangeExtraKey}
+        handleChangeExtraValue={handleChangeExtraValue}
+        handleRemoveExtraKey={handleRemoveExtraKey}
+        handleReorderExtraKeys={handleReorderExtraKeys}
+        handleFileChange={handleUnidadFileChange}
+        handleFileRemove={handleUnidadFileRemove}
+        handleAddUnidad={handleAddUnidad}
+        handleEditUnidad={handleEditUnidad}
+        handleDeleteUnidad={handleDeleteUnidad}
+      />
+    );
+  }
+
+  // Modal con tabs para edición rápida de proyectos existentes
   return (
     <Dialog open={open} onClose={()=>{}} fullScreen={false}
       maxWidth={false}

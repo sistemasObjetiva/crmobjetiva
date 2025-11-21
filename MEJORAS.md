@@ -2,6 +2,45 @@
 
 ## ✅ Mejoras Completadas (Fase 1 - Quick Wins)
 
+### 🆕 Nuevas Mejoras UX/UI (21 Nov 2025)
+
+#### 1. **Wizard de Creación de Proyectos** ✅
+- ✅ Creado componente `ProyectoWizard.tsx` con stepper de 4 pasos
+- ✅ Integrado en `ProyectoControlModal.tsx` para proyectos nuevos
+- ✅ Pasos: Información General → Planes de Pago → Unidades → Visualización
+- ✅ Navegación intuitiva con validación por paso
+- ✅ Proyectos existentes mantienen modal con tabs para edición rápida
+
+#### 2. **Componentes Mejorados para Gestión de Unidades** ✅
+- ✅ `ImportPreviewDialog.tsx`: Vista previa completa de importación Excel/CSV
+  - Muestra tabla con primeras 10 unidades
+  - Detecta campos extras automáticamente
+  - Advertencias de validación destacadas
+  - 3 modos: Agregar, Fusionar, Reemplazar
+  - Estadísticas de importación en tiempo real
+- ✅ `ExtrasManager.tsx`: Gestión de campos personalizados con drag-and-drop
+  - Reordenar campos arrastrando
+  - Edición inline de nombres de campo
+  - Visual feedback con cards
+  - Numeración automática
+- ✅ `UnidadCard.tsx`: Visualización en tarjetas de unidades
+  - Preview de primera imagen disponible
+  - Información compacta y visual
+  - Chips de estatus con colores
+  - Contador de imágenes y extras
+  - Acciones rápidas (editar/eliminar)
+
+#### 3. **Mejoras en ProyectoUnidadesTab** 🔄 (En progreso)
+- ✅ Imports actualizados para nuevos componentes
+- ✅ Componentes auxiliares creados y listos
+- 🔄 Integración pendiente:
+  - Reemplazar tabla por Grid de `UnidadCard`
+  - Usar `ImportPreviewDialog` en lugar de diálogo simple
+  - Usar `ExtrasManager` en lugar de lista de TextFields
+  - Mejorar diálogo de aumento de precios
+
+## ✅ Mejoras Completadas (Fase 1 - Quick Wins)
+
 ### 1. **Limpieza de Código**
 - ✅ Eliminados archivos duplicados:
   - `ProyectoUnidadesTab copy.tsx`

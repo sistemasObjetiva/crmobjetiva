@@ -5,12 +5,6 @@ import {
   TextField,
   IconButton,
   Tooltip,
-  TableContainer,
-  Table,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableBody,
   Paper,
   Button,
   FormControl,
@@ -19,12 +13,6 @@ import {
   Select,
   Chip,
   Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  RadioGroup,
-  FormControlLabel,
-  Radio,
   Switch,
   Divider,
   Alert,
@@ -32,21 +20,28 @@ import {
   Card,
   CardHeader,
   CardContent,
+  Grid,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  FormControlLabel,
 } from '@mui/material';
 import AddCircleIcon from '@mui/icons-material/AddCircle';
+import FileUploadIcon from '@mui/icons-material/FileUpload';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import DeleteIcon from '@mui/icons-material/Delete';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import EditIcon from '@mui/icons-material/Edit';
-import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward'
-import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward'
-
 
 import FileUploadPreview from '../general/FileUploadPreviewFiles';
 import FileUploadCarouselPreview from '../general/FileUploadCarouselPreview';
-import SignedImageCarousel from '../general/SinedImageCarousel';
-import { Proyecto, Unidad, Document } from '../../config/types';
+import { Proyecto, Unidad } from '../../config/types';
 import { formatoMoneda } from '../../hooks/useUtilsFunctions';
 import * as XLSX from 'xlsx';
-import SignedImage from '../general/SignedImage';
+import ImportPreviewDialog from './ImportPreviewDialog';
+import ExtrasManager from './ExtrasManager';
+import UnidadCard from './UnidadCard';
 
 type ImportMode = 'append' | 'replace' | 'merge';
 
@@ -868,27 +863,60 @@ const applyImport = () => {
       </TableContainer>
 
       {/* Diálogo: Aumentar precios */}
-      <Dialog open={openPrecioDialog} onClose={() => setOpenPrecioDialog(false)}>
-        <Box sx={{ p: 3, minWidth: 320 }}>
-          <Typography fontWeight={700} fontSize={18} mb={2}>
-            Aumentar precios de lista
-          </Typography>
+      <Dialog 
+        open={openPrecioDialog} 
+        onClose={() => setOpenPrecioDialog(false)} 
+        maxWidth="sm" 
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        <DialogTitle sx={{ backgroundColor: 'var(--primary-color)', color: 'white' }}>
+          <Stack direction="row" spacing={2} alignItems="center">
+            <TrendingUpIcon sx={{ fontSize: 32 }} />
+            <Typography variant="h6" fontWeight={700}>
+              Aumentar Precios de Lista
+            </Typography>
+          </Stack>
+        </DialogTitle>
+        
+        <DialogContent sx={{ mt: 2 }}>
+          <Alert severity="info" sx={{ mb: 3 }}>
+            Este cambio afectará a todas las unidades con estatus <strong>"Disponible"</strong> o <strong>"Apartado"</strong>.
+          </Alert>
+
           <TextField
             fullWidth
             label="Porcentaje de aumento (%)"
             type="number"
             value={porcentajeAumento}
             onChange={e => setPorcentajeAumento(Number(e.target.value))}
-            InputProps={{ inputProps: { min: 0 } }}
-            sx={{ mb: 3 }}
+            InputProps={{ inputProps: { min: 0, max: 100 } }}
+            helperText={`Ejemplo: Con ${porcentajeAumento}%, un precio de $1,000,000 pasará a $${(1000000 * (1 + porcentajeAumento / 100)).toLocaleString('es-MX')}`}
+            sx={{ mb: 2 }}
           />
-          <Box display="flex" gap={2} justifyContent="flex-end">
-            <Button onClick={() => setOpenPrecioDialog(false)}>Cancelar</Button>
-            <Button onClick={handleAumentarPrecios} variant="contained" color="primary" disabled={porcentajeAumento === 0}>
-              Aplicar
-            </Button>
-          </Box>
-        </Box>
+          
+          <Chip 
+            label={`${stats.disponibles + stats.apartados} unidades afectadas`} 
+            color="primary" 
+            icon={<TrendingUpIcon />}
+            sx={{ mt: 1 }}
+          />
+        </DialogContent>
+        
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setOpenPrecioDialog(false)} variant="outlined">
+            Cancelar
+          </Button>
+          <Button
+            onClick={handleAumentarPrecios}
+            variant="contained"
+            color="primary"
+            disabled={porcentajeAumento === 0}
+            startIcon={<TrendingUpIcon />}
+          >
+            Aplicar Aumento
+          </Button>
+        </DialogActions>
       </Dialog>
 
       {/* Diálogo: Importar Excel/CSV */}
