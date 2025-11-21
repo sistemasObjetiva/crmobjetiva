@@ -2,9 +2,9 @@
 import React, { useMemo, useState } from 'react'
 import {
   Box, Typography, IconButton, Tooltip,
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   Dialog, DialogTitle, DialogContent, DialogActions, Button,
-  LinearProgress, Stack, TextField, InputAdornment, Select, MenuItem, FormControl, InputLabel, Chip
+  LinearProgress, Stack, TextField, InputAdornment, Select, MenuItem, FormControl, InputLabel, Chip,
+  Accordion, AccordionSummary, AccordionDetails, Card, CardContent, Grid, Avatar, Divider, Badge
 } from '@mui/material'
 import AddBusinessIcon from '@mui/icons-material/AddBusiness'
 import PersonAddIcon from '@mui/icons-material/PersonAdd'
@@ -13,6 +13,12 @@ import VisibilityIcon from '@mui/icons-material/Visibility'
 import UploadFileIcon from '@mui/icons-material/UploadFile'
 import SearchIcon from '@mui/icons-material/Search'
 import FilterListIcon from '@mui/icons-material/FilterList'
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
+import BusinessIcon from '@mui/icons-material/Business'
+import EmailIcon from '@mui/icons-material/Email'
+import PhoneIcon from '@mui/icons-material/Phone'
+import PersonIcon from '@mui/icons-material/Person'
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'
 
 import { useAuthRole } from '../../config/auth'
 import { Empresa, ROLES, User } from '../../config/types'
@@ -57,6 +63,27 @@ const InteresadosPage: React.FC = () => {
   const [empresaQuery, setEmpresaQuery] = useState('')
   const [usuarioQuery, setUsuarioQuery] = useState('')
   const [roleFilter, setRoleFilter] = useState<string>('all')
+  const [expandedEmpresas, setExpandedEmpresas] = useState<Set<string>>(new Set())
+
+  const toggleEmpresa = (empresaId: string) => {
+    setExpandedEmpresas(prev => {
+      const next = new Set(prev)
+      if (next.has(empresaId)) {
+        next.delete(empresaId)
+      } else {
+        next.add(empresaId)
+      }
+      return next
+    })
+  }
+
+  const expandAll = () => {
+    setExpandedEmpresas(new Set(empresasFiltradas.map(e => e.id)))
+  }
+
+  const collapseAll = () => {
+    setExpandedEmpresas(new Set())
+  }
 
   // helpers
   const emailRegex = useMemo(() => /^[^@\s]+@[^@\s]+\.[^@\s]+$/, [])
@@ -312,102 +339,253 @@ const InteresadosPage: React.FC = () => {
       </Stack>
 
       {/* Resumen filtros */}
-      <Stack direction="row" spacing={1} mb={1} flexWrap="wrap">
-        <Chip label={`Empresas: ${empresasFiltradas.length}`} size="small" />
-        <Chip label={`Usuarios visibles: ${totalUsuariosFiltrados}`} size="small" />
-        {empresaQuery && <Chip label={`Filtro empresa: "${empresaQuery}"`} size="small" color="info" />}
-        {usuarioQuery && <Chip label={`Filtro usuario: "${usuarioQuery}"`} size="small" color="info" />}
-        {roleFilter !== 'all' && <Chip label={`Rol: ${roleFilter}`} size="small" color="warning" />}
+      <Stack direction="row" spacing={1} mb={2} flexWrap="wrap" alignItems="center">
+        <Chip 
+          label={`${empresasFiltradas.length} Empresa${empresasFiltradas.length === 1 ? '' : 's'}`} 
+          color="primary" 
+          icon={<BusinessIcon />}
+        />
+        <Chip 
+          label={`${totalUsuariosFiltrados} Usuario${totalUsuariosFiltrados === 1 ? '' : 's'}`} 
+          color="secondary" 
+          icon={<PersonIcon />}
+        />
+        {empresaQuery && <Chip label={`Empresa: "${empresaQuery}"`} size="small" color="info" onDelete={() => setEmpresaQuery('')} />}
+        {usuarioQuery && <Chip label={`Usuario: "${usuarioQuery}"`} size="small" color="info" onDelete={() => setUsuarioQuery('')} />}
+        {roleFilter !== 'all' && <Chip label={`Rol: ${roleFilter}`} size="small" color="warning" onDelete={() => setRoleFilter('all')} />}
+        
+        <Box flex={1} />
+        
+        <Button size="small" variant="text" onClick={expandAll}>
+          Expandir Todo
+        </Button>
+        <Button size="small" variant="text" onClick={collapseAll}>
+          Colapsar Todo
+        </Button>
       </Stack>
 
-      <TableContainer component={Paper} sx={{ minWidth: '90vw' }}>
-        <Table stickyHeader>
-          <TableHead>
-            <TableRow sx={{ backgroundColor: 'var(--primary-color)' }}>
-              <TableCell sx={{ color: 'white', fontWeight: 700 }}>Nombre</TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 700 }}>Correo</TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 700 }}>Rol</TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 700 }} align="right">Acciones</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {empresasFiltradas.map(emp => {
-              const usuariosDeEmpresa = usuariosPorEmpresaFiltrados.get(emp.id) ?? []
-              return (
-                <React.Fragment key={emp.id}>
-                  <TableRow sx={{ backgroundColor: 'var(--secondary-color)', color: 'white' }}>
-                    <TableCell colSpan={4} sx={{ color: 'white', fontWeight: 'bold' }}>
-                      <Box display="flex" alignItems="center" justifyContent="space-between">
-                        <Stack direction="row" alignItems="center" spacing={1}>
-                          <Typography sx={{ color: 'white' }}>{emp.nombre}</Typography>
-                          <Chip
-                            size="small"
-                            label={`${usuariosDeEmpresa.length} usuario${usuariosDeEmpresa.length === 1 ? '' : 's'}`}
-                            sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white' }}
-                          />
-                        </Stack>
-                        <Box>
-                          <Tooltip title="Ver Empresa">
-                            <IconButton onClick={() => handleEditEmpresa(emp)} sx={{ color: 'white' }}>
-                              <VisibilityIcon />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="Importar usuarios (CSV)">
-                            <IconButton onClick={() => handleOpenImport(emp)} sx={{ color: 'white' }}>
-                              <UploadFileIcon />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="Agregar Usuario">
-                            <IconButton
-                              onClick={() => {
-                                const nuevo: User = {
-                                  id: '' as any, // ← sin id para que se cree en Auth
-                                  nombre: '',
-                                  email: '',
-                                  telefono: '',
-                                  role: ROLES.Usuario,
-                                  empresaid: emp.id,
-                                  estatus: 'activo',
-                                }
-                                setUsuario(nuevo)
-                                setModalOpenUsuario(true)
-                              }}
-                              sx={{ color: 'white' }}
-                            >
-                              <PersonAddIcon />
-                            </IconButton>
-                          </Tooltip>
-                        </Box>
-                      </Box>
-                    </TableCell>
-                  </TableRow>
+      {empresasFiltradas.length === 0 ? (
+        <Card sx={{ p: 4, textAlign: 'center', bgcolor: '#f5f5f5' }}>
+          <BusinessIcon sx={{ fontSize: 64, color: '#ccc', mb: 2 }} />
+          <Typography variant="h6" color="text.secondary">
+            No se encontraron empresas
+          </Typography>
+          <Typography variant="body2" color="text.secondary" paragraph>
+            {empresaQuery ? 'Intenta ajustar los filtros de búsqueda' : 'Crea tu primera empresa para comenzar'}
+          </Typography>
+          {!empresaQuery && (
+            <Button variant="contained" startIcon={<AddBusinessIcon />} onClick={handleAgregarEmpresa}>
+              Crear Primera Empresa
+            </Button>
+          )}
+        </Card>
+      ) : (
+        <Stack spacing={2}>
+          {empresasFiltradas.map(emp => {
+            const usuariosDeEmpresa = usuariosPorEmpresaFiltrados.get(emp.id) ?? []
+            const isExpanded = expandedEmpresas.has(emp.id)
+            
+            return (
+              <Accordion 
+                key={emp.id} 
+                expanded={isExpanded}
+                onChange={() => toggleEmpresa(emp.id)}
+                sx={{ 
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  '&:before': { display: 'none' },
+                  boxShadow: 2,
+                }}
+              >
+                <AccordionSummary
+                  expandIcon={<ExpandMoreIcon />}
+                  sx={{
+                    bgcolor: 'var(--primary-color)',
+                    color: 'white',
+                    '&:hover': { bgcolor: 'var(--secondary-color)' },
+                    transition: 'background-color 0.3s',
+                  }}
+                >
+                  <Stack direction="row" spacing={2} alignItems="center" flex={1} onClick={(e) => e.stopPropagation()}>
+                    <Avatar sx={{ bgcolor: 'white', color: 'var(--primary-color)' }}>
+                      <BusinessIcon />
+                    </Avatar>
+                    
+                    <Box flex={1}>
+                      <Typography variant="h6" fontWeight={700}>
+                        {emp.nombre}
+                      </Typography>
+                      <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                        {emp.correocontacto || 'Sin correo'} • {emp.telefono || 'Sin teléfono'}
+                      </Typography>
+                    </Box>
 
-                  {usuariosDeEmpresa.length > 0 ? (
-                    usuariosDeEmpresa.map(u => (
-                      <TableRow key={u.id}>
-                        <TableCell>{u.nombre}</TableCell>
-                        <TableCell>{u.email}</TableCell>
-                        <TableCell>{typeof u.role === 'string' ? u.role : u.role?.tipo ?? '—'}</TableCell>
-                        <TableCell align="right">
-                          <IconButton onClick={() => handleEditUsuario(u)}>
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                        </TableCell>
-                      </TableRow>
-                    ))
+                    <Badge badgeContent={usuariosDeEmpresa.length} color="secondary" sx={{ mr: 2 }}>
+                      <Chip 
+                        label={`${usuariosDeEmpresa.length} usuario${usuariosDeEmpresa.length === 1 ? '' : 's'}`}
+                        size="small"
+                        sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white', fontWeight: 600 }}
+                      />
+                    </Badge>
+
+                    <Stack direction="row" spacing={0.5}>
+                      <Tooltip title="Ver/Editar Empresa">
+                        <IconButton 
+                          size="small" 
+                          onClick={(e) => { e.stopPropagation(); handleEditEmpresa(emp); }} 
+                          sx={{ color: 'white' }}
+                        >
+                          <VisibilityIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Importar CSV">
+                        <IconButton 
+                          size="small" 
+                          onClick={(e) => { e.stopPropagation(); handleOpenImport(emp); }} 
+                          sx={{ color: 'white' }}
+                        >
+                          <UploadFileIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Agregar Usuario">
+                        <IconButton
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const nuevo: User = {
+                              id: '' as any,
+                              nombre: '',
+                              email: '',
+                              telefono: '',
+                              role: ROLES.Usuario,
+                              empresaid: emp.id,
+                              estatus: 'activo',
+                            }
+                            setUsuario(nuevo)
+                            setModalOpenUsuario(true)
+                          }}
+                          sx={{ color: 'white' }}
+                        >
+                          <PersonAddIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Stack>
+                  </Stack>
+                </AccordionSummary>
+
+                <AccordionDetails sx={{ p: 3, bgcolor: '#fafafa' }}>
+                  {usuariosDeEmpresa.length === 0 ? (
+                    <Box textAlign="center" py={4}>
+                      <PersonIcon sx={{ fontSize: 48, color: '#ccc', mb: 1 }} />
+                      <Typography variant="body1" color="text.secondary" gutterBottom>
+                        No hay usuarios {usuarioQuery || roleFilter !== 'all' ? 'con los filtros aplicados' : 'en esta empresa'}
+                      </Typography>
+                      <Button 
+                        size="small" 
+                        startIcon={<PersonAddIcon />}
+                        onClick={() => {
+                          const nuevo: User = {
+                            id: '' as any,
+                            nombre: '',
+                            email: '',
+                            telefono: '',
+                            role: ROLES.Usuario,
+                            empresaid: emp.id,
+                            estatus: 'activo',
+                          }
+                          setUsuario(nuevo)
+                          setModalOpenUsuario(true)
+                        }}
+                      >
+                        Agregar Primer Usuario
+                      </Button>
+                    </Box>
                   ) : (
-                    <TableRow>
-                      <TableCell colSpan={4} sx={{ color: '#666', fontStyle: 'italic' }}>
-                        No hay usuarios con los filtros aplicados para esta empresa.
-                      </TableCell>
-                    </TableRow>
+                    <Grid container spacing={2}>
+                      {usuariosDeEmpresa.map(u => {
+                        const userRole = typeof u.role === 'string' ? u.role : (u.role?.tipo ?? 'Usuario')
+                        const isAdmin = ['Admin', 'Gerente', 'GerenteGeneral', 'Plataforma'].includes(userRole)
+                        
+                        return (
+                          <Grid item xs={12} sm={6} md={4} key={u.id}>
+                            <Card 
+                              sx={{ 
+                                height: '100%',
+                                transition: 'all 0.2s',
+                                '&:hover': { 
+                                  boxShadow: 4,
+                                  transform: 'translateY(-2px)'
+                                },
+                                border: '1px solid',
+                                borderColor: isAdmin ? 'warning.main' : 'divider',
+                              }}
+                            >
+                              <CardContent>
+                                <Stack spacing={1.5}>
+                                  <Stack direction="row" spacing={1.5} alignItems="flex-start">
+                                    <Avatar sx={{ bgcolor: isAdmin ? 'warning.main' : 'primary.main' }}>
+                                      {isAdmin ? <AdminPanelSettingsIcon /> : <PersonIcon />}
+                                    </Avatar>
+                                    <Box flex={1}>
+                                      <Typography variant="subtitle1" fontWeight={700}>
+                                        {u.nombre || 'Sin nombre'}
+                                      </Typography>
+                                      <Chip 
+                                        size="small" 
+                                        label={userRole}
+                                        color={isAdmin ? 'warning' : 'default'}
+                                        sx={{ fontWeight: 600 }}
+                                      />
+                                    </Box>
+                                    <Tooltip title="Editar usuario">
+                                      <IconButton 
+                                        size="small" 
+                                        onClick={() => handleEditUsuario(u)}
+                                        sx={{ color: 'primary.main' }}
+                                      >
+                                        <EditIcon fontSize="small" />
+                                      </IconButton>
+                                    </Tooltip>
+                                  </Stack>
+
+                                  <Divider />
+
+                                  <Stack spacing={1}>
+                                    <Stack direction="row" spacing={1} alignItems="center">
+                                      <EmailIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                                      <Typography variant="body2" color="text.secondary" sx={{ wordBreak: 'break-word' }}>
+                                        {u.email}
+                                      </Typography>
+                                    </Stack>
+                                    {u.telefono && (
+                                      <Stack direction="row" spacing={1} alignItems="center">
+                                        <PhoneIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                                        <Typography variant="body2" color="text.secondary">
+                                          {u.telefono}
+                                        </Typography>
+                                      </Stack>
+                                    )}
+                                    <Chip 
+                                      size="small" 
+                                      label={u.estatus === 'activo' ? 'Activo' : 'Inactivo'}
+                                      color={u.estatus === 'activo' ? 'success' : 'error'}
+                                      sx={{ alignSelf: 'flex-start', fontWeight: 600 }}
+                                    />
+                                  </Stack>
+                                </Stack>
+                              </CardContent>
+                            </Card>
+                          </Grid>
+                        )
+                      })}
+                    </Grid>
                   )}
-                </React.Fragment>
-              )
-            })}
-          </TableBody>
-        </Table>
-      </TableContainer>
+                </AccordionDetails>
+              </Accordion>
+            )
+          })}
+        </Stack>
+      )}
 
       {empresa && (
         <ModalEmpresa
