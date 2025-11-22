@@ -34,6 +34,12 @@ interface ProyectoWizardProps {
   onSave: (proyecto: Proyecto) => void;
   setProyecto: React.Dispatch<React.SetStateAction<Proyecto | null>>;
   userid: string;
+  // Props para planes de pago
+  handleDeliveryDateChange: any;
+  handleAddPaymentPlanRow: any;
+  handlePaymentPlanChange: any;
+  handleParcialidadChange: any;
+  handleDeletePaymentPlanRow: any;
   // Props adicionales para unidades
   unidad: any;
   extrasKeys: string[];
@@ -64,6 +70,11 @@ const ProyectoWizard: React.FC<ProyectoWizardProps> = ({
   onSave,
   setProyecto,
   userid,
+  handleDeliveryDateChange,
+  handleAddPaymentPlanRow,
+  handlePaymentPlanChange,
+  handleParcialidadChange,
+  handleDeletePaymentPlanRow,
   unidad,
   extrasKeys,
   handleChangeUnidad,
@@ -120,7 +131,11 @@ const ProyectoWizard: React.FC<ProyectoWizardProps> = ({
         return (
           <ProyectoPlanesPagoTab
             proyecto={proyecto}
-            setProyecto={setProyecto}
+            handleDeliveryDateChange={handleDeliveryDateChange}
+            handleAddPaymentPlanRow={handleAddPaymentPlanRow}
+            handlePaymentPlanChange={handlePaymentPlanChange}
+            handleParcialidadChange={handleParcialidadChange}
+            handleDeletePaymentPlanRow={handleDeletePaymentPlanRow}
           />
         );
       case 2:

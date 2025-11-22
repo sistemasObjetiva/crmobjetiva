@@ -20,33 +20,23 @@ import {
   Card,
   CardHeader,
   CardContent,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  FormControlLabel,
-  TableContainer,
-  Table,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableBody,
-  RadioGroup,
-  Radio,
+  Grid,
 } from '@mui/material';
 import AddCircleIcon from '@mui/icons-material/AddCircle';
+import FileUploadIcon from '@mui/icons-material/FileUpload';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
-import EditIcon from '@mui/icons-material/Edit';
 
 import FileUploadPreview from '../general/FileUploadPreviewFiles';
 import FileUploadCarouselPreview from '../general/FileUploadCarouselPreview';
-import SignedImage from '../general/SignedImage';
-import SignedImageCarousel from '../general/SinedImageCarousel';
-import { Proyecto, Unidad, Document } from '../../config/types';
+import { Proyecto, Unidad } from '../../config/types';
 import { formatoMoneda } from '../../hooks/useUtilsFunctions';
 import * as XLSX from 'xlsx';
+import ImportPreviewDialog from './ImportPreviewDialog';
+import ExtrasManager from './ExtrasManager';
+import UnidadCard from './UnidadCard';
 
 type ImportMode = 'append' | 'replace' | 'merge';
 
@@ -868,23 +858,15 @@ const applyImport = () => {
       </TableContainer>
 
       {/* Diálogo: Aumentar precios */}
-      <Dialog 
-        open={openPrecioDialog} 
-        onClose={() => setOpenPrecioDialog(false)} 
-        maxWidth="sm" 
-        fullWidth
-        PaperProps={{ sx: { borderRadius: 3 } }}
-      >
-        <DialogTitle sx={{ backgroundColor: 'var(--primary-color)', color: 'white' }}>
-          <Stack direction="row" spacing={2} alignItems="center">
-            <TrendingUpIcon sx={{ fontSize: 32 }} />
+      <Dialog open={openPrecioDialog} onClose={() => setOpenPrecioDialog(false)} maxWidth="sm" fullWidth>
+        <Box sx={{ p: 3 }}>
+          <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
+            <TrendingUpIcon color="primary" sx={{ fontSize: 32 }} />
             <Typography variant="h6" fontWeight={700}>
               Aumentar Precios de Lista
             </Typography>
           </Stack>
-        </DialogTitle>
-        
-        <DialogContent sx={{ mt: 2 }}>
+          
           <Alert severity="info" sx={{ mb: 3 }}>
             Este cambio afectará a todas las unidades con estatus <strong>"Disponible"</strong> o <strong>"Apartado"</strong>.
           </Alert>
@@ -897,31 +879,27 @@ const applyImport = () => {
             onChange={e => setPorcentajeAumento(Number(e.target.value))}
             InputProps={{ inputProps: { min: 0, max: 100 } }}
             helperText={`Ejemplo: Con ${porcentajeAumento}%, un precio de $1,000,000 pasará a $${(1000000 * (1 + porcentajeAumento / 100)).toLocaleString('es-MX')}`}
-            sx={{ mb: 2 }}
+            sx={{ mb: 3 }}
           />
           
-          <Chip 
-            label={`${stats.disponibles + stats.apartados} unidades afectadas`} 
-            color="primary" 
-            icon={<TrendingUpIcon />}
-            sx={{ mt: 1 }}
-          />
-        </DialogContent>
-        
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setOpenPrecioDialog(false)} variant="outlined">
-            Cancelar
-          </Button>
-          <Button
-            onClick={handleAumentarPrecios}
-            variant="contained"
-            color="primary"
-            disabled={porcentajeAumento === 0}
-            startIcon={<TrendingUpIcon />}
-          >
-            Aplicar Aumento
-          </Button>
-        </DialogActions>
+          <Stack direction="row" spacing={1} justifyContent="space-between">
+            <Chip label={`${stats.disponibles + stats.apartados} unidades afectadas`} color="primary" />
+            <Box display="flex" gap={1}>
+              <Button onClick={() => setOpenPrecioDialog(false)} variant="outlined">
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleAumentarPrecios}
+                variant="contained"
+                color="primary"
+                disabled={porcentajeAumento === 0}
+                startIcon={<TrendingUpIcon />}
+              >
+                Aplicar Aumento
+              </Button>
+            </Box>
+          </Stack>
+        </Box>
       </Dialog>
 
       {/* Diálogo: Importar Excel/CSV */}
