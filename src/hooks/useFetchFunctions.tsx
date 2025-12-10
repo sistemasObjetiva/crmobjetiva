@@ -55,6 +55,8 @@ export const actualizarUsuario = async (usuario: User): Promise<void> => {
   try {
     let userId = id;
 
+    // Solo crear en Auth si es un usuario NUEVO (sin id)
+    if (!userId) {
       const res = await fetch(`${API_BASE}/newupsert-user/${projectId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -67,16 +69,16 @@ export const actualizarUsuario = async (usuario: User): Promise<void> => {
         throw new Error(msg);
       }
 
-      const data = await res.json(); // 👈 IMPORTANTE
-      userId = data.userId;          // 👈 Aquí viene el id de Auth
+      const data = await res.json();
+      userId = data.userId;
       if (!userId) throw new Error("No se recibió userId desde el server");
-    
+    }
 
     const payload: User = {
       id: userId,
       email: email.toLowerCase().trim(),
       telefono,
-      role,            // si tu columna es TEXT, guarda 'Usuario' en lugar del objeto
+      role,
       nombre: nombre?.trim() ?? "",
       empresaid,
       estatus,
