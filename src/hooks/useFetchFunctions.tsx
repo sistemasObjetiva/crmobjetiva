@@ -2,8 +2,6 @@ import { useState, useEffect, useMemo } from 'react';
 import type { Proyecto,Document, User, Empresa, Propiedad, Unidad, Prospecto, Seguimiento, SeguimientoHistorial,  } from '../config/types';
 import { supabase } from '../config/supabase';
 
-const API_BASE = 'https://serverobjetiva.vercel.app';
-const projectId = import.meta.env.VITE_SUPABASE_PROJ_ID;
 /////////////////////////////////////////////////USUARIOS////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 export function useFetchUsuarios() {
   const [usuarios, setUsuarios] = useState<User[]>([]);
