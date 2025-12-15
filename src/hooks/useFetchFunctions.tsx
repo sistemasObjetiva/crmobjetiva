@@ -14,9 +14,11 @@ export function useFetchUsuarios() {
     setLoading(true);
     setError(null);
     try {
+      // Filtrar usuarios no eliminados (deleted_at es null)
       const { data, error: supaError } = await supabase
         .from('users')
-        .select('*');
+        .select('*')
+        .is('deleted_at', null); // Solo mostrar usuarios NO eliminados
       if (supaError) {
       } else {
         setUsuarios(data ?? []);
@@ -57,21 +59,24 @@ export const actualizarUsuario = async (usuario: User): Promise<void> => {
 
     // Solo crear en Auth si es un usuario NUEVO (sin id)
     if (!userId) {
-      const res = await fetch(`${API_BASE}/newupsert-user/${projectId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password: "Temp123!", nombre }),
+      // Usar Edge Function de Supabase en lugar del servidor externo
+      const { data, error: functionError } = await supabase.functions.invoke('create-user', {
+        body: { 
+          email: email.toLowerCase().trim(), 
+          password: "Temp123!", 
+          nombre: nombre?.trim() ?? "" 
+        }
       });
 
-      if (!res.ok) {
-        let msg = `Error ${res.status}`;
-        try { msg = (await res.json()).error || msg; } catch {}
-        throw new Error(msg);
+      if (functionError) {
+        throw new Error(functionError.message || 'Error al crear usuario en Auth');
       }
 
-      const data = await res.json();
+      if (!data?.userId) {
+        throw new Error("No se recibió userId desde la Edge Function");
+      }
+
       userId = data.userId;
-      if (!userId) throw new Error("No se recibió userId desde el server");
     }
 
     const payload: User = {
@@ -96,27 +101,41 @@ export const actualizarUsuario = async (usuario: User): Promise<void> => {
 export const eliminarUsuario = async (
   userId: string
 ): Promise<void> => {
-  if (!projectId || !userId) {
-    return;
+  if (!userId) {
+    throw new Error('userId es requerido');
   }
 
   try {
-    const response = await fetch(
-      `${API_BASE}/delete-nuser/${projectId}/${userId}`,
-      {
-        method: "DELETE",
-      }
-    );
+    // Borrado lógico: marcar como eliminado con timestamp
+    const { error } = await supabase
+      .from('users')
+      .update({ 
+        estatus: 'inactivo',
+        deleted_at: new Date().toISOString() // Marca de cuando se eliminó
+      })
+      .eq('id', userId);
 
-    if (!response.ok) {
-      // Si el servidor responde con código distinto a 2xx, mostramos error
-      const errJson = await response.json().catch(() => ({}));
-      throw new Error(
-        errJson.error || "No se pudo eliminar el usuario en el servidor."
-      );
+    if (error) {
+      throw new Error(`Error al eliminar usuario: ${error.message}`);
+    }
+
+    // Opcional: Desactivar usuario en Auth (sin eliminarlo)
+    // Esto previene que pueda iniciar sesión pero mantiene su cuenta
+    try {
+      const { error: authError } = await supabase.functions.invoke('disable-user', {
+        body: { userId }
+      });
+      
+      if (authError) {
+        console.warn('No se pudo desactivar en Auth (función no disponible):', authError);
+      }
+    } catch (authErr) {
+      console.warn('Función disable-user no configurada, usuario solo desactivado en BD');
     }
 
   } catch (error: any) {
+    console.error('Error al eliminar usuario:', error);
+    throw error;
   }
 };
 

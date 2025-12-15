@@ -37,7 +37,8 @@ export interface User {
   telefono?: string;
   role: Role;
   empresaid?: string;   
-  estatus: 'activo' | 'inactivo'
+  estatus: 'activo' | 'inactivo';
+  deleted_at?: string | null; // Para borrado lógico
 }
 
 export interface Empresa {
