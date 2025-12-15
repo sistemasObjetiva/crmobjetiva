@@ -28,7 +28,7 @@ const estatusColor: Record<string, 'success' | 'error' | 'info'> = {
   apartado: 'info',
 };
 
-const CardUnidadVisor: React.FC<CardUnidadVisorProps> = ({
+const CardUnidad: React.FC<CardUnidadVisorProps> = ({
   unidad,
   proyecto,
   onView,
@@ -172,4 +172,9 @@ const CardUnidadVisor: React.FC<CardUnidadVisorProps> = ({
   );
 };
 
-export default CardUnidadVisor;
+export default React.memo(CardUnidad, (prevProps, nextProps) => {
+  return (
+    prevProps.unidad.id === nextProps.unidad.id &&
+    prevProps.unidad.estatus === nextProps.unidad.estatus
+  )
+});

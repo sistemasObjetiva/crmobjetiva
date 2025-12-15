@@ -173,7 +173,9 @@ const SeguimientoModal: React.FC<Props> = ({
     ...propiedades.map(p => ({ ...p, tipo: 'propiedad' as const })),
     ...proyectos.flatMap<CotizadorOption>(proy =>
       proy.unidades?.length
-        ? proy.unidades.map(u => ({ ...u, proyectoObj: proy, tipo: 'unidad' as const }))
+        ? proy.unidades
+            .filter(u => u.estatus === 'disponible') // Solo unidades disponibles
+            .map(u => ({ ...u, proyectoObj: proy, tipo: 'unidad' as const }))
         : [{ ...proy, proyectoObj: proy, tipo: 'proyecto' as const }]
     ),
   ]

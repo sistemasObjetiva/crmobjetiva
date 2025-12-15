@@ -9,10 +9,18 @@ import {
   DialogContent,
   Button,
   DialogActions,
+  Box,
+  Paper,
+  Chip,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SaveIcon from '@mui/icons-material/Save';
+import InfoIcon from '@mui/icons-material/Info';
+import HomeWorkIcon from '@mui/icons-material/HomeWork';
+import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
+import ImageIcon from '@mui/icons-material/Image';
+import EditIcon from '@mui/icons-material/Edit';
 
 import { Proyecto, Unidad, PlanPago ,Document} from '../../config/types';
 import { fechaActual } from "../../hooks/useDateUtils";
@@ -22,6 +30,7 @@ import ProyectoPlanesPagoTab from './ProyectoPlanesPAgoTabs';
 import { eliminarProyecto } from '../../hooks/useFetchFunctions';
 import { useStatusChip } from '../../config/context/useStatusChip';
 import ProyectoStackingTab from './ProyectoStackingTab';
+import ProyectoWizard from './ProyectoWizard';
 
 interface ProyectoModalProps {
   proyecto: Proyecto | null;
@@ -46,6 +55,9 @@ const ProyectoControlModal: React.FC<ProyectoModalProps> = ({ proyecto, open, on
   const { showStatus } = useStatusChip()
   const [selectedTab, setSelectedTab] = useState<number>(0);
   const [unidad, setUnidad] = useState<Unidad|null>(null);
+  
+  // Determinar si es un proyecto nuevo (sin unidades y apenas creado)
+  const isNewProyecto = !proyecto?.unidades || proyecto.unidades.length === 0;
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setSelectedTab(newValue);
@@ -439,6 +451,40 @@ useEffect(() => {
     setUnidad(makeInitialUnidad(userid, proyecto.id));
   }
 }, [selectedTab, unidad, proyecto, userid]);
+
+  // Si es proyecto nuevo, usar Wizard
+  if (isNewProyecto) {
+    return (
+      <ProyectoWizard
+        proyecto={proyecto!}
+        open={open}
+        onClose={onClose}
+        onSave={onSave}
+        setProyecto={setProyecto}
+        userid={userid}
+        handleDeliveryDateChange={handleDeliveryDateChange}
+        handleAddPaymentPlanRow={handleAddPaymentPlanRow}
+        handlePaymentPlanChange={handlePaymentPlanChange}
+        handleParcialidadChange={handleParcialidadChange}
+        handleDeletePaymentPlanRow={handleDeletePaymentPlanRow}
+        unidad={unidad}
+        extrasKeys={extrasKeys}
+        handleChangeUnidad={handleChangeUnidad}
+        handleAddExtraKey={handleAddExtraKey}
+        handleChangeExtraKey={handleChangeExtraKey}
+        handleChangeExtraValue={handleChangeExtraValue}
+        handleRemoveExtraKey={handleRemoveExtraKey}
+        handleReorderExtraKeys={handleReorderExtraKeys}
+        handleFileChange={handleUnidadFileChange}
+        handleFileRemove={handleUnidadFileRemove}
+        handleAddUnidad={handleAddUnidad}
+        handleEditUnidad={handleEditUnidad}
+        handleDeleteUnidad={handleDeleteUnidad}
+      />
+    );
+  }
+
+  // Modal con tabs para edición rápida de proyectos existentes
   return (
     <Dialog open={open} onClose={()=>{}} fullScreen={false}
       maxWidth={false}
@@ -460,31 +506,98 @@ useEffect(() => {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          mb: 1,
+          py: 2,
+          px: 3,
           color: 'white',
-          backgroundColor: 'var(--secondary-color)',
+          background: 'linear-gradient(135deg, var(--secondary-color) 0%, var(--primary-color) 100%)',
+          boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
         }}
       >
-          <Typography>{proyecto!.nombre || "Proyecto"}</Typography>
-          <IconButton onClick={onClose}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Chip
+              icon={<EditIcon />}
+              label="Editar"
+              size="small"
+              sx={{
+                backgroundColor: 'rgba(255,255,255,0.2)',
+                color: 'white',
+                fontWeight: 'bold',
+                '& .MuiChip-icon': { color: 'white' },
+              }}
+            />
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+              {proyecto!.nombre || "Proyecto"}
+            </Typography>
+          </Box>
+          <IconButton
+            onClick={onClose}
+            sx={{
+              color: 'white',
+              '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' },
+            }}
+          >
             <CloseIcon />
           </IconButton>
         </DialogTitle>
 
-      <DialogContent dividers>
-        <Tabs
-          value={selectedTab}
-          onChange={handleTabChange}
-          variant="scrollable"
-          scrollButtons="auto"
-          aria-label="Scrollable tabs for navigation"
+      <DialogContent
+        sx={{
+          p: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
+      >
+        <Paper
+          elevation={0}
+          sx={{
+            borderBottom: 1,
+            borderColor: 'divider',
+            backgroundColor: 'var(--background-secondary, #f5f5f5)',
+          }}
         >
-          <Tab label="Información General" />
-          <Tab label="Unidades" />
-          <Tab label="Planes de Pago" />
-          <Tab label="Stacking Plan" />
-        </Tabs>
+          <Tabs
+            value={selectedTab}
+            onChange={handleTabChange}
+            variant="scrollable"
+            scrollButtons="auto"
+            aria-label="Tabs de proyecto"
+            sx={{
+              '& .MuiTab-root': {
+                minHeight: 64,
+                fontSize: '0.9rem',
+                fontWeight: 600,
+                textTransform: 'none',
+              },
+              '& .Mui-selected': {
+                color: 'var(--primary-color)',
+              },
+            }}
+          >
+            <Tab
+              icon={<InfoIcon />}
+              iconPosition="start"
+              label="Información General"
+            />
+            <Tab
+              icon={<HomeWorkIcon />}
+              iconPosition="start"
+              label="Unidades"
+            />
+            <Tab
+              icon={<AttachMoneyIcon />}
+              iconPosition="start"
+              label="Planes de Pago"
+            />
+            <Tab
+              icon={<ImageIcon />}
+              iconPosition="start"
+              label="Stacking Plan"
+            />
+          </Tabs>
+        </Paper>
 
+        <Box sx={{ p: 3, flexGrow: 1, overflow: 'auto' }}>
           {selectedTab === 0 && (
             <>
              <ProyectoGeneralTab
@@ -533,20 +646,30 @@ useEffect(() => {
               readOnly={false} // en true lo muestra sin drag (modo cliente)
             />
           )}
-
-          
-
-       
+        </Box>
       </DialogContent>
-      <DialogActions>
-            <Button onClick={onClose}>Cancelar</Button>
+      <DialogActions
+        sx={{
+          px: 3,
+          py: 2,
+          borderTop: 1,
+          borderColor: 'divider',
+          backgroundColor: 'var(--background-secondary, #f5f5f5)',
+          gap: 1,
+        }}
+      >
             <Button
-              variant="contained"
-              sx={{
-                backgroundColor: 'var(--error-color, #f44336)',
-                color: '#fff',
-                '&:hover': { backgroundColor: '#b71c1c' },
-              }}
+              onClick={onClose}
+              variant="outlined"
+              size="large"
+              sx={{ mr: 'auto' }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="outlined"
+              color="error"
+              size="large"
               startIcon={<DeleteIcon />}
               onClick={() => setConfirmEliminarProyectoOpen(true)}
             >
@@ -554,15 +677,23 @@ useEffect(() => {
             </Button>
             <Button
               variant="contained"
+              size="large"
               sx={{
-                backgroundColor: 'var(--secondary-color)',
+                background: 'linear-gradient(135deg, var(--secondary-color) 0%, var(--primary-color) 100%)',
                 color: '#fff',
-                '&:hover': { backgroundColor: 'var(--primary-color)' },
+                fontWeight: 700,
+                px: 4,
+                '&:hover': {
+                  background: 'linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%)',
+                  transform: 'translateY(-1px)',
+                  boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
+                },
+                transition: 'all 0.2s',
               }}
               startIcon={<SaveIcon />}
               onClick={()=>handleActualizarProyecto(proyecto)}
             >
-              Guardar
+              Guardar Cambios
             </Button>
           </DialogActions>
           <Dialog open={confirmEliminarProyectoOpen} onClose={() => setConfirmEliminarProyectoOpen(false)} maxWidth="xs">
