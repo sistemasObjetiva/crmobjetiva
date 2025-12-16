@@ -41,6 +41,7 @@ export interface AppNotification {
   timestamp: string;
   read: boolean;
   actionUrl?: string;
+  attachments?: string[]; // URLs de archivos adjuntos
   data?: Record<string, any>;
 }
 

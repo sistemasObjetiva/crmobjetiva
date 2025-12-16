@@ -139,6 +139,7 @@ CREATE TRIGGER audit_planes_pago BEFORE INSERT OR UPDATE ON public.planes_pago
   FOR EACH ROW EXECUTE FUNCTION set_audit_fields();
 
 CREATE TRIGGER audit_extras BEFORE INSERT OR UPDATE ON public.extras
+
   FOR EACH ROW EXECUTE FUNCTION set_audit_fields();
 
 -- ============================================

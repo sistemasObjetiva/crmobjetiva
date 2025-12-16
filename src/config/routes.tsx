@@ -70,6 +70,15 @@ export const routes: RouteConfig[] = [
     hideSelector: true,
   },
   {
+    path: 'perfil',
+    name: 'Mi Perfil',
+    icon: PeopleIcon,
+    rol: ['Gerente','GerenteGeneral', 'Plataforma', 'Usuario'],
+    nivel: ['Administrador', 'Usuario'],                                            
+    element: React.lazy(() => import('../pages/perfil/PerfilPage')),
+    hideSelector: true,
+  },
+  {
     path: 'configuracion',
     name: 'SettingsIcon',
     icon: BusinessIcon,

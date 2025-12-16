@@ -14,6 +14,7 @@ import {
   Divider,
   Chip,
   Tooltip,
+  Link,
 } from '@mui/material';
 import {
   Notifications as NotificationsIcon,
@@ -24,6 +25,7 @@ import {
   Delete as DeleteIcon,
   DoneAll as DoneAllIcon,
   Clear as ClearIcon,
+  AttachFile as AttachFileIcon,
 } from '@mui/icons-material';
 import { notificationService } from '../../services/NotificationService';
 import { useNavigate } from 'react-router-dom';
@@ -207,7 +209,7 @@ export const NotificationCenter: React.FC = () => {
                   <ListItemText
                     primary={
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography variant="body2" fontWeight={notification.read ? 'normal' : 'bold'}>
+                        <Typography component="span" variant="body2" fontWeight={notification.read ? 'normal' : 'bold'}>
                           {notification.title}
                         </Typography>
                         {!notification.read && (
@@ -221,13 +223,31 @@ export const NotificationCenter: React.FC = () => {
                       </Box>
                     }
                     secondary={
-                      <Box sx={{ mt: 0.5 }}>
-                        <Typography variant="body2" color="text.secondary">
+                      <Box component="span" sx={{ mt: 0.5, display: 'block' }}>
+                        <Typography component="span" variant="body2" color="text.secondary" sx={{ display: 'block' }}>
                           {notification.body}
                         </Typography>
-                        <Typography variant="caption" color="text.disabled">
+                        <Typography component="span" variant="caption" color="text.disabled" sx={{ display: 'block' }}>
                           {formatTimestamp(notification.timestamp)}
                         </Typography>
+                        {/* Archivos adjuntos */}
+                        {notification.data?.attachments && notification.data.attachments.length > 0 && (
+                          <Box sx={{ mt: 0.5, display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                            {notification.data.attachments.map((url: string, idx: number) => (
+                              <Chip
+                                key={idx}
+                                icon={<AttachFileIcon />}
+                                label={`Archivo ${idx + 1}`}
+                                size="small"
+                                component={Link}
+                                href={url}
+                                target="_blank"
+                                clickable
+                                sx={{ fontSize: '0.7rem', height: 20 }}
+                              />
+                            ))}
+                          </Box>
+                        )}
                       </Box>
                     }
                   />
