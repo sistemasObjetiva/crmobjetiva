@@ -14,6 +14,7 @@ import { routesNav } from '../../config/routes'
 import type { RouteConfig } from '../../config/routes'
 import { APPBAR_HEIGHT } from '../../config/variables'
 import FooterContainer from './Footer'
+import { EnvironmentBadge } from '../dev/EnvironmentBadge'
 
 const drawerWidth = 250
 
@@ -72,6 +73,7 @@ const Layout: React.FC = () => {
           }),
         }}
       >
+      <EnvironmentBadge />
       <Outlet />
     </Box>
 
