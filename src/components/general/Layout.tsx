@@ -15,6 +15,8 @@ import type { RouteConfig } from '../../config/routes'
 import { APPBAR_HEIGHT } from '../../config/variables'
 import FooterContainer from './Footer'
 import { EnvironmentBadge } from '../dev/EnvironmentBadge'
+import { OfflineStatusBadge } from './OfflineStatusBadge'
+import { NotificationCenter } from './NotificationCenter'
 
 const drawerWidth = 250
 
@@ -51,8 +53,12 @@ const Layout: React.FC = () => {
       <AppBar position="fixed" sx={{ zIndex: theme.zIndex.drawer + 1, background: 'var(--primary-color)' ,height: `${Number(APPBAR_HEIGHT) - 10}px`}}>
         <Toolbar sx={{ minHeight: APPBAR_HEIGHT }}>
           <HamburguerMenu onToggle={toggleSidebar} />
-
-
+          
+          <Box sx={{ flexGrow: 1 }} />
+          
+          <NotificationCenter />
+          <OfflineStatusBadge />
+          <EnvironmentBadge />
         </Toolbar>
       </AppBar>
       

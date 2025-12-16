@@ -130,6 +130,17 @@ export const routes: RouteConfig[] = [
     
   }, 
   
+  // 🧪 Demo de Offline-First (solo en DEV)
+  {
+    path: 'offline-demo',
+    name: 'Offline Demo',
+    icon: SettingsIcon,
+    element: React.lazy(() => import('../components/dev/OfflineDemo')),
+    rol: ['GerenteGeneral', 'Plataforma'],
+    nivel: ['Administrador'], 
+    hideSelector: true, 
+  }, 
+  
 ]
 
 export const routesNav: RouteConfig[] = [

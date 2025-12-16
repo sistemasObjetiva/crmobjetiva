@@ -1,3 +1,5 @@
+import { BaseEntity } from './base.types';
+
 export interface Route {
   path: string;
   name: string;
@@ -30,19 +32,16 @@ export const ROLES = {
 export type RoleTipo = keyof typeof ROLES; 
 export type Role = typeof ROLES[RoleTipo];
 
-export interface User {
-  id: string;
+export interface User extends BaseEntity {
   nombre: string;
   email: string;
   telefono?: string;
   role: Role;
   empresaid?: string;   
   estatus: 'activo' | 'inactivo';
-  deleted_at?: string | null; // Para borrado lógico
 }
 
-export interface Empresa {
-  id: string;
+export interface Empresa extends BaseEntity {
   userid:string;
   nombre: string;
   estatus: 'activo' | 'inactivo'
@@ -68,8 +67,7 @@ export type StackingState = {
 export type ProyectoLite = { id: string; nombre: string; logo?: string }
 
 
-export interface Proyecto {
-  id: string;
+export interface Proyecto extends BaseEntity {
   userid: string;
   nombre: string;
   descripcion?: string;
@@ -84,8 +82,7 @@ export interface Proyecto {
   stacking?: StackingState;
   extrasOrder?: string[];
 }
-export interface Unidad {
-  id:string;
+export interface Unidad extends BaseEntity {
   userid: string;
   numerounidad: string;
   unidadprivativa: string;
@@ -109,15 +106,12 @@ export interface PlanPago {
   }
 
   export type PropiedadLite = { id: string; tituloPropiedad: string; imagenes?: string[] }
-  export interface Propiedad {
-    id: string; 
+  export interface Propiedad extends BaseEntity {
     userid: string; 
     tituloPropiedad: string;
     tipo: string;
     descripcion?: string;
     estatus:'disponible'|'vendido'|'apartado',
-    
-    // 🔹 Datos de venta
     venta?: boolean;
     precioVenta?: number;
     comisionVenta?: number;
@@ -157,8 +151,7 @@ export interface PlanPago {
  // 🔹 Permite agregar más propiedades dinámicas si se necesitan
   }
 
-  export interface Prospecto {
-    id: string;
+  export interface Prospecto extends BaseEntity {
     userid:string;
     nombreCompleto: string;
     correoElectronico?: string;
@@ -173,7 +166,6 @@ export interface PlanPago {
     fechaActualizacion?: string;
     estatusBaja?:boolean
   }
-
 // Define el tipo de estatus como un union type:
 export const ESTATUS_LIST = [
   'contactado',
@@ -218,8 +210,8 @@ export const MOTIVOS_INTERACCION = [
 export type EstatusSeguimiento = typeof ESTATUS_LIST[number];
 
 // Úsalo en la interfaz:
-export interface Seguimiento {
-  id: string;
+// Úsalo en la interfaz:
+export interface Seguimiento extends BaseEntity {
   idprospecto: string;
   userid: string;
   fechaCreacion: string;
@@ -237,8 +229,7 @@ export interface Seguimiento {
   pdfCotizaciones?:Document[]
 }
 
-   export interface SeguimientoHistorial {
-    id: string;
+   export interface SeguimientoHistorial extends BaseEntity {
     idprospecto:string;    
     userid:string;
     fechaCreacion: string;  
@@ -254,7 +245,6 @@ export interface Seguimiento {
     pdfCotizaciones?:Document[]
 
   }
-
 
   export  type CotizadorOption =
   | (Propiedad & { tipo: 'propiedad' })

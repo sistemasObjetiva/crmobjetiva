@@ -11,6 +11,8 @@ import Spinner from './components/general/Spinner';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import "./styles/global.css";
 import { StatusChipProvider } from './config/context/useStatusChip';
+import { OfflineProvider } from './config/context/OfflineContext';
+
 function App() {
   const {role,loading} = useAuthRole()
   if (loading) {
@@ -19,7 +21,8 @@ function App() {
   return (
     <Router>
       <Suspense fallback={<Spinner open={true} />}>
-        <StatusChipProvider>
+        <OfflineProvider>
+          <StatusChipProvider>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/reset" element={<ResetPasswordPage />} />
@@ -72,10 +75,10 @@ function App() {
                 })}
 
               </Route>
-
               <Route path="*" element={<Navigate to="/login" replace />} />
             </Routes>
           </StatusChipProvider>
+        </OfflineProvider>
       </Suspense>
     </Router>
   );
