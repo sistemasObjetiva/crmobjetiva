@@ -60,11 +60,11 @@ const ProyectoViewModal: React.FC<ProyectoViewModalProps> = ({
     { label: 'Nombre', value: proyecto.nombre },
     { label: 'Estatus', value: proyecto.estatus },
     { label: 'Fecha de entrega', value: proyecto.fechaEntrega && new Date(proyecto.fechaEntrega).toLocaleDateString() },
-    { label: 'Amenidades', value: proyecto.amenidades?.length > 0 ? proyecto.amenidades.join(', ') : null },
+    { label: 'Amenidades', value: (proyecto.amenidades || []).length > 0 ? (proyecto.amenidades || []).join(', ') : null },
     { label: 'Unidades', value: proyecto.unidades?.length ?? 0 },
     { label: 'Planes de pago', value: proyecto.paymentPlans?.length ?? 0 },
   ]
-  const maxMeses = Math.max(0, ...proyecto.paymentPlans.map(p => p.months || 0))
+  const maxMeses = Math.max(0, ...(proyecto.paymentPlans || []).map(p => p.months || 0))
 
   // Para habilitar/deshabilitar el botón “Ver stacking”
   const nodesCount = ((proyecto as any).stacking?.nodes ?? []).length
@@ -169,7 +169,7 @@ const ProyectoViewModal: React.FC<ProyectoViewModalProps> = ({
                     </Typography>
                     {campo.label === 'Amenidades' ? (
                       <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 0.5 }}>
-                        {proyecto.amenidades.map((am, idx) => (
+                        {(proyecto.amenidades || []).map((am, idx) => (
                           <Chip key={am + idx} label={am} color="secondary" size="small" />
                         ))}
                       </Stack>
@@ -268,7 +268,7 @@ const ProyectoViewModal: React.FC<ProyectoViewModalProps> = ({
               <TableHead>
                 <TableRow>
                   <TableCell>Mes</TableCell>
-                  {proyecto.paymentPlans.map((plan, idx) => (
+                  {(proyecto.paymentPlans || []).map((plan, idx) => (
                     <TableCell key={idx} align="right">{plan.name}</TableCell>
                   ))}
                 </TableRow>
@@ -276,7 +276,7 @@ const ProyectoViewModal: React.FC<ProyectoViewModalProps> = ({
               <TableBody>
                 <TableRow>
                   <TableCell sx={{ fontWeight: 600 }}>Pago inicial</TableCell>
-                  {proyecto.paymentPlans.map((plan, idx) => (
+                  {(proyecto.paymentPlans || []).map((plan, idx) => (
                     <TableCell key={idx} align="right">
                       {plan.pInicial ? `%${plan.pInicial.toLocaleString()}` : '-'}
                     </TableCell>
@@ -286,7 +286,7 @@ const ProyectoViewModal: React.FC<ProyectoViewModalProps> = ({
                 {Array.from({ length: maxMeses }).map((_, rowIdx) => (
                   <TableRow key={rowIdx}>
                     <TableCell sx={{ fontWeight: 600 }}>{`Mes ${rowIdx + 1}`}</TableCell>
-                    {proyecto.paymentPlans.map((plan, colIdx) => {
+                    {(proyecto.paymentPlans || []).map((plan, colIdx) => {
                       const parcialidad = plan.parcialidades.find(p => p.month === rowIdx + 1)
                       return (
                         <TableCell key={colIdx} align="right">
@@ -299,7 +299,7 @@ const ProyectoViewModal: React.FC<ProyectoViewModalProps> = ({
 
                 <TableRow>
                   <TableCell sx={{ fontWeight: 600 }}>Contraentrega</TableCell>
-                  {proyecto.paymentPlans.map((plan, idx) => (
+                  {(proyecto.paymentPlans || []).map((plan, idx) => (
                     <TableCell key={idx} align="right">
                       {plan.contraentrega ? `%${plan.contraentrega.toLocaleString()}` : '-'}
                     </TableCell>

@@ -36,7 +36,7 @@ const ProyectoGeneralTab: React.FC<ProyectoGeneralTabProps> = ({ proyecto, setPr
   const removeAmenidad = (index: number) => {
     setProyecto(prev => prev ? {
       ...prev,
-      amenidades: prev.amenidades.filter((_, i) => i !== index)
+      amenidades: (prev.amenidades || []).filter((_, i) => i !== index)
     } : prev)
   }
 

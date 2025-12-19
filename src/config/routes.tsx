@@ -70,6 +70,15 @@ export const routes: RouteConfig[] = [
     hideSelector: true,
   },
   {
+    path: 'perfil',
+    name: 'Mi Perfil',
+    icon: PeopleIcon,
+    rol: ['Gerente','GerenteGeneral', 'Plataforma', 'Usuario'],
+    nivel: ['Administrador', 'Usuario'],                                            
+    element: React.lazy(() => import('../pages/perfil/PerfilPage')),
+    hideSelector: true,
+  },
+  {
     path: 'configuracion',
     name: 'SettingsIcon',
     icon: BusinessIcon,
@@ -128,6 +137,17 @@ export const routes: RouteConfig[] = [
     nivel: ['Administrador', 'Usuario'], 
     hideSelector: true, 
     
+  }, 
+  
+  // 🧪 Demo de Offline-First (solo en DEV)
+  {
+    path: 'offline-demo',
+    name: 'Offline Demo',
+    icon: SettingsIcon,
+    element: React.lazy(() => import('../components/dev/OfflineDemo')),
+    rol: ['GerenteGeneral', 'Plataforma'],
+    nivel: ['Administrador'], 
+    hideSelector: true, 
   }, 
   
 ]

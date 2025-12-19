@@ -28,7 +28,7 @@ export const makeInitialProyecto = (userId: string): Proyecto => ({
   userid: userId,
   nombre: '',
   descripcion: '',
-  imagenesProyecto: [],
+  imagenesProyecto: '',
   amenidades: [],
   unidades: [],
   paymentPlans: [

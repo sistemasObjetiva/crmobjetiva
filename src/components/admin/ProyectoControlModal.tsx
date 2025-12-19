@@ -88,7 +88,7 @@ const ProyectoControlModal: React.FC<ProyectoModalProps> = ({ proyecto, open, on
     if (!proyecto || !unidad) return
     setProyecto(prev => {
       if (!prev) return prev
-      const unidadesActualizadas = [...prev.unidades]
+      const unidadesActualizadas = [...(prev.unidades || [])]
       const index = unidadesActualizadas.findIndex(u => u.id === unidad.id)
 
       if (index !== -1) {
@@ -111,7 +111,7 @@ const ProyectoControlModal: React.FC<ProyectoModalProps> = ({ proyecto, open, on
     if (!proyecto) return;
     setProyecto((prevProyecto) => ({
       ...prevProyecto!,
-      unidades: prevProyecto!.unidades.filter((_, i) => i !== index),
+      unidades: (prevProyecto?.unidades || []).filter((_, i) => i !== index),
     }));
   };
 
@@ -164,7 +164,7 @@ const handleReorderExtraKeys = (from: number, to: number) => {
       nextOrder[index] = newKey;
 
       // renombrar en todas las unidades
-      const nextUnidades = prev.unidades.map(u => {
+      const nextUnidades = (prev.unidades || []).map(u => {
         if (!u.extras || !(oldKey in u.extras)) return u;
         const { [oldKey]: val, ...rest } = u.extras;
         return { ...u, extras: { ...rest, [newKey]: val } };
@@ -198,7 +198,7 @@ const handleReorderExtraKeys = (from: number, to: number) => {
       const key = currentOrder[index];
       const nextOrder = currentOrder.filter((_, i) => i !== index);
 
-      const nextUnidades = prev.unidades.map(u => {
+      const nextUnidades = (prev.unidades || []).map(u => {
         if (!u.extras || !(key in u.extras)) return u;
         const { [key]: _drop, ...rest } = u.extras;
         return { ...u, extras: rest };
@@ -341,7 +341,7 @@ const handleUnidadFileChange = (
 
   setProyecto(prev => {
     if (!prev) return prev;
-    const unidadesActualizadas = prev.unidades.map(u => {
+    const unidadesActualizadas = (prev.unidades || []).map(u => {
       if (u.id !== unidadId) return u;
       if (field === 'imagenes') {
         // Galería (array)
@@ -376,7 +376,7 @@ const handleUnidadFileRemove = (
 ) => {
   setProyecto(prev => {
     if (!prev) return prev;
-    const unidadesActualizadas = prev.unidades.map(u => {
+    const unidadesActualizadas = (prev.unidades || []).map(u => {
       if (u.id !== unidadId) return u;
       // Para campos array
       if (field === 'imagenes') {
