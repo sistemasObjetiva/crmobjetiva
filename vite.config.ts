@@ -75,7 +75,7 @@
         output: {
           manualChunks: {
             // Separar vendors grandes
-            'mui-core': ['@mui/material', '@mui/system', '@emotion/react', '@emotion/styled'],
+            'mui-core': ['@mui/material', '@emotion/react', '@emotion/styled'],
             'mui-icons': ['@mui/icons-material'],
             'mui-data-grid': ['@mui/x-data-grid'],
             'charts': ['recharts'],
