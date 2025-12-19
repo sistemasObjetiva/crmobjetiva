@@ -133,14 +133,15 @@ const ProyectoUnidadesTab: React.FC<ProyectoUnidadesTabProps> = ({
     (u: Unidad) => {
       setProyecto(prev => {
         if (!prev) return prev;
-        const idx = prev.unidades.findIndex(x => x.id === u.id);
+        const unidades = prev.unidades || [];
+        const idx = unidades.findIndex(x => x.id === u.id);
         if (idx >= 0) {
-          const copy = [...prev.unidades];
+          const copy = [...unidades];
           copy[idx] = { ...u };
           return { ...prev, unidades: copy };
         }
         if (requiredOk(u)) {
-          return { ...prev, unidades: [...prev.unidades, { ...u }] };
+          return { ...prev, unidades: [...unidades, { ...u }] };
         }
         return prev;
       });
@@ -307,14 +308,15 @@ const applyImport = () => {
   setProyecto(prev => {
     if (!prev) return prev;
 
-    let nextUnidades: Unidad[] = prev.unidades;
+    const unidades = prev.unidades || [];
+    let nextUnidades: Unidad[] = unidades;
     if (importMode === 'replace') {
       nextUnidades = [...importPreview];
     } else if (importMode === 'append') {
-      nextUnidades = [...prev.unidades, ...importPreview];
+      nextUnidades = [...unidades, ...importPreview];
     } else if (importMode === 'merge') {
-      const byNum = new Map(prev.unidades.map(u => [String(u.numerounidad).trim(), u]));
-      const merged: Unidad[] = [...prev.unidades];
+      const byNum = new Map(unidades.map(u => [String(u.numerounidad).trim(), u]));
+      const merged: Unidad[] = [...unidades];
       for (const nu of importPreview) {
         const key = String(nu.numerounidad).trim();
         if (byNum.has(key)) {
@@ -361,7 +363,7 @@ const applyImport = () => {
       if (!prev) return prev;
       return {
         ...prev,
-        unidades: prev.unidades.map(u => {
+        unidades: (prev.unidades || []).map(u => {
           if (u.estatus === 'disponible' || u.estatus === 'apartado') {
             return {
               ...u,
@@ -554,7 +556,7 @@ const applyImport = () => {
             {!autoSave && (
               <Stack direction="row" gap={1}>
                 <Button onClick={handleAddUnidad} startIcon={<AddCircleIcon />} variant="contained">
-                  {proyecto.unidades.some(u => u.id === unidad.id) ? 'Actualizar' : 'Agregar'}
+                  {(proyecto.unidades || []).some(u => u.id === unidad.id) ? 'Actualizar' : 'Agregar'}
                 </Button>
               </Stack>
             )}
@@ -772,7 +774,7 @@ const applyImport = () => {
           {!autoSave && (
             <Stack direction="row" justifyContent="flex-end" mt={2}>
               <Button onClick={handleAddUnidad} startIcon={<AddCircleIcon />} variant="contained">
-                {proyecto.unidades.some(u => u.id === unidad.id) ? 'Actualizar' : 'Agregar'}
+                {(proyecto.unidades || []).some(u => u.id === unidad.id) ? 'Actualizar' : 'Agregar'}
               </Button>
             </Stack>
           )}
@@ -808,7 +810,7 @@ const applyImport = () => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {proyecto.unidades.map((uni, idx) => (
+            {(proyecto.unidades || []).map((uni, idx) => (
               <TableRow key={uni.id || idx} hover>
                 <TableCell>{uni.numerounidad}</TableCell>
                 <TableCell>{uni.unidadprivativa}</TableCell>
@@ -854,7 +856,7 @@ const applyImport = () => {
                 </TableCell>
               </TableRow>
             ))}
-            {proyecto.unidades.length === 0 && (
+            {(proyecto.unidades || []).length === 0 && (
               <TableRow>
                 <TableCell colSpan={10}>
                   <Box py={3} textAlign="center" sx={{ opacity: 0.7 }}>

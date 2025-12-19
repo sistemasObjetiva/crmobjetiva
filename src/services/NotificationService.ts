@@ -10,6 +10,7 @@
  */
 
 import { db, type AppNotification } from '../db/schema';
+import { supabase } from '../config/supabase';
 
 export type NotificationType = 'sync' | 'business' | 'system' | 'error';
 
@@ -145,6 +146,74 @@ class NotificationService {
     } catch (error) {
       console.error('Error getting notifications:', error);
       return [];
+    }
+  }
+
+  /**
+   * Sincronizar notificaciones desde Supabase
+   * Solo trae notificaciones enviadas por GerenteGeneral o Plataforma
+   */
+  async syncFromSupabase(): Promise<void> {
+    try {
+      // Obtener usuario actual
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Obtener notificaciones de Supabase para el usuario actual
+      const { data: customNotifications, error } = await supabase
+        .from('custom_notifications')
+        .select(`
+          id,
+          title,
+          body,
+          type,
+          recipients,
+          attachments,
+          created_at,
+          created_by,
+          creator:users!custom_notifications_created_by_fkey(role)
+        `)
+        .contains('recipients', [user.id])
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) {
+        console.error('Error fetching custom notifications:', error);
+        return;
+      }
+
+      if (!customNotifications || customNotifications.length === 0) return;
+
+      // Filtrar solo notificaciones enviadas por GerenteGeneral o Plataforma
+      const allowedNotifications = customNotifications.filter((notif: any) => {
+        const creatorRole = notif.creator?.role?.tipo;
+        return creatorRole === 'GerenteGeneral' || creatorRole === 'Plataforma';
+      });
+
+      // Guardar en IndexedDB (evitar duplicados)
+      for (const notif of allowedNotifications) {
+        const exists = await db.notifications.get(notif.id);
+        if (!exists) {
+          const appNotification: AppNotification = {
+            id: notif.id,
+            type: notif.type || 'business',
+            title: notif.title,
+            body: notif.body,
+            icon: '📢',
+            timestamp: notif.created_at,
+            read: false,
+            data: {
+              attachments: notif.attachments || [],
+              customNotification: true,
+            },
+          };
+          await db.notifications.add(appNotification);
+        }
+      }
+
+      this.notifyListeners();
+    } catch (error) {
+      console.error('Error syncing notifications from Supabase:', error);
     }
   }
 

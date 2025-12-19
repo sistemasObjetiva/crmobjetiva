@@ -71,16 +71,22 @@ export interface Proyecto extends BaseEntity {
   userid: string;
   nombre: string;
   descripcion?: string;
-  logo?: Document;
-  render?: Document;
-  imagenesProyecto: Document[];
-  amenidades: string[];
-  unidades:Unidad[];
-  paymentPlans: PlanPago[];
-  fechaEntrega:string;
-  estatus?: 'activo' | 'inactivo';
-  stacking?: StackingState;
-  extrasOrder?: string[];
+  logo?: Document;              // JSONB en BD
+  render?: Document;            // JSONB en BD
+  imagenesProyecto?: string;    // TEXT en BD (legacy, debería ser JSONB)
+  amenidades?: any[];           // JSONB en BD
+  unidades?: Unidad[];          // JSONB en BD
+  paymentPlans?: PlanPago[];    // JSONB en BD
+  fechaEntrega?: string;        // DATE en BD
+  estatus?: 'activo' | 'inactivo'; // TEXT en BD
+  stacking?: StackingState;     // JSONB en BD
+  extrasOrder?: string[];       // JSONB en BD
+  correoUsuario?: string;       // TEXT en BD (legacy)
+  
+  // Metadata de sync (se agregarán con migration)
+  _version?: number;
+  _last_synced_at?: string;
+  _deleted?: boolean;
 }
 export interface Unidad extends BaseEntity {
   userid: string;

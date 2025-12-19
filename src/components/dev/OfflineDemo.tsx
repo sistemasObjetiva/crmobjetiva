@@ -66,7 +66,7 @@ export const OfflineDemo: React.FC = () => {
         userid: 'demo-user-id',
         descripcion: 'Proyecto de prueba offline',
         estatus: 'activo',
-        imagenesProyecto: [],
+        imagenesProyecto: '',
         amenidades: [],
         unidades: [],
         paymentPlans: [],
@@ -326,3 +326,5 @@ export const OfflineDemo: React.FC = () => {
     </Box>
   );
 };
+
+export default OfflineDemo;

@@ -38,6 +38,10 @@ export const NotificationCenter: React.FC = () => {
   const [unreadCount, setUnreadCount] = useState(0);
 
   const loadNotifications = async () => {
+    // Sincronizar notificaciones desde Supabase (solo de GerenteGeneral/Plataforma)
+    await notificationService.syncFromSupabase();
+    
+    // Cargar notificaciones locales
     const notifs = await notificationService.getNotifications();
     const count = await notificationService.getUnreadCount();
     setNotifications(notifs);

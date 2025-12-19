@@ -114,7 +114,7 @@ const ProyectoPlanesPagoTab: React.FC<Props> = ({
   const monthsCount = headerMonths.length;
 
   const dynamicPlans = useMemo<PlanPago[]>(() => {
-    return proyecto.paymentPlans.map(plan => {
+    return (proyecto.paymentPlans || []).map(plan => {
       if (plan.name === 'ContadoComercial' && (!plan.parcialidades || plan.parcialidades.length === 0)) {
         const primera = round2(plan.pInicial || 0);
         const restante = round2(100 - primera * 2);
@@ -136,10 +136,10 @@ const ProyectoPlanesPagoTab: React.FC<Props> = ({
 
   useEffect(() => {
     dynamicPlans.forEach((plan, pi) => {
-      if (proyecto.paymentPlans[pi]?.months !== monthsCount) {
+      if ((proyecto.paymentPlans || [])[pi]?.months !== monthsCount) {
         handlePaymentPlanChange(pi, 'months', monthsCount);
       }
-      if (!proyecto.paymentPlans[pi]?.parcialidades?.length && plan.parcialidades.length) {
+      if (!(proyecto.paymentPlans || [])[pi]?.parcialidades?.length && plan.parcialidades.length) {
         handlePaymentPlanChange(pi, 'parcialidades', plan.parcialidades);
       }
     });
@@ -203,7 +203,7 @@ const ProyectoPlanesPagoTab: React.FC<Props> = ({
               <TableBody>
                 {dynamicPlans.map((plan, pi) => {
                   const count = plan.months || plan.parcialidades.length;
-                  const sourcePlan = proyecto.paymentPlans[pi];
+                  const sourcePlan = (proyecto.paymentPlans || [])[pi];
                   const { total } = getTotals(sourcePlan, count);
                   const restante = round2(100 - total);
 

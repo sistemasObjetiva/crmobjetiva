@@ -174,8 +174,8 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
     const { logoBase, renderBase, isoBase, planoBase, galeriaBases } = await prepararMedios()
 
     const planesParaPdf = isCustomPlan && planParaPdf
-      ? [...proyecto.paymentPlans, planParaPdf]
-      : proyecto.paymentPlans
+      ? [...(proyecto.paymentPlans || []), planParaPdf]
+      : (proyecto.paymentPlans || [])
 
     const blobPdf = await pdf(
       <CotizacionPDF
@@ -217,8 +217,8 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
     const { logoBase, renderBase, isoBase, planoBase, galeriaBases } = await prepararMedios()
 
     const planesParaPdf = isCustomPlan && planParaPdf
-      ? [...proyecto.paymentPlans, planParaPdf]
-      : proyecto.paymentPlans
+      ? [...(proyecto.paymentPlans || []), planParaPdf]
+      : (proyecto.paymentPlans || [])
 
     const blobPdf = await pdf(
       <CotizacionPDF
@@ -292,7 +292,7 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
         <UnidadImagenes unidad={unidad} />
 
         <SelectorPlanPago
-          paymentPlans={proyecto.paymentPlans}
+          paymentPlans={proyecto.paymentPlans || []}
           precioLista={precioLista}
           selectedPlan={selectedPlan}
           isCustomPlan={isCustomPlan}

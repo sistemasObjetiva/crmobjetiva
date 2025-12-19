@@ -104,32 +104,33 @@ export const eliminarUsuario = async (
   }
 
   try {
-    // Borrado lógico: marcar como eliminado con timestamp
+    // OPCIÓN 1: Borrado lógico (RECOMENDADO - mantiene historial)
     const { error } = await supabase
       .from('users')
       .update({ 
         estatus: 'inactivo',
-        deleted_at: new Date().toISOString() // Marca de cuando se eliminó
+        deleted_at: new Date().toISOString()
       })
       .eq('id', userId);
+
+    // OPCIÓN 2: Borrado físico (descomenta para eliminar permanentemente)
+    // ADVERTENCIA: Esto eliminará TODOS los datos relacionados si tienes CASCADE
+    /*
+    const { error } = await supabase
+      .from('users')
+      .delete()
+      .eq('id', userId);
+    */
 
     if (error) {
       throw new Error(`Error al eliminar usuario: ${error.message}`);
     }
 
-    // Opcional: Desactivar usuario en Auth (sin eliminarlo)
-    // Esto previene que pueda iniciar sesión pero mantiene su cuenta
-    try {
-      const { error: authError } = await supabase.functions.invoke('disable-user', {
-        body: { userId }
-      });
-      
-      if (authError) {
-        console.warn('No se pudo desactivar en Auth (función no disponible):', authError);
-      }
-    } catch (authErr) {
-      console.warn('Función disable-user no configurada, usuario solo desactivado en BD');
-    }
+    // IMPORTANTE: El usuario AÚN PUEDE HACER LOGIN porque su cuenta de Auth sigue activa
+    // Para eliminarlo de Auth también, necesitas:
+    // 1. Crear Edge Function con Service Role Key (admin)
+    // 2. Llamar a auth.admin.deleteUser(userId)
+    // Ver: https://supabase.com/docs/guides/auth/managing-user-data#deleting-users
 
   } catch (error: any) {
     console.error('Error al eliminar usuario:', error);
