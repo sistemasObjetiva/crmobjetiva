@@ -86,6 +86,17 @@
       },
       // Aumentar límite de tamaño de chunk (opcional)
       chunkSizeWarningLimit: 1000,
+      commonjsOptions: {
+        include: [/node_modules/],
+        transformMixedEsModules: true,
+      },
+    },
+    
+    // Resolver correctamente supabase-js
+    resolve: {
+      alias: {
+        '@supabase/supabase-js': '@supabase/supabase-js/dist/module/index.js',
+      },
     },
     
     // Optimizar imports de MUI
@@ -97,6 +108,10 @@
         '@emotion/styled',
         'dexie',
         'dexie-react-hooks',
+        '@supabase/supabase-js',
       ],
+      esbuildOptions: {
+        target: 'es2020',
+      },
     },
   })
