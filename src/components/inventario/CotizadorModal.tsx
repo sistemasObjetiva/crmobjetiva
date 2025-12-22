@@ -103,32 +103,6 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
     ? (customPrecioPlan > 0 && restante === 0 && (customPagoInicial + customContraEntrega + customPayments.length > 0))
     : true
 
-  // ----------------- Utilidades -----------------
-  function buildCustomPseudoPlan(
-    total: number,
-    pagoInicial: number,
-    contraEntrega: number,
-    pagos: { mes: string; monto: number }[]
-  ): PlanPago {
-    const totalSeguro = total > 0 ? total : 1
-    const pInicialPct = (pagoInicial / totalSeguro) * 100
-    const contraPct = (contraEntrega / totalSeguro) * 100
-    const parcialidades = pagos.map((p, i) => ({
-      month: i + 1,
-      value: (p.monto / totalSeguro) * 100,
-    }))
-
-    return {
-      name: 'Personalizado',
-      descuento: 0,
-      pInicial: +pInicialPct.toFixed(2),
-      contraentrega: +contraPct.toFixed(2),
-      mensualidades: pagos.length,
-      months: pagos.length,
-      parcialidades,
-    } as PlanPago
-  }
-
   // --- Firmar medios y convertir a base64 para @react-pdf ---
   const prepararMedios = async () => {
     const logoUrl = proyecto.logo?.path
@@ -159,6 +133,34 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
     return { logoBase, renderBase, isoBase, planoBase, galeriaBases }
   }
 
+  // --- Construir plan personalizado con MONTOS ABSOLUTOS ---
+  const buildCustomPlanConMontos = (): PlanPago => {
+    // Convertir a porcentajes para mantener compatibilidad con estructura PlanPago
+    const totalSeguro = customPrecioPlan > 0 ? customPrecioPlan : 1
+    const pInicialPct = (customPagoInicial / totalSeguro) * 100
+    const contraPct = (customContraEntrega / totalSeguro) * 100
+    
+    // Las parcialidades guardan los MONTOS reales, no porcentajes
+    const parcialidades = customPayments.map((p, i) => ({
+      month: i + 1,
+      value: p.monto,  // 👈 MONTO ABSOLUTO, no porcentaje
+      isAbsolute: true as const, // 👈 Bandera para que el PDF lo interprete como monto
+    }))
+
+    return {
+      name: 'Personalizado',
+      descuento: 0,
+      pInicial: +pInicialPct.toFixed(2),
+      contraentrega: +contraPct.toFixed(2),
+      mensualidades: customPayments.length,
+      months: customPayments.length,
+      parcialidades,
+      precioBase: customPrecioPlan,  // 👈 Precio total del plan
+      engancheMonto: customPagoInicial,  // 👈 Montos absolutos
+      contraentregaMonto: customContraEntrega,
+    } as PlanPago
+  }
+
   // ----------------- Acciones -----------------
   const handleDownloadPdf = async () => {
     let planParaPdf: PlanPago | null = selectedPlan
@@ -168,7 +170,7 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
       if (restante !== 0) { alert('El total programado no coincide con el precio del plan.'); return }
       const hayPagos = (customPayments.length > 0) || (customContraEntrega > 0) || (customPagoInicial > 0)
       if (!hayPagos) { alert('Agrega al menos un pago al plan personalizado.'); return }
-      planParaPdf = buildCustomPseudoPlan(customPrecioPlan, customPagoInicial, customContraEntrega, customPayments)
+      planParaPdf = buildCustomPlanConMontos()
     }
 
     const { logoBase, renderBase, isoBase, planoBase, galeriaBases } = await prepararMedios()
@@ -211,7 +213,7 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
       if (customPrecioPlan <= 0 || restante !== 0) return
       const hayPagos = (customPayments.length > 0) || (customContraEntrega > 0) || (customPagoInicial > 0)
       if (!hayPagos) return
-      planParaPdf = buildCustomPseudoPlan(customPrecioPlan, customPagoInicial, customContraEntrega, customPayments)
+      planParaPdf = buildCustomPlanConMontos()
     }
 
     const { logoBase, renderBase, isoBase, planoBase, galeriaBases } = await prepararMedios()

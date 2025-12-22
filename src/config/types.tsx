@@ -108,7 +108,11 @@ export interface PlanPago {
     pInicial: number;
     mensualidades: number;
     contraentrega: number;
-    parcialidades: { month: number; value: number }[];
+    parcialidades: { month: number; value: number; isAbsolute?: boolean }[];
+    // Campos opcionales para planes personalizados
+    precioBase?: number;
+    engancheMonto?: number;
+    contraentregaMonto?: number;
   }
 
   export type PropiedadLite = { id: string; tituloPropiedad: string; imagenes?: string[] }
