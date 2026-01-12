@@ -207,13 +207,31 @@ export async function actualizarProyecto(
       return Object.keys(rest).length ? (rest as Document) : undefined;
     }
 
+    // Validar que file.name existe
+    if (!doc.file.name) {
+      console.warn('uploadDoc: doc.file sin nombre, omitiendo', doc);
+      return undefined;
+    }
+
+    // Optimizar imagen antes de subir si es imagen
+    let fileToUpload = doc.file;
+    if (doc.file.type.startsWith('image/')) {
+      const { processFile } = await import('../utils/image.utils');
+      fileToUpload = await processFile(doc.file, {
+        maxWidth: 1920,
+        maxHeight: 1080,
+        quality: 0.85,
+        format: 'jpeg'
+      });
+    }
+
     // Sube el archivo y devuelve un Document "persistible"
     const safeName = normalizeFileName(doc.file.name);
     const path = `${proyecto.id}/${carpeta}${carpeta ? '/' : ''}${safeName}`;
 
     // Intento de limpieza de versión previa (por si re-suben el mismo nombre)
     await storage.remove([path]).catch(() => {});
-    const { error: upErr } = await storage.upload(path, doc.file, { upsert: true });
+    const { error: upErr } = await storage.upload(path, fileToUpload, { upsert: true });
     if (upErr) throw upErr;
 
     uploaded.push(path);
@@ -266,17 +284,37 @@ export async function actualizarProyecto(
     (proyecto.unidades || []).map(processUnidad)
   );
 
-  // 3) Arma el payload final, preservando el stacking recibido
+  // 3) Procesa imágenes de fondo del stacking si existen
+  let stackingProcesado = proyecto.stacking;
+  if (proyecto.stacking?.background && Array.isArray(proyecto.stacking.background)) {
+    // Solo procesar si hay documentos con archivos nuevos (file present)
+    const hasNewFiles = proyecto.stacking.background.some(doc => doc?.file);
+    
+    if (hasNewFiles) {
+      const backgroundProcesado = await Promise.all(
+        proyecto.stacking.background.map(async (doc) =>
+          doc ? await uploadDoc(doc, 'stacking/background') : null
+        )
+      ).then((arr) => arr.filter((d): d is Document => !!d));
+      
+      stackingProcesado = {
+        ...proyecto.stacking,
+        background: backgroundProcesado.length > 0 ? backgroundProcesado : null,
+      };
+    }
+  }
+
+  // 4) Arma el payload final, preservando el stacking recibido
   const payload: Proyecto = {
     ...proyecto,
     logo: uploadedLogo,
     render: uploadedRender,
     unidades: unidadesProcesadas,
-    // Muy importante: incluir stacking para guardar {zoom, nodes}
-    stacking: proyecto.stacking ?? undefined,
+    // Muy importante: incluir stacking para guardar {zoom, nodes, background procesado}
+    stacking: stackingProcesado ?? undefined,
   };
 
-  // 4) UPSERT en Supabase
+  // 5) UPSERT en Supabase
   try {
     const { data, error } = await supabase
       .from('proyectos')
@@ -455,11 +493,23 @@ async function uploadNewImages(imagenes: Document[], bucket: string): Promise<Do
 
   // Subir nuevas imágenes al storage y obtener URLs
   const uploads = await Promise.all(nuevas.map(async (img) => {
+    // Optimizar imagen antes de subir
+    let fileToUpload = img.file!;
+    if (img.file!.type.startsWith('image/')) {
+      const { processFile } = await import('../utils/image.utils');
+      fileToUpload = await processFile(img.file!, {
+        maxWidth: 1920,
+        maxHeight: 1080,
+        quality: 0.85,
+        format: 'jpeg'
+      });
+    }
+
     const ext = img.file!.name.split('.').pop();
     const filename = `prop_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
     const path = `${img.nombre}_${filename}`;
 
-    const { error } = await supabase.storage.from(bucket).upload(path, img.file!, {
+    const { error } = await supabase.storage.from(bucket).upload(path, fileToUpload, {
       cacheControl: "3600",
       upsert: false,
     });

@@ -42,6 +42,7 @@ const CardUnidad: React.FC<CardUnidadVisorProps> = ({
     { label: 'Render', img: unidad.render },
     { label: 'Isométrico', img: unidad.isometrico },
     { label: 'Plano', img: unidad.plano },
+    ...(unidad.imagenes || []).map((img, idx) => ({ label: `Imagen ${idx + 1}`, img })),
   ].filter(x => x.img);
 
   return (
@@ -101,7 +102,7 @@ const CardUnidad: React.FC<CardUnidadVisorProps> = ({
 
       {/* Mini galería */}
       {minigallery.length > 1 && (
-        <Stack direction="row" spacing={1} px={2} py={1} alignItems="center" justifyContent="center">
+        <Stack direction="row" spacing={1} px={2} py={1} alignItems="center" justifyContent="center" flexWrap="wrap">
           {minigallery.map((mini, idx) =>
             mini.img && (
               <Tooltip title={mini.label} key={idx}>
@@ -172,9 +173,5 @@ const CardUnidad: React.FC<CardUnidadVisorProps> = ({
   );
 };
 
-export default React.memo(CardUnidad, (prevProps, nextProps) => {
-  return (
-    prevProps.unidad.id === nextProps.unidad.id &&
-    prevProps.unidad.estatus === nextProps.unidad.estatus
-  )
-});
+// No usar React.memo para asegurar que siempre se actualice
+export default CardUnidad;

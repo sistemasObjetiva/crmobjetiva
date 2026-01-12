@@ -113,11 +113,23 @@ export const CreateNotificationModal: React.FC<CreateNotificationModalProps> = (
     const uploadedUrls: string[] = [];
 
     for (const attachment of attachments) {
+      // Optimizar imagen antes de subir si es imagen
+      let fileToUpload = attachment.file;
+      if (attachment.file.type.startsWith('image/')) {
+        const { processFile } = await import('../../utils/image.utils');
+        fileToUpload = await processFile(attachment.file, {
+          maxWidth: 1920,
+          maxHeight: 1080,
+          quality: 0.85,
+          format: 'jpeg'
+        });
+      }
+
       const fileName = `notifications/${Date.now()}_${attachment.file.name}`;
       
       const { error } = await supabase.storage
         .from('documentos')
-        .upload(fileName, attachment.file);
+        .upload(fileName, fileToUpload);
 
       if (error) throw error;
 

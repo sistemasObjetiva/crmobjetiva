@@ -161,8 +161,8 @@ const CardPropiedadVisor: React.FC<CardPropiedadVisorProps> = ({
         )}
         {/* Mini galería de imágenes extra */}
         {propiedad.imagenes && propiedad.imagenes.length > 1 && (
-          <Stack direction="row" spacing={1} mt={1}>
-            {propiedad.imagenes.slice(1, 4).map((img, i) => (
+          <Stack direction="row" spacing={1} mt={1} flexWrap="wrap">
+            {propiedad.imagenes.slice(1).map((img, i) => (
               <SignedAvatar
                 key={i}
                 value={img}

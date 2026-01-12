@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import {
   Modal,
   Box,
@@ -8,8 +8,11 @@ import {
   IconButton,
   Chip,
   Stack,
+  Dialog,
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
+import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew'
+import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos'
 import SignedImage from '../general/SignedImage'
 import { Propiedad } from '../../config/types'
 
@@ -24,9 +27,33 @@ const PropiedadViewModal: React.FC<PropiedadViewModalProps> = ({
   onClose,
   propiedad
 }) => {
+  const [lightboxOpen, setLightboxOpen] = useState(false)
+  const [currentImageIndex, setCurrentImageIndex] = useState(0)
+
   if (!propiedad) return null
 
+  const imagenes = (propiedad.imagenes || []).filter(img => img?.path && img?.bucket)
+
+  const handleImageClick = (index: number) => {
+    setCurrentImageIndex(index)
+    setLightboxOpen(true)
+  }
+
+  const handleNextImage = () => {
+    setCurrentImageIndex((prev) => (prev + 1) % imagenes.length)
+  }
+
+  const handlePrevImage = () => {
+    setCurrentImageIndex((prev) => (prev - 1 + imagenes.length) % imagenes.length)
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowRight') handleNextImage()
+    if (e.key === 'ArrowLeft') handlePrevImage()
+  }
+
   return (
+    <>
     <Modal
       open={open}
       onClose={onClose}
@@ -42,7 +69,8 @@ const PropiedadViewModal: React.FC<PropiedadViewModalProps> = ({
           bgcolor: 'white',
           borderRadius: 3,
           boxShadow: 24,
-          width: { xs: '95%', sm: 540 },
+          width: { xs: '95%', sm: '85%', md: '75%', lg: '65%' },
+          maxWidth: 1200,
           maxHeight: '94vh',
           outline: 'none',
           p: 4,
@@ -199,50 +227,219 @@ const PropiedadViewModal: React.FC<PropiedadViewModalProps> = ({
           </>
         )}
 
-        {/* Descripción */}
-        {propiedad.descripcion && (
-          <>
-            <Divider sx={{ my: 2 }} />
-            <Typography variant="h6" sx={{ color: 'var(--primary-color)', fontWeight: 600, mb: 1 }}>
-              Descripción
-            </Typography>
-            <Typography sx={{ color: '#444', whiteSpace: 'pre-line' }}>
-              {propiedad.descripcion}
-            </Typography>
-          </>
-        )}
-
         {/* Imágenes */}
-        {propiedad.imagenes && propiedad.imagenes.length > 0 && (
+        {imagenes.length > 0 && (
           <>
             <Divider sx={{ my: 2 }} />
             <Typography variant="subtitle1" sx={{ color: 'var(--primary-color)', fontWeight: 500, mb: 1 }}>
-              Imágenes
+              Imágenes ({imagenes.length})
             </Typography>
             <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
-              {propiedad.imagenes.map((img, i) =>
-                img?.path && img?.bucket ? (
+              {imagenes.map((img, i) => (
+                <Box 
+                  key={i}
+                  sx={{ 
+                    cursor: 'pointer',
+                    transition: 'transform 0.2s',
+                    '&:hover': { transform: 'scale(1.05)' },
+                    position: 'relative'
+                  }}
+                  onClick={() => handleImageClick(i)}
+                >
                   <SignedImage
-                    key={i}
-                    path={img.path}
-                    bucket={img.bucket}
+                    path={img.path!}
+                    bucket={img.bucket!}
                     alt={`Imagen ${i + 1}`}
                     sx={{
-                      width: { xs: 100, sm: 140 },
-                      height: { xs: 70, sm: 100 },
+                      width: 120,
+                      height: 90,
                       borderRadius: 2,
                       border: '1px solid #eee',
                       objectFit: 'cover',
                       background: '#fafafa'
                     }}
                   />
-                ) : null
-              )}
+                  <Typography
+                    sx={{
+                      position: 'absolute',
+                      bottom: 4,
+                      right: 4,
+                      bgcolor: 'rgba(0, 0, 0, 0.6)',
+                      color: 'white',
+                      px: 0.5,
+                      py: 0.25,
+                      borderRadius: 1,
+                      fontSize: 10,
+                      fontWeight: 600
+                    }}
+                  >
+                    {i + 1}
+                  </Typography>
+                </Box>
+              ))}
             </Box>
           </>
         )}
       </Box>
     </Modal>
+
+      {/* Lightbox - Carrusel de imágenes */}
+      <Dialog
+        open={lightboxOpen}
+        onClose={() => setLightboxOpen(false)}
+        maxWidth="lg"
+        fullWidth
+        onKeyDown={handleKeyDown}
+        PaperProps={{
+          sx: {
+            bgcolor: 'rgba(0, 0, 0, 0.95)',
+            boxShadow: 24,
+          }
+        }}
+      >
+        {/* Botón cerrar */}
+        <IconButton
+          onClick={() => setLightboxOpen(false)}
+          sx={{ 
+            position: 'absolute', 
+            top: 8, 
+            right: 8, 
+            color: 'white',
+            bgcolor: 'rgba(0, 0, 0, 0.5)',
+            zIndex: 10,
+            '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.7)' }
+          }}
+        >
+          <CloseIcon />
+        </IconButton>
+
+        {/* Contador de imágenes */}
+        <Box sx={{
+          position: 'absolute',
+          top: 16,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          color: 'white',
+          bgcolor: 'rgba(0, 0, 0, 0.5)',
+          px: 2,
+          py: 1,
+          borderRadius: 2,
+          zIndex: 10,
+          fontWeight: 600
+        }}>
+          {currentImageIndex + 1} / {imagenes.length}
+        </Box>
+
+        {imagenes.length > 0 && (
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            position: 'relative',
+            minHeight: '70vh',
+            p: 4
+          }}>
+            {/* Flecha izquierda */}
+            {imagenes.length > 1 && (
+              <IconButton
+                onClick={handlePrevImage}
+                sx={{
+                  position: 'absolute',
+                  left: 16,
+                  color: 'white',
+                  bgcolor: 'rgba(0, 0, 0, 0.5)',
+                  '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.7)', transform: 'scale(1.1)' },
+                  transition: 'all 0.2s',
+                  zIndex: 10
+                }}
+              >
+                <ArrowBackIosNewIcon />
+              </IconButton>
+            )}
+
+            {/* Imagen actual */}
+            <SignedImage
+              path={imagenes[currentImageIndex].path!}
+              bucket={imagenes[currentImageIndex].bucket!}
+              alt={`Imagen ${currentImageIndex + 1}`}
+              sx={{
+                maxWidth: '90%',
+                maxHeight: '85vh',
+                width: 'auto',
+                height: 'auto',
+                objectFit: 'contain',
+                borderRadius: 1
+              }}
+            />
+
+            {/* Flecha derecha */}
+            {imagenes.length > 1 && (
+              <IconButton
+                onClick={handleNextImage}
+                sx={{
+                  position: 'absolute',
+                  right: 16,
+                  color: 'white',
+                  bgcolor: 'rgba(0, 0, 0, 0.5)',
+                  '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.7)', transform: 'scale(1.1)' },
+                  transition: 'all 0.2s',
+                  zIndex: 10
+                }}
+              >
+                <ArrowForwardIosIcon />
+              </IconButton>
+            )}
+          </Box>
+        )}
+
+        {/* Miniaturas en la parte inferior */}
+        {imagenes.length > 1 && (
+          <Box sx={{
+            display: 'flex',
+            gap: 1,
+            p: 2,
+            overflowX: 'auto',
+            justifyContent: 'center',
+            bgcolor: 'rgba(0, 0, 0, 0.3)',
+            '&::-webkit-scrollbar': {
+              height: 8
+            },
+            '&::-webkit-scrollbar-thumb': {
+              bgcolor: 'rgba(255, 255, 255, 0.3)',
+              borderRadius: 4
+            }
+          }}>
+            {imagenes.map((img, i) => (
+              <Box
+                key={i}
+                onClick={() => setCurrentImageIndex(i)}
+                sx={{
+                  cursor: 'pointer',
+                  opacity: currentImageIndex === i ? 1 : 0.5,
+                  border: currentImageIndex === i ? '2px solid white' : '2px solid transparent',
+                  borderRadius: 1,
+                  transition: 'all 0.2s',
+                  '&:hover': { opacity: 1 },
+                  flexShrink: 0
+                }}
+              >
+                <SignedImage
+                  path={img.path!}
+                  bucket={img.bucket!}
+                  alt={`Miniatura ${i + 1}`}
+                  sx={{
+                    width: 80,
+                    height: 60,
+                    objectFit: 'cover',
+                    borderRadius: 1
+                  }}
+                />
+              </Box>
+            ))}
+          </Box>
+        )}
+      </Dialog>
+    </>
   )
 }
 

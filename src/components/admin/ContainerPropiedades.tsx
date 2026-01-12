@@ -33,7 +33,7 @@ export const makeInitialPropiedad = (userId: string): Propiedad => ({
 })
 
 const ContainerPropiedades: React.FC<Props> = ({ userId }) => {
-  const { propiedades /*, refresh*/ } = useFetchPropiedades()
+  const { propiedades, fetch: fetchPropiedades } = useFetchPropiedades()
   const { showStatus } = useStatusChip()
   const [loading, setLoading] = useState(false)
   const [propiedadLocal, setPropiedadLocal] = useState<Propiedad | null>(null)
@@ -91,6 +91,10 @@ const ContainerPropiedades: React.FC<Props> = ({ userId }) => {
     setLoading(true)
     try {
       await upsertPropiedad(nuevo)
+      // Pequeño delay para asegurar que Supabase procese el cambio
+      await new Promise(resolve => setTimeout(resolve, 300))
+      // Refrescar lista de propiedades inmediatamente
+      await fetchPropiedades()
       showStatus('Propiedad guardada exitosamente', 'success')
     } catch (err: any) {
       console.error(err)

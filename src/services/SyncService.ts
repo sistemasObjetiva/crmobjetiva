@@ -46,20 +46,25 @@ class SyncService {
    * Iniciar sincronización automática
    */
   private startAutoSync() {
-    this.syncInterval = window.setInterval(() => {
+    // DESACTIVADO TEMPORALMENTE - requiere campo updated_at en BD
+    console.log('⚠️ Auto-sync disabled - missing updated_at field in database');
+    return;
+    
+    /* this.syncInterval = window.setInterval(() => {
       if (this.isOnline && !this.isSyncing) {
         this.sync();
       }
-    }, 5 * 60 * 1000); // 5 minutos
+    }, 5 * 60 * 1000); // 5 minutos */
   }
 
   /**
    * Handler cuando se conecta a internet
    */
   private async handleOnline() {
-    console.log('🌐 Online detected - starting sync');
+    console.log('🌐 Online detected');
     this.isOnline = true;
-    await this.sync();
+    // No auto-sincronizar al conectar - desactivado temporalmente
+    // await this.sync();
   }
 
   /**
@@ -238,15 +243,27 @@ class SyncService {
 
     try {
       // Obtener última sincronización
-      const lastSync = localStorage.getItem('lastSyncTimestamp');
-      const timestamp = lastSync ? new Date(lastSync) : new Date(0);
+      // const lastSync = localStorage.getItem('lastSyncTimestamp');
+      // const timestamp = lastSync ? new Date(lastSync) : new Date(0);
 
       // Descargar cada tabla (solo las que existen en Supabase)
       const tables = ['users', 'empresas', 'proyectos', 'propiedades', 'prospectos', 'seguimientos'];
       
       for (const table of tables) {
         try {
-          const { data, error } = await supabase
+          // NOTA: Desactivado temporalmente - requiere campo updated_at en BD
+          // Si no existe el campo, traer todo (no recomendado para producción)
+          console.log(`⚠️ Skipping download for ${table} - updated_at field not available`);
+          continue;
+          
+          /* const { data, error } = await supabase
+            .from(table)
+            .select('*')
+            .gt('updated_at', timestamp.toISOString());
+
+          if (error) throw error;
+
+          /* const { data, error } = await supabase
             .from(table)
             .select('*')
             .gt('updated_at', timestamp.toISOString());
@@ -268,7 +285,7 @@ class SyncService {
                 count++;
               }
             }
-          }
+          } */
         } catch (err) {
           errors.push(`${table}: ${err instanceof Error ? err.message : 'Unknown error'}`);
         }

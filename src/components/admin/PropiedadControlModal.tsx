@@ -512,8 +512,9 @@ const handleImagenesCarouselDelete = (doc: Document) => {
             onDelete={handleImagenesCarouselDelete}
             multiple
             accept="image/*"
-            width={220}
-            height={180}
+            height="auto"
+            maxHeight={600}
+            fit="contain"
           />
         </Box>
 </Box>

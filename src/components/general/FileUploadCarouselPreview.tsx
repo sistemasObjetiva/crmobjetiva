@@ -187,11 +187,14 @@ const FileUploadCarouselPreview: React.FC<FileUploadCarouselProps> = ({
                 src={previewUrl}
                 alt={current?.nombre || 'imagen'}
                 sx={{
-                  width: '100%',
+                  maxWidth: '100%',
+                  width: auto ? 'auto' : '100%',
                   height: auto ? 'auto' : '100%',
-                  objectFit: auto ? 'contain' : fit,
+                  maxHeight: auto && maxHeight ? maxHeight : undefined,
+                  objectFit: auto ? undefined : fit,
                   objectPosition: 'center',
                   display: 'block',
+                  margin: auto ? '0 auto' : undefined,
                 }}
               />
             )
