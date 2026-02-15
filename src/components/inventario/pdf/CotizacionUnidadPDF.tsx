@@ -56,10 +56,15 @@ const CotizacionPDFCompacto: React.FC<PDFProps> = ({
     const mensualidades = p.mensualidades || p.parcialidades?.length || 0
 
     let pagosArray: number[] = []
+    const tieneMontosAbsolutos =
+      p.parcialidades?.some((par) => (par as any)?.isAbsolute) ||
+      (p as any).precioBase !== undefined ||
+      (p as any).engancheMonto !== undefined ||
+      (p as any).contraentregaMonto !== undefined
     
-    // 👇 Si el plan trae montos absolutos (plan personalizado)
-    if (p.parcialidades?.length && (p.parcialidades[0] as any)?.isAbsolute) {
-      pagosArray = p.parcialidades.map((par) => par.value) // Ya son montos
+    // 👇 Si el plan trae montos absolutos (plan personalizado), incluso sin mensualidades
+    if (tieneMontosAbsolutos) {
+      pagosArray = (p.parcialidades || []).map((par) => par.value) // Ya son montos
       
       // Usar montos absolutos para enganche y contraentrega también
       const engancheMonto = (p as any).engancheMonto || base * (engPct / 100)
