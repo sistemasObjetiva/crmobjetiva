@@ -16,6 +16,7 @@ import PeopleIcon from '@mui/icons-material/PeopleOutline';
 import GavelIcon from '@mui/icons-material/GavelOutlined';
 import HomeIcon from '@mui/icons-material/HomeOutlined';
 import SettingsIcon from '@mui/icons-material/SettingsOutlined';
+import SettingsEthernetIcon from '@mui/icons-material/SettingsEthernet';
 
 import logo from "../assets/logos/logoObjetiva.png";
 
@@ -108,6 +109,15 @@ export const routes: RouteConfig[] = [
     hideSelector: true,
   },
   {
+    path: 'easybroker',
+    name: 'EasyBroker',
+    icon: SettingsEthernetIcon,
+    rol: ['Gerente','GerenteGeneral', 'Plataforma'],
+    nivel: ['Administrador', 'Usuario'],
+    element: React.lazy(() => import('../pages/config/EasyBrokerPage')),
+    hideSelector: true,
+  },
+  {
     path: 'inventario',
     name: 'Inventario',
     icon: PeopleIcon,
@@ -178,6 +188,16 @@ export const routesNav: RouteConfig[] = [
         rol: ['Gerente','GerenteGeneral', 'Plataforma',],
         nivel: ['Administrador', 'Usuario'],     
         element: React.lazy(() => import('../pages/config/InteresadosPage')),
+        hideSelector: true,
+
+      },
+      {
+        path: 'easybroker',
+        name: 'EasyBroker',
+        icon: SettingsEthernetIcon,
+        rol: ['Gerente','GerenteGeneral', 'Plataforma'],
+        nivel: ['Administrador', 'Usuario'],
+        element: React.lazy(() => import('../pages/config/EasyBrokerPage')),
         hideSelector: true,
 
       },
