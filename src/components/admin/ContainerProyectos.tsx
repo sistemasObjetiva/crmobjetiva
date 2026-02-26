@@ -41,7 +41,7 @@ export const makeInitialProyecto = (userId: string): Proyecto => ({
 })
 
 const ContainerProyectos: React.FC<Props> = ({ userId }) => {
-  const { proyectos /*, refresh*/ } = useFetchProyects()
+  const { proyectos, fetchProyectos } = useFetchProyects()
   const { showStatus } = useStatusChip()
   const [loading, setLoading] = useState(false)
   const [proyectoLocal, setProyectoLocal] = useState<Proyecto | null>(null)
@@ -104,6 +104,7 @@ const ContainerProyectos: React.FC<Props> = ({ userId }) => {
     setLoading(true)
     try {
       await actualizarProyecto(nuevo)
+      await fetchProyectos()
       showStatus('Proyecto guardado exitosamente', 'success')
     } catch (err: any) {
       console.error(err)
@@ -133,6 +134,7 @@ const ContainerProyectos: React.FC<Props> = ({ userId }) => {
     setLoading(true)
     try {
       await eliminarProyecto(proyectoAEliminar)
+      await fetchProyectos()
       showStatus('Proyecto eliminado', 'success')
     } catch {
       showStatus('Error al eliminar proyecto', 'error')
