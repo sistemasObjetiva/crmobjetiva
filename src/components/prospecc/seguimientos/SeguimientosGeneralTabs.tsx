@@ -31,8 +31,8 @@ const getUserName  = (u: any) => u?.nombre ?? u?.displayName ?? u?.name ?? ''
 
 export default function SeguimientosGeneralPage() {
   const { showStatus } = useStatusChip()
-  const { seguimientos, loading: loadingSeguimientos } = useFetchSeguimientos()
-  const { prospectos } = useFetchProspectos()
+  const { seguimientos, loading: loadingSeguimientos, fetch: fetchSeguimientos } = useFetchSeguimientos()
+  const { prospectos, fetch: fetchProspectos } = useFetchProspectos()
   const { proyectos } = useFetchProyects()
   const { propiedades } = useFetchPropiedades()
   const { usuarios } = useFetchUsuarios()
@@ -149,9 +149,18 @@ useEffect(() => {
   const [seguimientoLocal, setSeguimientoLocal] = useState<Seguimiento | null>(null)
   const handleAbrirModalVer = (s: Seguimiento) => { setSeguimientoLocal(s); setModalOpen(true) }
   const [_, setSaving] = useState(false)
+
+  const refreshSeguimientoData = async () => {
+    await Promise.all([fetchSeguimientos(), fetchProspectos()])
+  }
+
   const handleGuardarSeguimiento = async (s: Seguimiento) => {
     setSaving(true)
-    try { await updateSeguimiento(s); showStatus('Seguimiento guardado', 'success') }
+    try {
+      await updateSeguimiento({ ...s, fechaActualizacion: new Date().toISOString() })
+      await refreshSeguimientoData()
+      showStatus('Seguimiento guardado', 'success')
+    }
     catch (e:any){ showStatus(e?.message || 'Error al guardar', 'error') }
     finally { setSaving(false); setModalOpen(false); setSeguimientoLocal(null) }
   }
@@ -168,6 +177,7 @@ useEffect(() => {
         estatusBaja: next,
         fechaActualizacion: new Date().toISOString(),
       })
+      await refreshSeguimientoData()
       showStatus(next ? 'Prospecto dado de baja' : 'Prospecto restaurado', 'success')
     } catch (e:any) {
       showStatus(e?.message || 'No se pudo actualizar la baja', 'error')

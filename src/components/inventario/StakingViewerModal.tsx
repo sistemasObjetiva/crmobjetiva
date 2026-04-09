@@ -174,6 +174,7 @@ const StackingViewerModal: React.FC<StackingViewerModalProps> = ({ open, onClose
                   backgroundDocs={backgroundDocs}
                   backgroundFit={bgFit}
                   backgroundOpacity={bgOpacity}
+                  showDetails={true}
                 />
               </Box>
             </DndProvider>

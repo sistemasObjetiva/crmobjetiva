@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Tabs,
   Tab,
@@ -27,7 +27,7 @@ import { fechaActual } from "../../hooks/useDateUtils";
 import ProyectoGeneralTab from './ProyectoGeneralTab';
 import ProyectoUnidadesTab from './ProyectoUnidadesTab';
 import ProyectoPlanesPagoTab from './ProyectoPlanesPAgoTabs';
-import { eliminarProyecto } from '../../hooks/useFetchFunctions';
+import { actualizarProyecto, eliminarProyecto } from '../../hooks/useFetchFunctions';
 import { useStatusChip } from '../../config/context/useStatusChip';
 import ProyectoStackingTab from './ProyectoStackingTab';
 import ProyectoWizard from './ProyectoWizard';
@@ -36,7 +36,8 @@ interface ProyectoModalProps {
   proyecto: Proyecto | null;
   open: boolean;
   onClose: () => void;  
-  onSave: (proyecto:Proyecto) => void;
+  onSave: (proyecto: Proyecto) => Promise<void> | void;
+  onRefreshAfterSave?: (proyecto: Proyecto) => Promise<void> | void;
   setProyecto: React.Dispatch<React.SetStateAction<Proyecto | null>>;
   userid: string;
 }
@@ -51,10 +52,25 @@ export const makeInitialUnidad = (userId: string,proyectoid: string): Unidad => 
   imagenes: [],
   estatus:'disponible'
 })
-const ProyectoControlModal: React.FC<ProyectoModalProps> = ({ proyecto, open, onClose, setProyecto, userid ,onSave}) => {
+
+type AutoSaveState = 'idle' | 'saving' | 'saved' | 'error';
+
+const ProyectoControlModal: React.FC<ProyectoModalProps> = ({
+  proyecto,
+  open,
+  onClose,
+  setProyecto,
+  userid,
+  onSave,
+  onRefreshAfterSave,
+}) => {
   const { showStatus } = useStatusChip()
   const [selectedTab, setSelectedTab] = useState<number>(0);
   const [unidad, setUnidad] = useState<Unidad|null>(null);
+  const [autoSaveState, setAutoSaveState] = useState<AutoSaveState>('idle');
+  const autoSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoSaveRequestIdRef = useRef(0);
+  const lastSavedUnitsSnapshotRef = useRef('');
   
   // Determinar si es un proyecto nuevo (sin unidades y apenas creado)
   const isNewProyecto = !proyecto?.unidades || proyecto.unidades.length === 0;
@@ -83,6 +99,14 @@ const ProyectoControlModal: React.FC<ProyectoModalProps> = ({ proyecto, open, on
     [proyecto]
   );
 
+  const unidadesSnapshot = React.useMemo(
+    () =>
+      JSON.stringify({
+        unidades: proyecto?.unidades ?? [],
+        extrasOrder: proyecto?.extrasOrder ?? [],
+      }),
+    [proyecto?.unidades, proyecto?.extrasOrder]
+  );
 
   const handleAddUnidad = () => {
     if (!proyecto || !unidad) return
@@ -109,10 +133,23 @@ const ProyectoControlModal: React.FC<ProyectoModalProps> = ({ proyecto, open, on
 
   const handleDeleteUnidad = (index: number) => {
     if (!proyecto) return;
-    setProyecto((prevProyecto) => ({
-      ...prevProyecto!,
-      unidades: (prevProyecto?.unidades || []).filter((_, i) => i !== index),
-    }));
+
+    const unidadAEliminar = (proyecto.unidades || [])[index];
+
+    setProyecto((prevProyecto) => {
+      if (!prevProyecto) return prevProyecto;
+      return {
+        ...prevProyecto,
+        unidades: (prevProyecto.unidades || []).filter((_, i) => i !== index),
+      };
+    });
+
+    setUnidad((prevUnidad) => {
+      if (!prevUnidad || !unidadAEliminar || prevUnidad.id !== unidadAEliminar.id) {
+        return prevUnidad;
+      }
+      return makeInitialUnidad(userid, proyecto.id);
+    });
   };
 
   const handleEditUnidad = (index: number) => {
@@ -424,14 +461,27 @@ const handleUnidadFileRemove = (
 
 const [confirmEliminarProyectoOpen, setConfirmEliminarProyectoOpen] = useState(false);
 
-  const handleActualizarProyecto = async (proyecto: Proyecto | null): Promise<void> => {
-    onSave(proyecto!)
+  const handleActualizarProyecto = async (proyectoActualizado: Proyecto | null): Promise<void> => {
+    if (!proyectoActualizado) return;
+    lastSavedUnitsSnapshotRef.current = unidadesSnapshot;
+    await onSave(proyectoActualizado);
   };
-  const  handleEliminarProyecto = async (): Promise<void> => {
-  async (proyecto: Proyecto) => {
+
+  const notifyProjectRefresh = async (proyectoGuardado: Proyecto): Promise<void> => {
+    if (!onRefreshAfterSave) return;
+    try {
+      await onRefreshAfterSave(proyectoGuardado);
+    } catch (refreshError) {
+      console.error('Error refrescando proyectos después de guardar:', refreshError);
+    }
+  };
+
+  const handleEliminarProyecto = async (): Promise<void> => {
+    if (!proyecto) return;
+
     try {
       await eliminarProyecto(proyecto);
-      showStatus('Proyecto eliminada exitosamente', 'success');
+      showStatus('Proyecto eliminado exitosamente', 'success');
       setConfirmEliminarProyectoOpen(false);
       onClose();
     } catch (err: any) {
@@ -444,13 +494,69 @@ const [confirmEliminarProyectoOpen, setConfirmEliminarProyectoOpen] = useState(f
       );
     }
   };
-}
 
 useEffect(() => {
   if (selectedTab === 1 && unidad === null && proyecto) {
     setUnidad(makeInitialUnidad(userid, proyecto.id));
   }
 }, [selectedTab, unidad, proyecto, userid]);
+
+useEffect(() => {
+  if (!open || !proyecto) return;
+  lastSavedUnitsSnapshotRef.current = JSON.stringify({
+    unidades: proyecto.unidades ?? [],
+    extrasOrder: proyecto.extrasOrder ?? [],
+  });
+  setAutoSaveState('idle');
+}, [open, proyecto?.id]);
+
+useEffect(() => {
+  if (!open || !proyecto || isNewProyecto) return;
+  if (unidadesSnapshot === lastSavedUnitsSnapshotRef.current) return;
+
+  if (autoSaveTimeoutRef.current) {
+    clearTimeout(autoSaveTimeoutRef.current);
+  }
+
+  setAutoSaveState('saving');
+
+  autoSaveTimeoutRef.current = setTimeout(async () => {
+    const requestId = ++autoSaveRequestIdRef.current;
+
+    try {
+      const proyectoGuardado = await actualizarProyecto(proyecto);
+
+      if (requestId !== autoSaveRequestIdRef.current) return;
+
+      lastSavedUnitsSnapshotRef.current = JSON.stringify({
+        unidades: proyectoGuardado.unidades ?? proyecto.unidades ?? [],
+        extrasOrder: proyectoGuardado.extrasOrder ?? proyecto.extrasOrder ?? [],
+      });
+
+      setProyecto((prev) => {
+        if (!prev || prev.id !== proyectoGuardado.id) return prev;
+        return {
+          ...prev,
+          ...proyectoGuardado,
+          unidades: proyectoGuardado.unidades ?? prev.unidades,
+          extrasOrder: proyectoGuardado.extrasOrder ?? prev.extrasOrder,
+        };
+      });
+
+      await notifyProjectRefresh(proyectoGuardado);
+      setAutoSaveState('saved');
+    } catch (err) {
+      console.error('Error guardando unidades automáticamente:', err);
+      setAutoSaveState('error');
+    }
+  }, 800);
+
+  return () => {
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+    }
+  };
+}, [open, proyecto, isNewProyecto, unidadesSnapshot, setProyecto]);
 
   // Si es proyecto nuevo, usar Wizard
   if (isNewProyecto) {
@@ -643,6 +749,7 @@ useEffect(() => {
             <ProyectoStackingTab
               proyecto={proyecto}
               setProyecto={setProyecto}
+              onProjectSaved={notifyProjectRefresh}
               readOnly={false} // en true lo muestra sin drag (modo cliente)
             />
           )}
@@ -658,6 +765,26 @@ useEffect(() => {
           gap: 1,
         }}
       >
+            {selectedTab === 1 && autoSaveState !== 'idle' && (
+              <Chip
+                size="small"
+                variant="outlined"
+                color={
+                  autoSaveState === 'saving'
+                    ? 'warning'
+                    : autoSaveState === 'saved'
+                    ? 'success'
+                    : 'error'
+                }
+                label={
+                  autoSaveState === 'saving'
+                    ? 'Guardando unidades...'
+                    : autoSaveState === 'saved'
+                    ? 'Unidades guardadas en Supabase'
+                    : 'Error al guardar unidades'
+                }
+              />
+            )}
             <Button
               onClick={onClose}
               variant="outlined"
