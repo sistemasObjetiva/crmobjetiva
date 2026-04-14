@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from 'react'
 import {
   Modal,
   Box,
@@ -8,545 +8,439 @@ import {
   IconButton,
   Chip,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableRow,
-  TableHead,
-  Paper,
-  TableContainer,
-  Button,
-  Tooltip,
-  CircularProgress,
-} from "@mui/material";
-import CloseIcon from "@mui/icons-material/Close";
-import VisibilityIcon from "@mui/icons-material/Visibility";
-import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
-import SignedAvatar from "../general/SignedAvatar";
-import SignedImage from "../general/SignedImage";
-import SignedImageCarousel from "../general/SinedImageCarousel";
-import { formatoMoneda } from "../../hooks/useUtilsFunctions";
-import { Proyecto, Unidad } from "../../config/types";
-import { supabase } from "../../config/supabase";
+  Dialog,
+} from '@mui/material'
+import CloseIcon from '@mui/icons-material/Close'
+import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew'
+import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos'
+import SignedImage from '../general/SignedImage'
+import { Propiedad } from '../../config/types'
 
-// 👇 Asegúrate de que el nombre del archivo coincida en tu proyecto
-import StackingViewerModal from "./StakingViewerModal";
-
-interface ProyectoViewModalProps {
-  open: boolean;
-  onClose: () => void;
-  proyecto: Proyecto | null;
-  onCotizarUnidad: (unidad: Unidad, proyecto: Proyecto) => void;
+interface PropiedadViewModalProps {
+  open: boolean
+  onClose: () => void
+  propiedad: Propiedad | null
 }
 
-// ================================================================
-// Helpers de Estilo, Estatus y Formato
-// ================================================================
-function estatusChipProps(estatus?: string): {
-  label: string;
-  color: "success" | "info" | "warning" | "default";
-} {
-  const s = (estatus ?? "").trim().toLowerCase();
-  if (s === "disponible") return { label: "Disponible", color: "success" };
-  if (s === "apartado") return { label: "Apartado", color: "info" };
-  if (s === "vendido") return { label: "Vendido", color: "warning" };
-  return { label: estatus ?? "-", color: "default" };
-}
-
-function unidadChipProps(raw?: string): {
-  label: "Disponible" | "Apartado" | "Vendido";
-  color: "success" | "info" | "warning";
-} {
-  const s = (raw ?? "").trim().toLowerCase();
-  if (s === "disponible") return { label: "Disponible", color: "success" };
-  if (s === "apartado") return { label: "Apartado", color: "info" };
-  return { label: "Vendido", color: "warning" };
-}
-
-const headerStyle = {
-  fontWeight: 700,
-  backgroundColor: "var(--primary-color)",
-  color: "white",
-  whiteSpace: "nowrap" as const,
-};
-
-// Helper para extraer números limpios (ej. "$ 1,500.00" -> 1500)
-function limpiarPrecio(precioRaw: any): number {
-  if (!precioRaw) return 0;
-  if (typeof precioRaw === "number") return precioRaw;
-  const cleaned = String(precioRaw).replace(/[^0-9.-]+/g, "");
-  return Number(cleaned) || 0;
-}
-
-// Helper para forzar 2 decimales en áreas y unidades privativas
-function formatoDosDecimales(valor: any): string {
-  if (valor === null || valor === undefined || valor === "" || valor === "-")
-    return "-";
-  // Convertimos a número (quitando comas por si viene como texto formateado)
-  const cleaned = String(valor).replace(/,/g, "");
-  const num = Number(cleaned);
-
-  if (isNaN(num)) return String(valor);
-
-  // Intl.NumberFormat garantiza que siempre haya 2 decimales (ej. 24.00)
-  return new Intl.NumberFormat("es-MX", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(num);
-}
-
-// ================================================================
-// Sub-componente: Modal de Lista de Precios (Matriz de Planes)
-// ================================================================
-interface ListaPreciosModalProps {
-  open: boolean;
-  onClose: () => void;
-  proyecto: Proyecto | null;
-}
-
-const ListaPreciosModal: React.FC<ListaPreciosModalProps> = ({
+const PropiedadViewModal: React.FC<PropiedadViewModalProps> = ({
   open,
   onClose,
-  proyecto,
+  propiedad
 }) => {
-  const [filasDb, setFilasDb] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [lightboxOpen, setLightboxOpen] = useState(false)
+  const [currentImageIndex, setCurrentImageIndex] = useState(0)
 
-  useEffect(() => {
-    if (!open || !proyecto) return;
+  if (!propiedad) return null
 
-    const fetchData = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const { data, error: sbError } = await supabase
-          .from("prueba1")
-          .select("*")
-          .eq("Proyecto", proyecto.nombre);
+  const imagenes = (propiedad.imagenes || []).filter(img => img?.path && img?.bucket)
 
-        if (sbError) throw sbError;
-        setFilasDb(data || []);
-      } catch (err: any) {
-        console.error(
-          "Error al cargar prueba1, usando unidades por defecto:",
-          err,
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, [open, proyecto]);
-
-  if (!proyecto) return null;
-
-  // Extracción a prueba de fallos de los planes de pago
-  let planes: any[] = [];
-  try {
-    if (typeof proyecto.paymentPlans === "string") {
-      planes = JSON.parse(proyecto.paymentPlans || "[]");
-    } else if (Array.isArray(proyecto.paymentPlans)) {
-      planes = proyecto.paymentPlans;
-    }
-  } catch (e) {
-    console.error("Error parseando paymentPlans", e);
+  const handleImageClick = (index: number) => {
+    setCurrentImageIndex(index)
+    setLightboxOpen(true)
   }
 
-  // Si la tabla prueba1 está vacía, usamos las unidades nativas del proyecto
-  const dataFuente = filasDb.length > 0 ? filasDb : proyecto.unidades || [];
+  const handleNextImage = () => {
+    setCurrentImageIndex((prev) => (prev + 1) % imagenes.length)
+  }
+
+  const handlePrevImage = () => {
+    setCurrentImageIndex((prev) => (prev - 1 + imagenes.length) % imagenes.length)
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowRight') handleNextImage()
+    if (e.key === 'ArrowLeft') handlePrevImage()
+  }
 
   return (
-    <Modal open={open} onClose={onClose}>
+    <>
+    <Modal
+      open={open}
+      onClose={onClose}
+      aria-labelledby="modal-propiedad-view"
+      aria-describedby="modal-propiedad-view-content"
+    >
       <Box
         sx={{
-          position: "absolute",
-          top: "50%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-          bgcolor: "white",
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          bgcolor: 'white',
           borderRadius: 3,
           boxShadow: 24,
-          width: { xs: "95%", sm: "90%", md: "95%" },
-          maxWidth: 1400,
-          maxHeight: "90vh",
-          outline: "none",
+          width: { xs: '95%', sm: '85%', md: '75%', lg: '65%' },
+          maxWidth: 1200,
+          maxHeight: '94vh',
+          outline: 'none',
           p: 4,
-          overflow: "auto",
+          overflow: 'auto',
         }}
       >
         <IconButton
           onClick={onClose}
-          sx={{ position: "absolute", top: 12, right: 12 }}
+          sx={{ position: 'absolute', top: 12, right: 12 }}
         >
           <CloseIcon />
         </IconButton>
 
-        <Typography
-          variant="h5"
-          sx={{ fontWeight: "bold", color: "var(--primary-color)", mb: 0.5 }}
-        >
-          Matriz de Precios por Plan
-        </Typography>
-        <Typography variant="subtitle2" sx={{ color: "#888", mb: 3 }}>
-          {proyecto.nombre}
+        {/* Título */}
+        <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'var(--primary-color)', mb: 2, textAlign: 'center' }}>
+          {propiedad.tituloPropiedad}
         </Typography>
 
-        {loading ? (
-          <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
-            <CircularProgress />
-          </Box>
-        ) : dataFuente.length === 0 ? (
-          <Typography sx={{ textAlign: "center", color: "#999", py: 4 }}>
-            No hay unidades registradas para este proyecto.
-          </Typography>
-        ) : (
-          <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
-            <Table size="small" stickyHeader>
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={headerStyle}>Unidad</TableCell>
-                  <TableCell sx={headerStyle}>Nivel</TableCell>
-                  <TableCell sx={headerStyle}>Unidad Priv.</TableCell>
-                  <TableCell sx={headerStyle}>M² Interiores</TableCell>
-                  <TableCell sx={headerStyle}>Precio Lista Base</TableCell>
+        {/* Estado/estatus */}
+        <Box sx={{ textAlign: 'center', mb: 2 }}>
+          <Chip
+            label={propiedad.estatus}
+            color={
+              propiedad.estatus === 'vendido'
+                ? 'error'
+                : propiedad.estatus === 'apartado'
+                ? 'warning'
+                : 'success'
+            }
+            sx={{ fontWeight: 600, fontSize: 18 }}
+          />
+        </Box>
 
-                  {/* Columnas Dinámicas para cada Plan basado en el JSON */}
-                  {planes.map((plan, idx) => (
-                    <TableCell key={idx} sx={headerStyle} align="right">
-                      {plan.name} <br />
-                      <span
-                        style={{
-                          fontSize: "0.75em",
-                          fontWeight: "normal",
-                          color: "#e0e0e0",
-                        }}
-                      >
-                        ({plan.descuento || 0}% desc)
-                      </span>
-                    </TableCell>
-                  ))}
+        {/* Amenidades */}
+        {propiedad.amenidades && propiedad.amenidades.length > 0 && (
+          <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 2, justifyContent: 'center' }}>
+            {propiedad.amenidades.map((am, idx) => (
+              <Chip key={am + idx} label={am} color="secondary" size="small" />
+            ))}
+          </Stack>
+        )}
 
-                  <TableCell sx={headerStyle} align="center">
-                    Estatus
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {dataFuente.map((fila, idx) => {
-                  const depto = fila.Depto || fila.numerounidad || "-";
-                  const nivel = fila.Nivel || fila.extras?.Nivel || "-";
+        <Divider sx={{ mb: 2 }} />
 
-                  // Extracción robusta y aplicación de 2 decimales
-                  const m2InterioresRaw =
-                    fila["M² Interiores"] ??
-                    fila["M2 Interiores"] ??
-                    fila["M2 Interior"] ??
-                    fila.extras?.["M2 Interior"] ??
-                    fila.extras?.["M2 Interiores"] ??
-                    fila.extras?.["M² Interiores"] ??
-                    "-";
-                  const m2Interiores = formatoDosDecimales(m2InterioresRaw);
+        {/* Características principales */}
+        <Grid container spacing={2} sx={{ mb: 2 }}>
+          <Grid item xs={12} sm={6}>
+            <Typography variant="subtitle2" sx={{ color: 'var(--primary-color)', fontWeight: 600 }}>
+              Tipo
+            </Typography>
+            <Typography sx={{ color: '#555', mb: 1 }}>
+              {propiedad.tipo}
+            </Typography>
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <Typography variant="subtitle2" sx={{ color: 'var(--primary-color)', fontWeight: 600 }}>
+              Creación
+            </Typography>
+            <Typography sx={{ color: '#555', mb: 1 }}>
+              {propiedad.fechaCreacion ? new Date(propiedad.fechaCreacion).toLocaleDateString() : '-'}
+            </Typography>
+          </Grid>
+          {(propiedad.venta || propiedad.precioVenta) && (
+            <Grid item xs={12} sm={6}>
+              <Typography variant="subtitle2" sx={{ color: 'var(--primary-color)', fontWeight: 600 }}>
+                Precio Venta
+              </Typography>
+              <Typography sx={{ color: '#555', mb: 1 }}>
+                {propiedad.precioVenta ? `$${Number(propiedad.precioVenta).toLocaleString()}` : '-'}
+              </Typography>
+            </Grid>
+          )}
+          {(propiedad.renta || propiedad.precioRenta) && (
+            <Grid item xs={12} sm={6}>
+              <Typography variant="subtitle2" sx={{ color: 'var(--primary-color)', fontWeight: 600 }}>
+                Precio Renta
+              </Typography>
+              <Typography sx={{ color: '#555', mb: 1 }}>
+                {propiedad.precioRenta ? `$${Number(propiedad.precioRenta).toLocaleString()}` : '-'}
+              </Typography>
+            </Grid>
+          )}
+        </Grid>
 
-                  const unidadPrivativaRaw =
-                    fila["Unidad Privativa"] ??
-                    fila.unidadprivativa ??
-                    fila.extras?.["Unidad Privativa"] ??
-                    "-";
-                  const unidadPrivativa =
-                    formatoDosDecimales(unidadPrivativaRaw);
+        {/* Ubicación */}
+        <Divider sx={{ mb: 2 }} />
+        <Typography variant="h6" sx={{ color: 'var(--primary-color)', fontWeight: 600, mb: 1 }}>
+          Ubicación
+        </Typography>
+        <Grid container spacing={1} sx={{ mb: 1 }}>
+          {[
+            ['País', propiedad.pais],
+            ['Estado', propiedad.estado],
+            ['Ciudad', propiedad.ciudad],
+            ['Colonia', propiedad.colonia],
+            ['Calle', propiedad.calle],
+            ['Número', propiedad.numero],
+            ['Interior', propiedad.interior],
+            ['Esquina', propiedad.esquina],
+            ['Código Postal', propiedad.codigoPostal],
+          ].map(([label, value]) =>
+            value ? (
+              <Grid item xs={12} sm={6} key={label}>
+                <Typography variant="subtitle2" sx={{ color: 'var(--primary-color)' }}>
+                  {label}
+                </Typography>
+                <Typography sx={{ color: '#555', mb: 1 }}>{value}</Typography>
+              </Grid>
+            ) : null
+          )}
+        </Grid>
 
-                  const estatusS = (fila.Estatus || fila.estatus || "")
-                    .trim()
-                    .toLowerCase();
-                  const ocultarPrecios =
-                    estatusS === "vendido" || estatusS === "apartado";
+        {/* Exclusividad y colaboración */}
+        <Divider sx={{ my: 2 }} />
+        <Typography variant="h6" sx={{ color: 'var(--primary-color)', fontWeight: 600, mb: 1 }}>
+          Exclusividad y Colaboración
+        </Typography>
+        <Grid container spacing={1}>
+          <Grid item xs={12} sm={6}>
+            <Typography variant="subtitle2">Exclusividad</Typography>
+            <Typography>{propiedad.exclusividad ? 'Sí' : 'No'}</Typography>
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <Typography variant="subtitle2">Comisión compartida</Typography>
+            <Typography>{propiedad.comisionCompartida ? 'Sí' : 'No'}</Typography>
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <Typography variant="subtitle2">Comparte 50%</Typography>
+            <Typography>{propiedad.comparte50 ? 'Sí' : 'No'}</Typography>
+          </Grid>
+          <Grid item xs={12}>
+            <Typography variant="subtitle2">Condiciones para compartir</Typography>
+            <Typography>{propiedad.condicionesCompartir || '-'}</Typography>
+          </Grid>
+        </Grid>
 
-                  // Extraer y limpiar precio
-                  const precioRaw =
-                    fila["Precio de lista"] ??
-                    fila["Precio Lista"] ??
-                    fila.preciolista;
-                  const precioBase = limpiarPrecio(precioRaw);
+        {/* Características adicionales */}
+        {propiedad.variables && Object.keys(propiedad.variables).length > 0 && (
+          <>
+            <Divider sx={{ my: 2 }} />
+            <Typography variant="h6" sx={{ color: 'var(--primary-color)', fontWeight: 600, mb: 1 }}>
+              Características Adicionales
+            </Typography>
+            <Grid container spacing={1}>
+              {Object.entries(propiedad.variables).map(([label, value]) =>
+                value !== null && value !== '' ? (
+                  <Grid item xs={12} sm={6} key={label}>
+                    <Typography variant="subtitle2">{label}</Typography>
+                    <Typography>{String(value)}</Typography>
+                  </Grid>
+                ) : null
+              )}
+            </Grid>
+          </>
+        )}
 
-                  const chip = estatusChipProps(fila.Estatus || fila.estatus);
-                  const valorOculto = formatoMoneda(0);
-
-                  return (
-                    <TableRow
-                      key={idx}
-                      hover
-                      sx={{
-                        "&:nth-of-type(odd)": { backgroundColor: "#f9f9f9" },
-                      }}
-                    >
-                      <TableCell sx={{ fontWeight: 600 }}>{depto}</TableCell>
-                      <TableCell>{nivel}</TableCell>
-                      <TableCell>{unidadPrivativa}</TableCell>
-                      <TableCell>{m2Interiores}</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>
-                        {ocultarPrecios
-                          ? valorOculto
-                          : formatoMoneda(precioBase)}
-                      </TableCell>
-
-                      {/* Cálculo de Precio Final por Plan */}
-                      {planes.map((plan, pIdx) => {
-                        const descuento = Number(plan.descuento || 0);
-                        const factor = 1 - descuento / 100;
-                        const precioFinal = precioBase * factor;
-
-                        return (
-                          <TableCell key={pIdx} align="right">
-                            {ocultarPrecios
-                              ? valorOculto
-                              : formatoMoneda(precioFinal)}
-                          </TableCell>
-                        );
-                      })}
-
-                      <TableCell align="center">
-                        <Chip
-                          size="small"
-                          label={chip.label}
-                          color={chip.color}
-                        />
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
+        {/* Imágenes */}
+        {imagenes.length > 0 && (
+          <>
+            <Divider sx={{ my: 2 }} />
+            <Typography variant="subtitle1" sx={{ color: 'var(--primary-color)', fontWeight: 500, mb: 1 }}>
+              Imágenes ({imagenes.length})
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
+              {imagenes.map((img, i) => (
+                <Box 
+                  key={i}
+                  sx={{ 
+                    cursor: 'pointer',
+                    transition: 'transform 0.2s',
+                    '&:hover': { transform: 'scale(1.05)' },
+                    position: 'relative'
+                  }}
+                  onClick={() => handleImageClick(i)}
+                >
+                  <SignedImage
+                    path={img.path!}
+                    bucket={img.bucket!}
+                    alt={`Imagen ${i + 1}`}
+                    sx={{
+                      width: 120,
+                      height: 90,
+                      borderRadius: 2,
+                      border: '1px solid #eee',
+                      objectFit: 'cover',
+                      background: '#fafafa'
+                    }}
+                  />
+                  <Typography
+                    sx={{
+                      position: 'absolute',
+                      bottom: 4,
+                      right: 4,
+                      bgcolor: 'rgba(0, 0, 0, 0.6)',
+                      color: 'white',
+                      px: 0.5,
+                      py: 0.25,
+                      borderRadius: 1,
+                      fontSize: 10,
+                      fontWeight: 600
+                    }}
+                  >
+                    {i + 1}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
+          </>
         )}
       </Box>
     </Modal>
-  );
-};
 
-// ================================================================
-// Componente Principal: ProyectoViewModal
-// ================================================================
-const ProyectoViewModal: React.FC<ProyectoViewModalProps> = ({
-  open,
-  onClose,
-  proyecto,
-  onCotizarUnidad,
-}) => {
-  const [openStacking, setOpenStacking] = useState(false);
-  const [openListaPrecios, setOpenListaPrecios] = useState(false);
-
-  if (!proyecto) return null;
-
-  const camposBasicos = [
-    { label: "Estatus", value: proyecto.estatus },
-    {
-      label: "Entrega",
-      value:
-        proyecto.fechaEntrega &&
-        new Date(proyecto.fechaEntrega).toLocaleDateString(),
-    },
-    { label: "Unidades", value: proyecto.unidades?.length ?? 0 },
-  ];
-
-  const nodesCount = ((proyecto as any).stacking?.nodes ?? []).length;
-
-  return (
-    <>
-      <Modal open={open} onClose={onClose}>
-        <Box
-          sx={{
-            position: "absolute",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            bgcolor: "white",
-            borderRadius: 3,
+      {/* Lightbox - Carrusel de imágenes */}
+      <Dialog
+        open={lightboxOpen}
+        onClose={() => setLightboxOpen(false)}
+        maxWidth="lg"
+        fullWidth
+        onKeyDown={handleKeyDown}
+        PaperProps={{
+          sx: {
+            bgcolor: 'rgba(0, 0, 0, 0.95)',
             boxShadow: 24,
-            width: { xs: "95%", sm: 900 },
-            maxHeight: "95vh",
-            outline: "none",
-            p: 4,
-            overflow: "auto",
+          }
+        }}
+      >
+        {/* Botón cerrar */}
+        <IconButton
+          onClick={() => setLightboxOpen(false)}
+          sx={{ 
+            position: 'absolute', 
+            top: 8, 
+            right: 8, 
+            color: 'white',
+            bgcolor: 'rgba(0, 0, 0, 0.5)',
+            zIndex: 10,
+            '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.7)' }
           }}
         >
-          <IconButton
-            onClick={onClose}
-            sx={{ position: "absolute", top: 12, right: 12 }}
-          >
-            <CloseIcon />
-          </IconButton>
+          <CloseIcon />
+        </IconButton>
 
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 3,
-              mb: 2,
-              flexWrap: "wrap",
-            }}
-          >
-            {proyecto.logo && (
-              <SignedAvatar
-                value={proyecto.logo}
-                alt="logo"
-                sx={{ width: 80, height: 80, border: "2px solid #eee" }}
-              />
-            )}
-            {proyecto.render && (
-              <SignedImage
-                path={proyecto.render.path!}
-                bucket={proyecto.render.bucket!}
-                alt="render"
+        {/* Contador de imágenes */}
+        <Box sx={{
+          position: 'absolute',
+          top: 16,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          color: 'white',
+          bgcolor: 'rgba(0, 0, 0, 0.5)',
+          px: 2,
+          py: 1,
+          borderRadius: 2,
+          zIndex: 10,
+          fontWeight: 600
+        }}>
+          {currentImageIndex + 1} / {imagenes.length}
+        </Box>
+
+        {imagenes.length > 0 && (
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            position: 'relative',
+            minHeight: '70vh',
+            p: 4
+          }}>
+            {/* Flecha izquierda */}
+            {imagenes.length > 1 && (
+              <IconButton
+                onClick={handlePrevImage}
                 sx={{
-                  width: 180,
-                  height: 110,
-                  borderRadius: 3,
-                  objectFit: "cover",
+                  position: 'absolute',
+                  left: 16,
+                  color: 'white',
+                  bgcolor: 'rgba(0, 0, 0, 0.5)',
+                  '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.7)', transform: 'scale(1.1)' },
+                  transition: 'all 0.2s',
+                  zIndex: 10
                 }}
-              />
+              >
+                <ArrowBackIosNewIcon />
+              </IconButton>
+            )}
+
+            {/* Imagen actual */}
+            <SignedImage
+              path={imagenes[currentImageIndex].path!}
+              bucket={imagenes[currentImageIndex].bucket!}
+              alt={`Imagen ${currentImageIndex + 1}`}
+              sx={{
+                maxWidth: '90%',
+                maxHeight: '85vh',
+                width: 'auto',
+                height: 'auto',
+                objectFit: 'contain',
+                borderRadius: 1
+              }}
+            />
+
+            {/* Flecha derecha */}
+            {imagenes.length > 1 && (
+              <IconButton
+                onClick={handleNextImage}
+                sx={{
+                  position: 'absolute',
+                  right: 16,
+                  color: 'white',
+                  bgcolor: 'rgba(0, 0, 0, 0.5)',
+                  '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.7)', transform: 'scale(1.1)' },
+                  transition: 'all 0.2s',
+                  zIndex: 10
+                }}
+              >
+                <ArrowForwardIosIcon />
+              </IconButton>
             )}
           </Box>
+        )}
 
-          <Stack
-            direction="row"
-            justifyContent="space-between"
-            alignItems="center"
-            sx={{ mb: 2 }}
-          >
-            <Typography
-              variant="h4"
-              sx={{ fontWeight: "bold", color: "var(--primary-color)" }}
-            >
-              {proyecto.nombre}
-            </Typography>
-            <Stack spacing={1} direction="row">
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={() => setOpenListaPrecios(true)}
+        {/* Miniaturas en la parte inferior */}
+        {imagenes.length > 1 && (
+          <Box sx={{
+            display: 'flex',
+            gap: 1,
+            p: 2,
+            overflowX: 'auto',
+            justifyContent: 'center',
+            bgcolor: 'rgba(0, 0, 0, 0.3)',
+            '&::-webkit-scrollbar': {
+              height: 8
+            },
+            '&::-webkit-scrollbar-thumb': {
+              bgcolor: 'rgba(255, 255, 255, 0.3)',
+              borderRadius: 4
+            }
+          }}>
+            {imagenes.map((img, i) => (
+              <Box
+                key={i}
+                onClick={() => setCurrentImageIndex(i)}
+                sx={{
+                  cursor: 'pointer',
+                  opacity: currentImageIndex === i ? 1 : 0.5,
+                  border: currentImageIndex === i ? '2px solid white' : '2px solid transparent',
+                  borderRadius: 1,
+                  transition: 'all 0.2s',
+                  '&:hover': { opacity: 1 },
+                  flexShrink: 0
+                }}
               >
-                Ver Lista de Precios
-              </Button>
-              <Button
-                variant="outlined"
-                color="secondary"
-                onClick={() => setOpenStacking(true)}
-                disabled={!nodesCount}
-              >
-                Ver Stacking
-              </Button>
-            </Stack>
-          </Stack>
-
-          <Divider sx={{ mb: 3 }} />
-
-          <Grid container spacing={2}>
-            {camposBasicos.map(
-              (c, i) =>
-                c.value && (
-                  <Grid item xs={12} sm={4} key={i}>
-                    <Typography
-                      variant="subtitle2"
-                      sx={{ color: "var(--primary-color)", fontWeight: 600 }}
-                    >
-                      {c.label}
-                    </Typography>
-                    <Typography color="#555">{c.value}</Typography>
-                  </Grid>
-                ),
-            )}
-          </Grid>
-
-          {proyecto.descripcion && (
-            <Box sx={{ mt: 3 }}>
-              <Typography
-                variant="h6"
-                sx={{ fontWeight: 600, color: "var(--primary-color)" }}
-              >
-                Descripción
-              </Typography>
-              <Typography sx={{ color: "#444", whiteSpace: "pre-line" }}>
-                {proyecto.descripcion}
-              </Typography>
-            </Box>
-          )}
-
-          {/* Sección de Unidades Rápidas */}
-          {proyecto.unidades && proyecto.unidades.length > 0 && (
-            <Box sx={{ mt: 4 }}>
-              <Typography
-                variant="h6"
-                sx={{ fontWeight: 600, color: "var(--primary-color)", mb: 2 }}
-              >
-                Unidades Disponibles
-              </Typography>
-              <TableContainer component={Paper} variant="outlined">
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Unidad</TableCell>
-                      <TableCell>Precio Lista</TableCell>
-                      <TableCell>Estatus</TableCell>
-                      <TableCell align="center">Cotizar</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {proyecto.unidades.slice(0, 10).map((u, i) => {
-                      const chip = unidadChipProps(u.estatus);
-                      const precioBase = limpiarPrecio(u.preciolista);
-                      return (
-                        <TableRow key={i}>
-                          <TableCell>{u.numerounidad}</TableCell>
-                          <TableCell>
-                            {chip.label === "Vendido"
-                              ? "-"
-                              : formatoMoneda(precioBase)}
-                          </TableCell>
-                          <TableCell>
-                            <Chip
-                              size="small"
-                              label={chip.label}
-                              color={chip.color}
-                            />
-                          </TableCell>
-                          <TableCell align="center">
-                            <IconButton
-                              color="info"
-                              disabled={chip.label === "Vendido"}
-                              onClick={() => onCotizarUnidad(u, proyecto)}
-                            >
-                              {chip.label === "Vendido" ? (
-                                <VisibilityOffIcon />
-                              ) : (
-                                <VisibilityIcon />
-                              )}
-                            </IconButton>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Box>
-          )}
-        </Box>
-      </Modal>
-
-      <StackingViewerModal
-        open={openStacking}
-        onClose={() => setOpenStacking(false)}
-        proyecto={proyecto}
-      />
-      <ListaPreciosModal
-        open={openListaPrecios}
-        onClose={() => setOpenListaPrecios(false)}
-        proyecto={proyecto}
-      />
+                <SignedImage
+                  path={img.path!}
+                  bucket={img.bucket!}
+                  alt={`Miniatura ${i + 1}`}
+                  sx={{
+                    width: 80,
+                    height: 60,
+                    objectFit: 'cover',
+                    borderRadius: 1
+                  }}
+                />
+              </Box>
+            ))}
+          </Box>
+        )}
+      </Dialog>
     </>
-  );
-};
+  )
+}
 
-export default ProyectoViewModal;
+export default PropiedadViewModal
