@@ -168,7 +168,7 @@ const ListaPreciosModal: React.FC<ListaPreciosModalProps> = ({
         </IconButton>
 
         <Typography variant="h5" sx={{ fontWeight: "bold", color: "var(--primary-color)", mb: 0.5 }}>
-          Matriz de Precios por Plan
+          Precios por Plan
         </Typography>
         <Typography variant="subtitle2" sx={{ color: "#888", mb: 3 }}>
           {proyecto.nombre}
