@@ -166,6 +166,7 @@ const StackingLiveViewer: React.FC<Props> = ({ proyectoId, fetchProyecto, subscr
           backgroundDocs={backgroundDocs}
           backgroundFit={bgFit}
           backgroundOpacity={bgOpacity}
+          showDetails={true}
         />
       </Box>
     </Paper>

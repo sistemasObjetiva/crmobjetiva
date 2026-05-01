@@ -34,8 +34,8 @@ interface Props { userid: string }
 
 const SeguimientosTab: React.FC<Props> = ({ userid }) => {
   const { showStatus } = useStatusChip()
-  const { seguimientos, loading: loadingSeguimientos } = useFetchSeguimientosUser(userid)
-  const { prospectos } = useFetchProspectosUser(userid)
+  const { seguimientos, loading: loadingSeguimientos, fetch: fetchSeguimientos } = useFetchSeguimientosUser(userid)
+  const { prospectos, fetch: fetchProspectos } = useFetchProspectosUser(userid)
   const { proyectos } = useFetchProyects()
   const { propiedades } = useFetchPropiedades()
 
@@ -83,10 +83,21 @@ const SeguimientosTab: React.FC<Props> = ({ userid }) => {
   const handleAbrirModalNuevo = () => { setSeguimientoLocal(initialSeguimiento()); setModalOpen(true) }
   const handleAbrirModalVer   = (s: Seguimiento) => { setSeguimientoLocal(s); setModalOpen(true) }
 
+  const refreshSeguimientoData = async () => {
+    await Promise.all([fetchSeguimientos(), fetchProspectos()])
+  }
+
   const handleGuardarSeguimiento = async (s: Seguimiento) => {
     setSaving(true)
-    try { await updateSeguimiento(s); showStatus('Seguimiento guardado exitosamente', 'success') }
-    catch (err: any) { console.error(err); showStatus(err?.message || 'Error al guardar seguimiento', 'error') }
+    try {
+      await updateSeguimiento({ ...s, fechaActualizacion: new Date().toISOString() })
+      await refreshSeguimientoData()
+      showStatus('Seguimiento guardado exitosamente', 'success')
+    }
+    catch (err: any) {
+      console.error(err)
+      showStatus(err?.message || 'Error al guardar seguimiento', 'error')
+    }
     finally { setModalOpen(false); setSeguimientoLocal(null); setSaving(false) }
   }
 

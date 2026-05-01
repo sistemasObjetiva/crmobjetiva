@@ -6,9 +6,11 @@ import {
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import {
   updateProspecto,
+  updateSeguimiento,
   useFetchPropiedades,
   useFetchProspectos,
   useFetchProyects,
+  useFetchSeguimientos,
   useFetchUsuarios
 } from '../../../hooks/useFetchFunctions'
 import { Prospecto, Document as StorageDocument } from '../../../config/types'
@@ -104,7 +106,8 @@ const ProyectosChipsLite: React.FC<{
 const ProspectosGeneralTab: React.FC<ProspectosTabProps> = ({ }) => {
   const { showStatus } = useStatusChip()
   const { usuarios } = useFetchUsuarios()
-  const { prospectos, loading: loadingProspectos } = useFetchProspectos()
+  const { prospectos, loading: loadingProspectos, fetch: fetchProspectos } = useFetchProspectos()
+  const { seguimientos, fetch: fetchSeguimientos } = useFetchSeguimientos()
   const { proyectos } = useFetchProyects()
   const { propiedades } = useFetchPropiedades()
 
@@ -295,10 +298,19 @@ const ProspectosGeneralTab: React.FC<ProspectosTabProps> = ({ }) => {
     setModalOpen(true)
   }
 
+  const refreshProspeccionData = async () => {
+    await Promise.all([fetchProspectos(), fetchSeguimientos()])
+  }
+
   const handleGuardarProspecto = async (p: Prospecto) => {
     setLoading(true)
     try {
-      await updateProspecto(p)
+      const prospectoActualizado = {
+        ...p,
+        fechaActualizacion: new Date().toISOString(),
+      }
+      await updateProspecto(prospectoActualizado)
+      await refreshProspeccionData()
       showStatus('Prospecto guardado exitosamente', 'success')
     } catch (err: any) {
       console.error(err)
@@ -311,6 +323,23 @@ const ProspectosGeneralTab: React.FC<ProspectosTabProps> = ({ }) => {
     } finally {
       setModalOpen(false)
       setProspectoSeleccionado(null)
+      setLoading(false)
+    }
+  }
+
+  const handleGuardarSeguimientoDesdeProspecto = async (seguimiento: any) => {
+    setLoading(true)
+    try {
+      await updateSeguimiento({
+        ...seguimiento,
+        fechaActualizacion: new Date().toISOString(),
+      })
+      await refreshProspeccionData()
+      showStatus('Seguimiento guardado exitosamente', 'success')
+    } catch (err: any) {
+      console.error(err)
+      showStatus(err?.message ? `Error al guardar seguimiento: ${err.message}` : 'Error al guardar seguimiento', 'error')
+    } finally {
       setLoading(false)
     }
   }
@@ -803,6 +832,8 @@ const ProspectosGeneralTab: React.FC<ProspectosTabProps> = ({ }) => {
         proyectos={proyectos}
         propiedades={propiedades}
         readOnly={false}
+        seguimientos={seguimientos}
+        onSaveSeguimiento={handleGuardarSeguimientoDesdeProspecto}
       />
 
       {/* Diálogo de importación CSV */}

@@ -775,6 +775,7 @@ export async function updateSeguimiento(seguimiento: Seguimiento) {
   // Crea el seguimiento a guardar, ya con historial actualizado
   const seguimientoToSave: Seguimiento = {
     ...seguimiento,
+    fechaActualizacion: new Date().toISOString(),
     historialSeguimiento: historial
   }
 

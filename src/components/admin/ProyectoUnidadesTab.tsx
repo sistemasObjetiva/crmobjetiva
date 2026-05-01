@@ -103,6 +103,8 @@ const ProyectoUnidadesTab: React.FC<ProyectoUnidadesTabProps> = ({
   // ---- UI/UX state ----
   const [autoSave, setAutoSave] = React.useState(true);
   const [savedFlash, setSavedFlash] = React.useState(false);
+  const editorRef = React.useRef<HTMLDivElement | null>(null);
+  const numeroUnidadInputRef = React.useRef<HTMLInputElement | null>(null);
 
   // Aumentar precios
   const [openPrecioDialog, setOpenPrecioDialog] = React.useState(false);
@@ -522,7 +524,7 @@ const applyImport = () => {
               Alta y edición de unidades
             </Typography>
             <Typography variant="body2" sx={{ opacity: 0.7 }}>
-              Completa los datos y, si el auto-guardado está activo, tus cambios se aplican a la tabla automáticamente.
+              Completa los datos y, si el auto-guardado está activo, tus cambios se aplican a la tabla automáticamente y se sincronizan con Supabase.
             </Typography>
           </Box>
 
@@ -556,14 +558,14 @@ const applyImport = () => {
               control={<Switch checked={autoSave} onChange={(_, v) => setAutoSave(v)} />}
               label="Guardar automáticamente"
             />
-            {savedFlash && <Chip label="Guardado" color="success" variant="outlined" size="small" />}
+            {savedFlash && <Chip label="Tabla actualizada" color="success" variant="outlined" size="small" />}
           </Stack>
         </Stack>
       </Paper>
 
       {/* Formulario de la unidad */}
       {unidad && (
-        <Paper sx={{ p: 2, mb: 3, borderRadius: 3 }}>
+        <Paper ref={editorRef} sx={{ p: 2, mb: 3, borderRadius: 3 }}>
           <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
               Unidad en edición
@@ -578,7 +580,7 @@ const applyImport = () => {
           </Stack>
 
           <Alert severity="info" sx={{ mb: 2 }}>
-            Con <b>Guardar automáticamente</b>, al escribir se actualiza la tabla. Desactívalo si prefieres confirmar con el botón.
+            Con <b>Guardar automáticamente</b>, al escribir se actualiza la tabla y se prepara el guardado en Supabase. Desactívalo si prefieres confirmar con el botón.
           </Alert>
 
           {/* Datos principales */}
@@ -594,6 +596,7 @@ const applyImport = () => {
             }}
           >
             <TextField
+              inputRef={numeroUnidadInputRef}
               label="Número de Unidad"
               value={unidad.numerounidad}
               onChange={e => handleChangeUnidad('numerounidad', e.target.value as any)}
@@ -859,7 +862,17 @@ const applyImport = () => {
                 </TableCell>
                 <TableCell>
                   <Tooltip title="Editar">
-                    <IconButton onClick={() => handleEditUnidad(idx)}>
+                    <IconButton
+                      onClick={() => {
+                        handleEditUnidad(idx);
+                        requestAnimationFrame(() => {
+                          editorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                          setTimeout(() => {
+                            numeroUnidadInputRef.current?.focus();
+                          }, 150);
+                        });
+                      }}
+                    >
                       <EditIcon />
                     </IconButton>
                   </Tooltip>

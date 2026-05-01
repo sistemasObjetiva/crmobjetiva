@@ -103,7 +103,8 @@ const ContainerProyectos: React.FC<Props> = ({ userId }) => {
   const handleSaveProyecto = async (nuevo: Proyecto) => {
     setLoading(true)
     try {
-      await actualizarProyecto(nuevo)
+      const proyectoGuardado = await actualizarProyecto(nuevo)
+      setProyectoLocal(proyectoGuardado)
       await fetchProyectos()
       showStatus('Proyecto guardado exitosamente', 'success')
     } catch (err: any) {
@@ -114,6 +115,11 @@ const ContainerProyectos: React.FC<Props> = ({ userId }) => {
       setProyectoLocal(null)
       setLoading(false)
     }
+  }
+
+  const handleRefreshProyectoData = async (proyectoGuardado: Proyecto) => {
+    setProyectoLocal(proyectoGuardado)
+    await fetchProyectos()
   }
 
   const handleEditProyecto = (proyecto: Proyecto) => {
@@ -248,6 +254,7 @@ const ContainerProyectos: React.FC<Props> = ({ userId }) => {
           open={modalOpen}
           onClose={handleCloseModal}
           onSave={handleSaveProyecto}
+          onRefreshAfterSave={handleRefreshProyectoData}
           setProyecto={setProyectoLocal}
           userid={userId}
         />

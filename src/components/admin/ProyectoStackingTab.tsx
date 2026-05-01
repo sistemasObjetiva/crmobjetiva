@@ -8,6 +8,8 @@ import DeleteOutline from '@mui/icons-material/DeleteOutline';
 import RestartAlt from '@mui/icons-material/RestartAlt';
 import Save from '@mui/icons-material/Save';
 import ZoomOutMap from '@mui/icons-material/ZoomOutMap';
+import CenterFocusStrong from '@mui/icons-material/CenterFocusStrong';
+import ViewModule from '@mui/icons-material/ViewModule';
 import ImageIcon from '@mui/icons-material/Image';
 import RemoveCircleOutline from '@mui/icons-material/RemoveCircleOutline';
 import type { Proyecto, Unidad, Document as Doc } from '../../config/types';
@@ -22,8 +24,15 @@ import { formatoMoneda } from '../../hooks/useUtilsFunctions';
 // Constantes / utils
 // ======================================================
 const GRID = 10;
-const CARD_H = 70;
+const CARD_H = 80;
 const MIN_W = 120;
+const BLOCK_W = 140;
+const BLOCK_H = 90;
+const BLOCK_GAP_X = 18;
+const BLOCK_GAP_Y = 20;
+const TOWER_GAP = 72;
+const CANVAS_W = 2400;
+const CANVAS_H = 1400;
 const AREA_UNIT = 'm'; // unidad para área (no m²)
 
 const normalize = (s?: string | null) =>
@@ -118,13 +127,79 @@ const mapUnidad = (u: Unidad): MappedUnit => {
 
 // Tamaño mínimo según contenido
 function minSizeFor(u?: MappedUnit): { w: number; h: number } {
-  if (!u) return { w: MIN_W, h: CARD_H };
+  if (!u) return { w: BLOCK_W, h: CARD_H };
   const isDisponible = u.estatus === 'disponible';
-  let h = 68;                      // número + info + chip
-  if (typeof u.area === 'number') h += 4;
-  if (isDisponible && u.precio != null) h += 18; // línea de precio
-  h = Math.max(GRID, Math.ceil(h / GRID) * GRID); // redondea a la grilla
-  return { w: MIN_W, h };
+  let h = 72;
+  if (typeof u.area === 'number') h += 6;
+  if (isDisponible && u.precio != null) h += 18;
+  h = Math.max(BLOCK_H, Math.ceil(h / GRID) * GRID);
+  return { w: Math.max(MIN_W, BLOCK_W), h };
+}
+
+const extractUnitOrder = (numero?: string) => {
+  const match = String(numero ?? '').match(/\d+/);
+  return match ? Number(match[0]) : Number.MAX_SAFE_INTEGER;
+};
+
+function autoArrangeNodes(units: MappedUnit[]): StackingNode[] {
+  const nodes: StackingNode[] = [];
+  const towers = new Map<string, MappedUnit[]>();
+
+  units.forEach((unit) => {
+    const towerKey = String(unit.torre || 'Torre A');
+    const current = towers.get(towerKey) ?? [];
+    current.push(unit);
+    towers.set(towerKey, current);
+  });
+
+  let currentX = 80;
+
+  Array.from(towers.entries())
+    .sort(([a], [b]) => a.localeCompare(b, 'es', { numeric: true }))
+    .forEach(([, towerUnits]) => {
+      const levels = new Map<string, MappedUnit[]>();
+
+      towerUnits.forEach((unit) => {
+        const key = typeof unit.nivel === 'number' ? String(unit.nivel) : 'PB';
+        const current = levels.get(key) ?? [];
+        current.push(unit);
+        levels.set(key, current);
+      });
+
+      const orderedLevels = Array.from(levels.entries()).sort(([a], [b]) => {
+        const numA = a === 'PB' ? -1 : Number(a);
+        const numB = b === 'PB' ? -1 : Number(b);
+        return numB - numA;
+      });
+
+      let towerWidth = BLOCK_W;
+
+      orderedLevels.forEach(([, levelUnits], levelIndex) => {
+        const sortedUnits = [...levelUnits].sort(
+          (a, b) => extractUnitOrder(a.numero) - extractUnitOrder(b.numero)
+        );
+
+        sortedUnits.forEach((unit, unitIndex) => {
+          const size = minSizeFor(unit);
+          nodes.push({
+            id: unit.id,
+            x: currentX + unitIndex * (BLOCK_W + BLOCK_GAP_X),
+            y: 80 + levelIndex * (BLOCK_H + BLOCK_GAP_Y),
+            w: size.w,
+            h: size.h,
+          });
+        });
+
+        towerWidth = Math.max(
+          towerWidth,
+          sortedUnits.length * (BLOCK_W + BLOCK_GAP_X) - BLOCK_GAP_X
+        );
+      });
+
+      currentX += towerWidth + TOWER_GAP;
+    });
+
+  return nodes;
 }
 
 // ======================================================
@@ -188,9 +263,10 @@ type NodeCardProps = {
   setNodes: React.Dispatch<React.SetStateAction<StackingNode[]>>;
   unitById: Map<string, MappedUnit>;
   scale: number; // <— importante para que Rnd sincronice con el zoom
+  showDetails: boolean;
 };
 
-const NodeCard: React.FC<NodeCardProps> = React.memo(({ n, u, editMode, setNodes, unitById, scale }) => {
+const NodeCard: React.FC<NodeCardProps> = React.memo(({ n, u, editMode, setNodes, unitById, scale, showDetails }) => {
   const isDisponible = u.estatus === 'disponible';
   const bg = statusColor(u.estatus);
   const isWhiteBg = bg === '#ffffff';
@@ -206,20 +282,23 @@ const NodeCard: React.FC<NodeCardProps> = React.memo(({ n, u, editMode, setNodes
   }, [n.id, n.h, n.w, u.estatus, u.area, u.precio, setNodes]);
 
   const info: string[] = [String(u.torre)];
-  if (typeof u.nivel === 'number') info.push(`Nivel ${u.nivel}`);if (typeof u.area === 'number')
-  info.push(`${(Math.round(u.area * 100) / 100).toLocaleString('es-MX', { maximumFractionDigits: 2 })} ${AREA_UNIT}`);
+  if (typeof u.nivel === 'number') info.push(`Nivel ${u.nivel}`);
+  if (typeof u.area === 'number') {
+    info.push(`${(Math.round(u.area * 100) / 100).toLocaleString('es-MX', { maximumFractionDigits: 2 })} ${AREA_UNIT}`);
+  }
 
 
   const body = (
     <Paper
       ref={bodyRef}
+      data-node-card="true"
       sx={{
         width: '100%',
         height: '100%',
         borderRadius: 2,
-        bgcolor: bg,
+        bgcolor: isWhiteBg ? '#ffffff' : bg,
         color: isWhiteBg ? '#111' : '#fff',
-        border: isWhiteBg ? '1px solid #e5e7eb' : 'none',
+        border: `2px solid ${isWhiteBg ? '#cbd5e1' : bg}`,
         display: 'flex',
         flexDirection: 'column',
         p: 1,
@@ -229,18 +308,28 @@ const NodeCard: React.FC<NodeCardProps> = React.memo(({ n, u, editMode, setNodes
         overflow: 'hidden',
         wordBreak: 'break-word',
         willChange: 'transform',
+        backgroundImage: isWhiteBg
+          ? 'linear-gradient(180deg, rgba(15,23,42,0.03) 0%, rgba(15,23,42,0) 100%)'
+          : 'linear-gradient(180deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 100%)',
       }}
       elevation={3}
     >
-      <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}>
-        <Typography sx={{ fontWeight: 900, lineHeight: 1.1 }}>
-          {u.numero || 'UN'}
-        </Typography>
+      <Stack direction="row" alignItems="flex-start" justifyContent="space-between" gap={1}>
+        <Box>
+          <Typography sx={{ fontWeight: 900, lineHeight: 1.05, fontSize: '1.05rem' }}>
+            {u.numero || 'UN'}
+          </Typography>
+          {showDetails && (
+            <Typography variant="caption" sx={{ display: 'block', opacity: 0.85 }}>
+              {info.join(' · ')}
+            </Typography>
+          )}
+        </Box>
         {editMode && (
           <Tooltip title="Quitar del canvas">
             <IconButton
               size="small"
-              sx={{ color: isWhiteBg ? '#111' : '#fff' }}
+              sx={{ color: isWhiteBg ? '#111' : '#fff', mt: -0.25, mr: -0.25 }}
               onClick={(e) => {
                 e.stopPropagation();
                 setNodes(prev => prev.filter(nn => nn.id !== n.id));
@@ -252,26 +341,29 @@ const NodeCard: React.FC<NodeCardProps> = React.memo(({ n, u, editMode, setNodes
         )}
       </Stack>
 
-      {/* Info: Torre · (Nivel) · (Área m) */}
-      <Typography variant="caption">{info.join(' · ')}</Typography>
-
-      {/* Precio SOLO si está disponible */}
-      {isDisponible && u.precio != null && (
+      {showDetails && isDisponible && u.precio != null && (
         <Typography variant="body2" sx={{ fontWeight: 800, mt: 0.25 }}>
           {formatoMoneda(u.precio)}
         </Typography>
       )}
 
-      <Chip
-        label={u.estatus.toUpperCase()}
-        size="small"
-        sx={{
-          mt: 'auto',
-          bgcolor: isWhiteBg ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.25)',
-          color: isWhiteBg ? '#111' : '#fff',
-          fontWeight: 700
-        }}
-      />
+      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mt: 'auto' }}>
+        {!showDetails && typeof u.area === 'number' && (
+          <Typography variant="caption" sx={{ opacity: 0.8 }}>
+            {`${(Math.round(u.area * 100) / 100).toLocaleString('es-MX', { maximumFractionDigits: 2 })} ${AREA_UNIT}`}
+          </Typography>
+        )}
+        <Chip
+          label={u.estatus.toUpperCase()}
+          size="small"
+          sx={{
+            ml: 'auto',
+            bgcolor: isWhiteBg ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.22)',
+            color: isWhiteBg ? '#111' : '#fff',
+            fontWeight: 700
+          }}
+        />
+      </Stack>
     </Paper>
   );
 
@@ -329,8 +421,44 @@ export const CanvasNodes: React.FC<{
   backgroundDocs: Doc[] | null;
   backgroundFit: 'contain' | 'cover' | 'none';
   backgroundOpacity: number;
-}> = ({ zoom, editMode, nodes, setNodes, unitById, scrollRef, backgroundDocs, backgroundFit, backgroundOpacity }) => {
+  showDetails: boolean;
+}> = ({ zoom, editMode, nodes, setNodes, unitById, scrollRef, backgroundDocs, backgroundFit, backgroundOpacity, showDetails }) => {
   const canvasRef = React.useRef<HTMLDivElement>(null);
+  const panStateRef = React.useRef({ active: false, startX: 0, startY: 0, scrollLeft: 0, scrollTop: 0 });
+  const [isPanning, setIsPanning] = React.useState(false);
+
+  const stopPanning = React.useCallback(() => {
+    panStateRef.current.active = false;
+    setIsPanning(false);
+  }, []);
+
+  const handleMouseDown = React.useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement;
+    if (target.closest('[data-node-card="true"]')) return;
+
+    const container = scrollRef.current;
+    if (!container) return;
+
+    panStateRef.current = {
+      active: true,
+      startX: event.clientX,
+      startY: event.clientY,
+      scrollLeft: container.scrollLeft,
+      scrollTop: container.scrollTop,
+    };
+    setIsPanning(true);
+  }, [scrollRef]);
+
+  const handleMouseMove = React.useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (!panStateRef.current.active) return;
+    const container = scrollRef.current;
+    if (!container) return;
+
+    const dx = event.clientX - panStateRef.current.startX;
+    const dy = event.clientY - panStateRef.current.startY;
+    container.scrollLeft = panStateRef.current.scrollLeft - dx;
+    container.scrollTop = panStateRef.current.scrollTop - dy;
+  }, [scrollRef]);
 
   const [, drop] = useDrop<DragItem>(() => ({
     accept: DND_TYPES.UNIT,
@@ -375,28 +503,38 @@ export const CanvasNodes: React.FC<{
     <Paper
       ref={scrollRef}
       variant="outlined"
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={stopPanning}
+      onMouseLeave={stopPanning}
       sx={{
         position: 'relative',
         borderRadius: 3,
         p: 0,
         overflow: 'auto',
         height: '70vh',
+        cursor: isPanning ? 'grabbing' : 'grab',
+        bgcolor: '#f8fafc',
+        borderColor: 'rgba(15,23,42,0.12)',
       }}
     >
       <Box
         ref={canvasRef}
         sx={{
           position: 'relative',
-          width: '2400px',
-          height: '1400px',
+          width: `${CANVAS_W}px`,
+          height: `${CANVAS_H}px`,
           transform: `scale(${zoom})`,
           transformOrigin: '0 0',
-          // Grid por encima del fondo
+          backgroundColor: '#f8fafc',
           backgroundImage: `
-            linear-gradient(to right, rgba(0,0,0,0.06) 1px, transparent 1px),
-            linear-gradient(to bottom, rgba(0,0,0,0.06) 1px, transparent 1px)
+            linear-gradient(to right, rgba(15,23,42,0.05) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(15,23,42,0.05) 1px, transparent 1px),
+            linear-gradient(to right, rgba(15,23,42,0.10) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(15,23,42,0.10) 1px, transparent 1px)
           `,
-          backgroundSize: `${GRID}px ${GRID}px, ${GRID}px ${GRID}px`,
+          backgroundSize: `${GRID}px ${GRID}px, ${GRID}px ${GRID}px, ${GRID * 5}px ${GRID * 5}px, ${GRID * 5}px ${GRID * 5}px`,
+          boxShadow: 'inset 0 0 0 1px rgba(15,23,42,0.04)',
         }}
       >
         {/* Fondo de imagen (debajo de los nodos) */}
@@ -430,6 +568,7 @@ export const CanvasNodes: React.FC<{
               setNodes={setNodes}
               unitById={unitById}
               scale={zoom}   // <- pasamos el zoom al Rnd
+              showDetails={showDetails}
             />
           );
         })}
@@ -444,10 +583,11 @@ export const CanvasNodes: React.FC<{
 interface Props {
   proyecto: Proyecto;
   setProyecto: React.Dispatch<React.SetStateAction<Proyecto | null>>;
+  onProjectSaved?: (proyecto: Proyecto) => Promise<void> | void;
   readOnly?: boolean;
 }
 
-const ProyectoStackingDesignerTab: React.FC<Props> = ({ proyecto, setProyecto, readOnly }) => {
+const ProyectoStackingDesignerTab: React.FC<Props> = ({ proyecto, setProyecto, onProjectSaved, readOnly }) => {
   const allUnits = React.useMemo<MappedUnit[]>(
     () => (proyecto.unidades ?? []).map(mapUnidad),
     [proyecto.unidades]
@@ -505,39 +645,160 @@ const ProyectoStackingDesignerTab: React.FC<Props> = ({ proyecto, setProyecto, r
   }, [allUnits]);
 
   const scrollRef = React.useRef<HTMLDivElement>(null);
+  const initializedLayoutRef = React.useRef<string | null>(null);
+  const autoSaveTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSavedSnapshotRef = React.useRef('');
+  const [showDetails, setShowDetails] = React.useState(true);
+  const [saveState, setSaveState] = React.useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
-  const saveIntoProject = () => {
+  const currentStacking = React.useMemo<StackingState>(() => ({
+    zoom,
+    nodes,
+    background: backgroundDocs,
+    backgroundFit: bgFit,
+    backgroundOpacity: bgOpacity,
+  }), [zoom, nodes, backgroundDocs, bgFit, bgOpacity]);
+
+  const currentStackingSnapshot = React.useMemo(
+    () => JSON.stringify(currentStacking),
+    [currentStacking]
+  );
+
+  const fitCanvasToNodes = React.useCallback((targetNodes: StackingNode[] = nodes) => {
+    const container = scrollRef.current;
+    if (!container) return;
+
+    if (!targetNodes.length) {
+      setZoom(1);
+      container.scrollLeft = 0;
+      container.scrollTop = 0;
+      return;
+    }
+
+    const padding = 120;
+    const minX = Math.min(...targetNodes.map((node) => node.x));
+    const minY = Math.min(...targetNodes.map((node) => node.y));
+    const maxX = Math.max(...targetNodes.map((node) => node.x + node.w));
+    const maxY = Math.max(...targetNodes.map((node) => node.y + node.h));
+    const width = Math.max(1, maxX - minX);
+    const height = Math.max(1, maxY - minY);
+
+    const nextZoom = Math.max(
+      0.5,
+      Math.min(
+        2,
+        Math.min((container.clientWidth - padding) / width, (container.clientHeight - padding) / height)
+      )
+    );
+
+    setZoom(Number(nextZoom.toFixed(2)));
+
+    requestAnimationFrame(() => {
+      container.scrollLeft = Math.max(0, minX * nextZoom - (container.clientWidth - width * nextZoom) / 2);
+      container.scrollTop = Math.max(0, minY * nextZoom - (container.clientHeight - height * nextZoom) / 2);
+    });
+  }, [nodes]);
+
+  const handleAutoArrange = React.useCallback(() => {
+    const arranged = autoArrangeNodes(allUnits);
+    setNodes(arranged);
+    setTimeout(() => fitCanvasToNodes(arranged), 50);
+  }, [allUnits, fitCanvasToNodes]);
+
+  const persistStacking = React.useCallback(async (stackingToSave: StackingState) => {
+    const snapshot = JSON.stringify(stackingToSave);
+    if (snapshot === lastSavedSnapshotRef.current) {
+      setSaveState('saved');
+      return;
+    }
+
+    setSaveState('saving');
+
+    try {
+      const proyectoGuardado = await actualizarProyecto({
+        ...proyecto,
+        stacking: stackingToSave,
+      });
+
+      const savedStacking = ((proyectoGuardado as any).stacking ?? stackingToSave) as StackingState;
+      lastSavedSnapshotRef.current = JSON.stringify(savedStacking);
+      setSaveState('saved');
+
+      setProyecto(prev => {
+        if (!prev || prev.id !== proyectoGuardado.id) return prev;
+        return { ...prev, ...proyectoGuardado, stacking: savedStacking };
+      });
+
+      try {
+        await onProjectSaved?.(proyectoGuardado as Proyecto);
+      } catch (refreshError) {
+        console.error('error refreshing projects after stacking save', refreshError);
+      }
+    } catch (err) {
+      console.error('autosave stacking error', err);
+      setSaveState('error');
+    }
+  }, [onProjectSaved, proyecto, setProyecto]);
+
+  const saveIntoProject = async () => {
     setProyecto(prev => {
       if (!prev) return prev;
-      const next: any = { ...prev };
-      next.stacking = {
-        zoom,
-        nodes,
-        background: backgroundDocs,
-        backgroundFit: bgFit,
-        backgroundOpacity: bgOpacity,
-      };
-      return next;
+      return { ...prev, stacking: currentStacking };
     });
+    await persistStacking(currentStacking);
   };
+
+  useEffect(() => {
+    initializedLayoutRef.current = null;
+    lastSavedSnapshotRef.current = JSON.stringify({
+      zoom: initial.zoom,
+      nodes: initial.nodes,
+      background: initial.background,
+      backgroundFit: initial.backgroundFit ?? 'contain',
+      backgroundOpacity: initial.backgroundOpacity ?? 0.6,
+    });
+    setSaveState('idle');
+  }, [proyecto.id, initial.zoom, initial.nodes, initial.background, initial.backgroundFit, initial.backgroundOpacity]);
+
+  useEffect(() => {
+    setProyecto(prev => {
+      if (!prev || prev.id !== proyecto.id) return prev;
+      const prevSnapshot = JSON.stringify((prev as any).stacking ?? null);
+      if (prevSnapshot === currentStackingSnapshot) return prev;
+      return { ...prev, stacking: currentStacking };
+    });
+  }, [currentStacking, currentStackingSnapshot, proyecto.id, setProyecto]);
+
+  useEffect(() => {
+    if (readOnly || initial.nodes.length > 0 || allUnits.length === 0) return;
+    if (initializedLayoutRef.current === proyecto.id) return;
+
+    const arranged = autoArrangeNodes(allUnits);
+    setNodes(arranged);
+    initializedLayoutRef.current = proyecto.id;
+    setTimeout(() => fitCanvasToNodes(arranged), 50);
+  }, [allUnits, fitCanvasToNodes, initial.nodes.length, proyecto.id, readOnly]);
 
   // Autosave (debounce)
   useEffect(() => {
     if (!editMode) return;
-    const t = setTimeout(() => {
-      actualizarProyecto({
-        ...proyecto,
-        stacking: {
-          zoom,
-          nodes,
-          background: backgroundDocs,
-          backgroundFit: bgFit,
-          backgroundOpacity: bgOpacity,
-        }
-      }).catch(err => console.error('autosave stacking error', err));
+    if (currentStackingSnapshot === lastSavedSnapshotRef.current) return;
+
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+    }
+
+    setSaveState('saving');
+    autoSaveTimeoutRef.current = setTimeout(() => {
+      void persistStacking(currentStacking);
     }, 800);
-    return () => clearTimeout(t);
-  }, [zoom, nodes, backgroundDocs, bgFit, bgOpacity, editMode, proyecto]);
+
+    return () => {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+      }
+    };
+  }, [currentStacking, currentStackingSnapshot, editMode, persistStacking]);
 
   // ---- Subir/Quitar imagen de fondo ----
   const onPickBackground = async (file: File) => {
@@ -559,6 +820,13 @@ const ProyectoStackingDesignerTab: React.FC<Props> = ({ proyecto, setProyecto, r
         {/* Sidebar */}
         <Paper sx={{ p: 2, borderRadius: 3, height: '70vh', display: 'flex', flexDirection: 'column', gap: 1 }}>
           <Typography variant="h6" fontWeight={900}>Paleta de unidades</Typography>
+          <Typography variant="body2" color="text.secondary">
+            Canvas tipo plano arquitectónico con grilla y snap para acomodar la torre visualmente.
+          </Typography>
+          <Stack direction="row" spacing={1} flexWrap="wrap">
+            <Chip size="small" color="primary" variant="outlined" label={`${allUnits.length} unidades`} />
+            <Chip size="small" color="success" variant="outlined" label={`${allUnits.filter((u) => u.estatus === 'disponible').length} disponibles`} />
+          </Stack>
 
           <TextField
             size="small"
@@ -670,6 +938,38 @@ const ProyectoStackingDesignerTab: React.FC<Props> = ({ proyecto, setProyecto, r
 
           <Divider sx={{ my: 1 }} />
 
+          <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}>
+            <FormControlLabel
+              control={<Switch checked={showDetails} onChange={(_, v) => setShowDetails(v)} />}
+              label="Vista detallada"
+            />
+            <Chip size="small" variant="outlined" color="primary" label={`Snap ${GRID}px`} />
+          </Stack>
+
+          <Typography variant="caption" color="text.secondary">
+            Usa <b>Autoacomodar</b> para generar una base de la torre y arrastra el fondo del plano para desplazarte.
+          </Typography>
+
+          <Stack direction="row" gap={1}>
+            <Button
+              variant="outlined"
+              startIcon={<ViewModule />}
+              onClick={handleAutoArrange}
+              disabled={!editMode}
+              fullWidth
+            >
+              Autoacomodar
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<CenterFocusStrong />}
+              onClick={() => fitCanvasToNodes()}
+              fullWidth
+            >
+              Ajustar vista
+            </Button>
+          </Stack>
+
           <Stack direction="row" alignItems="center" gap={1}>
             <ZoomOutMap fontSize="small" />
             <Slider min={0.5} max={2} step={0.1} value={zoom} onChange={(_, v) => setZoom(v as number)} valueLabelDisplay="auto" />
@@ -694,7 +994,7 @@ const ProyectoStackingDesignerTab: React.FC<Props> = ({ proyecto, setProyecto, r
                 <Button
                   variant="contained"
                   startIcon={<Save />}
-                  onClick={saveIntoProject}
+                  onClick={() => void saveIntoProject()}
                   disabled={!editMode}
                   fullWidth
                 >
@@ -703,6 +1003,21 @@ const ProyectoStackingDesignerTab: React.FC<Props> = ({ proyecto, setProyecto, r
               </span>
             </Tooltip>
           </Stack>
+
+          {saveState !== 'idle' && (
+            <Chip
+              size="small"
+              variant="outlined"
+              color={saveState === 'saving' ? 'warning' : saveState === 'saved' ? 'success' : 'error'}
+              label={
+                saveState === 'saving'
+                  ? 'Guardando layout...'
+                  : saveState === 'saved'
+                  ? 'Layout guardado'
+                  : 'Error al guardar'
+              }
+            />
+          )}
         </Paper>
 
         {/* Canvas */}
@@ -716,12 +1031,14 @@ const ProyectoStackingDesignerTab: React.FC<Props> = ({ proyecto, setProyecto, r
           backgroundDocs={backgroundDocs}
           backgroundFit={bgFit}
           backgroundOpacity={bgOpacity}
+          showDetails={showDetails}
         />
       </Box>
 
       <Box mt={1} color="text.secondary">
         <Typography variant="caption">
-          Arrastra una tarjeta desde la paleta y suéltala en el canvas. Luego puedes moverla o redimensionarla.
+          Arrastra una tarjeta desde la paleta y suéltala en el canvas. Luego puedes moverla, redimensionarla,
+          usar <code>Autoacomodar</code> para dibujar una torre base y <code>Ajustar vista</code> para centrar el plano.
           El diseño se guarda dentro de <code>proyecto.stacking</code>.
         </Typography>
       </Box>
