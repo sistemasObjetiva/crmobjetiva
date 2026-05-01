@@ -27,10 +27,11 @@ interface CotizadorModalProps {
   onClose: () => void
   onAsignarCotizacion?: (doc: Document) => void
   seguimiento?: Seguimiento
+  asPage?: boolean
 }
 
 const CotizadorModal: React.FC<CotizadorModalProps> = ({
-  proyecto, unidad, open, onClose, onAsignarCotizacion,
+  proyecto, unidad, open, onClose, onAsignarCotizacion, asPage = false,
 }) => {
   // ----------------- Estado del plan -----------------
   const [selectedPlan, setSelectedPlan] = useState<PlanPago | null>(null)
@@ -255,6 +256,101 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
   }
 
   // ----------------- UI -----------------
+  const header = (
+    <Box
+      sx={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        mb: 1, color: 'white', background: 'var(--secondary-color)', p: 2, borderRadius: asPage ? 2 : 0
+      }}
+    >
+      <Typography variant="h6" component="div">
+        Cotización {proyecto.nombre}
+      </Typography>
+      {!asPage && (
+        <IconButton onClick={onClose} color="inherit">
+          <CloseIcon />
+        </IconButton>
+      )}
+    </Box>
+  )
+
+  const body = (
+    <>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, mb: 3, flexWrap: 'wrap' }}>
+        <SignedAvatar value={proyecto.logo!} alt="Logo del Proyecto" sx={{ width: 90, height: 90, boxShadow: 2 }} />
+        {proyecto.render && (
+          <SignedImage
+            path={proyecto.render.path!}
+            bucket={proyecto.render.bucket!}
+            alt="Fachada del Proyecto"
+            sx={{ width: 260, height: 150, borderRadius: 2, boxShadow: '2px 2px 10px rgba(0,0,0,0.13)' }}
+          />
+        )}
+      </Box>
+
+      <UnidadInfo unidad={unidad} extrasOrder={proyecto.extrasOrder} />
+      <UnidadImagenes unidad={unidad} />
+
+      <SelectorPlanPago
+        paymentPlans={proyecto.paymentPlans || []}
+        precioLista={precioLista}
+        selectedPlan={selectedPlan}
+        isCustomPlan={isCustomPlan}
+        customPayments={customPayments}
+        customPrecioPlan={customPrecioPlan}
+        customPagoInicial={customPagoInicial}
+        customContraEntrega={customContraEntrega}
+        restante={restante}
+        onPlanSelected={handlePlanSelected}
+        onCustomPaymentsChange={setCustomPayments}
+        onCustomPrecioPlanChange={setCustomPrecioPlan}
+        onCustomPagoInicialChange={setCustomPagoInicial}
+        onCustomContraEntregaChange={setCustomContraEntrega}
+        onSelectedPlanChange={handleSelectedPlanChange}
+        onIsCustomPlanChange={handleIsCustomPlanChange}
+      />
+    </>
+  )
+
+  const actions = (
+    <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, p: asPage ? 0 : 2, mt: asPage ? 2 : 0 }}>
+      <Button
+        variant="outlined"
+        startIcon={<PictureAsPdfIcon />}
+        onClick={handleDownloadPdf}
+        disabled={!canDownload}
+        sx={{ color: 'var(--primary-color)', borderColor: '#fff' }}
+      >
+        Descargar PDF
+      </Button>
+
+      {onAsignarCotizacion && (
+        <Button
+          variant="contained"
+          color="primary"
+          onClick={handleAsignarPdf}
+          disabled={!canDownload}
+        >
+          Asignar a seguimiento
+        </Button>
+      )}
+
+      <Button onClick={onClose}>Cerrar</Button>
+    </Box>
+  )
+
+  if (asPage) {
+    return (
+      <Box sx={{ bgcolor: 'white', borderRadius: 3, boxShadow: 2, p: 2 }}>
+        {header}
+        <Box sx={{ px: { xs: 1, md: 2 } }}>
+          {body}
+          {actions}
+        </Box>
+      </Box>
+    )
+  }
+
   return (
     <Dialog
       open={open}
@@ -263,79 +359,16 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
       maxWidth="xl"
       PaperProps={{ sx: { width: 'min(1200px, 96vw)' } }}
     >
-      <DialogTitle
-        sx={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          mb: 1, color: 'white', background: 'var(--secondary-color)'
-        }}
-      >
-        <Typography variant="h6" component="div">
-          Cotización {proyecto.nombre}
-        </Typography>
-        <IconButton onClick={onClose} color="inherit">
-          <CloseIcon />
-        </IconButton>
+      <DialogTitle sx={{ p: 0 }}>
+        {header}
       </DialogTitle>
 
       <DialogContent>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, mb: 3, flexWrap: 'wrap' }}>
-          <SignedAvatar value={proyecto.logo!} alt="Logo del Proyecto" sx={{ width: 90, height: 90, boxShadow: 2 }} />
-          {proyecto.render && (
-            <SignedImage
-              path={proyecto.render.path!}
-              bucket={proyecto.render.bucket!}
-              alt="Fachada del Proyecto"
-              sx={{ width: 260, height: 150, borderRadius: 2, boxShadow: '2px 2px 10px rgba(0,0,0,0.13)' }}
-            />
-          )}
-        </Box>
-
-        <UnidadInfo unidad={unidad} extrasOrder={proyecto.extrasOrder} />
-        <UnidadImagenes unidad={unidad} />
-
-        <SelectorPlanPago
-          paymentPlans={proyecto.paymentPlans || []}
-          precioLista={precioLista}
-          selectedPlan={selectedPlan}
-          isCustomPlan={isCustomPlan}
-          customPayments={customPayments}
-          customPrecioPlan={customPrecioPlan}
-          customPagoInicial={customPagoInicial}
-          customContraEntrega={customContraEntrega}
-          restante={restante}
-          onPlanSelected={handlePlanSelected}
-          onCustomPaymentsChange={setCustomPayments}
-          onCustomPrecioPlanChange={setCustomPrecioPlan}
-          onCustomPagoInicialChange={setCustomPagoInicial}
-          onCustomContraEntregaChange={setCustomContraEntrega}
-          onSelectedPlanChange={handleSelectedPlanChange}
-          onIsCustomPlanChange={handleIsCustomPlanChange}
-        />
+        {body}
       </DialogContent>
 
       <DialogActions>
-        <Button
-          variant="outlined"
-          startIcon={<PictureAsPdfIcon />}
-          onClick={handleDownloadPdf}
-          disabled={!canDownload}
-          sx={{ mr: 1, color: 'var(--primary-color)', borderColor: '#fff' }}
-        >
-          Descargar PDF
-        </Button>
-
-        {onAsignarCotizacion && (
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={handleAsignarPdf}
-            disabled={!canDownload}
-          >
-            Asignar a seguimiento
-          </Button>
-        )}
-
-        <Button onClick={onClose}>Cerrar</Button>
+        {actions}
       </DialogActions>
     </Dialog>
   )

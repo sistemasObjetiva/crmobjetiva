@@ -5,24 +5,15 @@ import CardUnidadVisor from './CardUnidad'
 import { useFetchPropiedades, useFetchProyects } from '../../hooks/useFetchFunctions'
 import Spinner from '../general/Spinner'
 import ModalFiltroInventario from '../admin/ModalFiltroInventario'
-import CotizadorModal from './CotizadorModal' // <-- importa tu modal cotizador
 import { Unidad, Proyecto, Propiedad } from '../../config/types'
-import PropiedadViewModal from './ModalPropiedadView'
-import ModalUnidadView from './ModalUnidadView'
-import CotizadorPropiedadModal from './CotizadorPropiedadModal'
+import { useNavigate } from 'react-router-dom'
 
 const ContainerInventario: React.FC = () => {
   const { propiedades, loading: loadingPropiedades } = useFetchPropiedades()
   const { proyectos, loading: loadingProyectos } = useFetchProyects()
+  const navigate = useNavigate()
   const [modalOpen, setModalOpen] = useState(false)
   const [filtros, setFiltros] = useState<Record<string, any>>({})
-
-  // --- Estado para cotizador modal ---
-  const [cotizadorOpen, setCotizadorOpen] = useState(false)
-  const [cotizadorUnidad, setCotizadorUnidad] = useState<Unidad | null>(null)
-  const [cotizadorProyecto, setCotizadorProyecto] = useState<Proyecto | null>(null)
-  const [propiedadView, setPropiedadView] = useState<Propiedad | null>(null)
-  const [cotizadorPropiedad, setCotizadorPropiedad] = useState<Propiedad | null>(null);
 
   // Junta propiedades y todas las unidades de todos los proyectos
   const items = useMemo(() => [
@@ -84,19 +75,24 @@ const ContainerInventario: React.FC = () => {
 
   // Handler para abrir el cotizador (recibe unidad y proyecto)
   const handleCotizarUnidad = (unidad: Unidad, proyecto: Proyecto) => {
-    setCotizadorUnidad(unidad)
-    setCotizadorProyecto(proyecto)
-    setCotizadorOpen(true)
+    navigate(`/productos/cotizar/unidad/${proyecto.id}/${unidad.id}`)
   }
 
 
 
   // ... allKeys y resto igual ...
-  const [unidadView, setUnidadView] = useState<{ unidad: Unidad, proyecto: Proyecto } | null>(null);
-
   const handleVerUnidad = (unidad: Unidad, proyecto: Proyecto) => {
-    setUnidadView({ unidad, proyecto });
+    navigate(`/productos/unidad/${proyecto.id}/${unidad.id}`)
   };
+
+  const handleVerPropiedad = (propiedad: Propiedad) => {
+    navigate(`/productos/propiedad/${propiedad.id}`)
+  }
+
+  const handleCotizarPropiedad = (propiedad: Propiedad) => {
+    navigate(`/productos/cotizar/propiedad/${propiedad.id}`)
+  }
+
   // RENDER
   if (loadingPropiedades || loadingProyectos) return <Spinner open />
 
@@ -134,8 +130,8 @@ const ContainerInventario: React.FC = () => {
             <CardPropiedadVisor
                 key={`prop-${item.propiedad!.id}`}
                 propiedad={item.propiedad!}
-                onView={setPropiedadView}
-                onCotizar={setCotizadorPropiedad}
+                onView={handleVerPropiedad}
+                onCotizar={handleCotizarPropiedad}
               />
           ) : (
             <CardUnidadVisor
@@ -155,33 +151,6 @@ const ContainerInventario: React.FC = () => {
         allKeys={[]} // O tu allKeys calculado
         onApply={setFiltros}
         valoresActuales={filtros}
-      />
-      {/* Modal Cotizador */}
-      {cotizadorUnidad && cotizadorProyecto && (
-        <CotizadorModal
-          open={cotizadorOpen}
-          onClose={() => setCotizadorOpen(false)}
-          unidad={cotizadorUnidad}
-          proyecto={cotizadorProyecto}
-        />
-      )}
-      {cotizadorPropiedad && (
-        <CotizadorPropiedadModal
-          open={!!cotizadorPropiedad}
-          propiedad={cotizadorPropiedad}
-          onClose={() => setCotizadorPropiedad(null)}
-        />
-      )}
-      <PropiedadViewModal
-        open={!!propiedadView}
-        propiedad={propiedadView}
-        onClose={() => setPropiedadView(null)}
-      />
-      <ModalUnidadView
-        open={!!unidadView}
-        onClose={() => setUnidadView(null)}
-        unidad={unidadView?.unidad ?? null}
-        proyecto={unidadView?.proyecto ?? null}
       />
 
     </Box>

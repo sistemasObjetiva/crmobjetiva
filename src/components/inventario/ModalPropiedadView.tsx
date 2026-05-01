@@ -20,12 +20,14 @@ interface PropiedadViewModalProps {
   open: boolean
   onClose: () => void
   propiedad: Propiedad | null
+  asPage?: boolean
 }
 
 const PropiedadViewModal: React.FC<PropiedadViewModalProps> = ({
   open,
   onClose,
-  propiedad
+  propiedad,
+  asPage = false
 }) => {
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
@@ -52,37 +54,33 @@ const PropiedadViewModal: React.FC<PropiedadViewModalProps> = ({
     if (e.key === 'ArrowLeft') handlePrevImage()
   }
 
-  return (
-    <>
-    <Modal
-      open={open}
-      onClose={onClose}
-      aria-labelledby="modal-propiedad-view"
-      aria-describedby="modal-propiedad-view-content"
+  const content = (
+    <Box
+      sx={{
+        position: asPage ? 'static' : 'absolute',
+        top: asPage ? undefined : '50%',
+        left: asPage ? undefined : '50%',
+        transform: asPage ? undefined : 'translate(-50%, -50%)',
+        bgcolor: 'white',
+        borderRadius: 3,
+        boxShadow: asPage ? 2 : 24,
+        width: asPage ? '100%' : { xs: '95%', sm: '85%', md: '75%', lg: '65%' },
+        maxWidth: 1200,
+        maxHeight: asPage ? 'none' : '94vh',
+        outline: 'none',
+        p: 4,
+        overflow: 'auto',
+        mx: asPage ? 'auto' : undefined,
+      }}
     >
-      <Box
-        sx={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          bgcolor: 'white',
-          borderRadius: 3,
-          boxShadow: 24,
-          width: { xs: '95%', sm: '85%', md: '75%', lg: '65%' },
-          maxWidth: 1200,
-          maxHeight: '94vh',
-          outline: 'none',
-          p: 4,
-          overflow: 'auto',
-        }}
-      >
+      {!asPage && (
         <IconButton
           onClick={onClose}
           sx={{ position: 'absolute', top: 12, right: 12 }}
         >
           <CloseIcon />
         </IconButton>
+      )}
 
         {/* Título */}
         <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'var(--primary-color)', mb: 2, textAlign: 'center' }}>
@@ -280,8 +278,23 @@ const PropiedadViewModal: React.FC<PropiedadViewModalProps> = ({
             </Box>
           </>
         )}
-      </Box>
-    </Modal>
+    </Box>
+  )
+
+  return (
+    <>
+      {asPage ? (
+        content
+      ) : (
+        <Modal
+          open={open}
+          onClose={onClose}
+          aria-labelledby="modal-propiedad-view"
+          aria-describedby="modal-propiedad-view-content"
+        >
+          {content}
+        </Modal>
+      )}
 
       {/* Lightbox - Carrusel de imágenes */}
       <Dialog

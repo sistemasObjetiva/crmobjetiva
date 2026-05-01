@@ -16,6 +16,7 @@ interface CotizadorPropiedadModalProps {
   open: boolean
   onClose: () => void
   onAsignarCotizacion?: (doc: Document) => void
+  asPage?: boolean
 }
 
 const CotizadorPropiedadModal: React.FC<CotizadorPropiedadModalProps> = ({
@@ -23,6 +24,7 @@ const CotizadorPropiedadModal: React.FC<CotizadorPropiedadModalProps> = ({
   open,
   onClose,
   onAsignarCotizacion,
+  asPage = false,
 }) => {
   // Cálculo de comisiones
   const venta = propiedad.venta && propiedad.precioVenta ? Number(propiedad.precioVenta) : null
@@ -106,26 +108,30 @@ const CotizadorPropiedadModal: React.FC<CotizadorPropiedadModalProps> = ({
     }
     onClose()
   };
-  return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      {/* HEADER */}
-      <DialogTitle sx={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        mb: 1,
-        color: 'white',
-        background: 'var(--secondary-color)'
-      }}>
-        <Typography variant="h6">
-          Cotización de Propiedad
-        </Typography>
+  const header = (
+    <Box sx={{
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      mb: 1,
+      color: 'white',
+      background: 'var(--secondary-color)',
+      p: 2,
+      borderRadius: asPage ? 2 : 0,
+    }}>
+      <Typography variant="h6">
+        Cotización de Propiedad
+      </Typography>
+      {!asPage && (
         <IconButton onClick={onClose} color="inherit">
           <CloseIcon />
         </IconButton>
-      </DialogTitle>
+      )}
+    </Box>
+  )
 
-      <DialogContent>
+  const body = (
+    <>
         {/* Mini-galería o portada */}
         {propiedad.imagenes && propiedad.imagenes.length > 0 && (
           <Box sx={{ my: 2, width: '100%', maxWidth: 320, mx: 'auto', display: 'flex', justifyContent: 'center' }}>
@@ -217,8 +223,11 @@ const CotizadorPropiedadModal: React.FC<CotizadorPropiedadModalProps> = ({
             </Box>
           )}
         </Box>
-      </DialogContent>
-      <DialogActions>
+    </>
+  )
+
+  const actions = (
+    <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 2 }}>
         <Button
           variant="outlined"
           startIcon={<PictureAsPdfIcon />}
@@ -238,6 +247,32 @@ const CotizadorPropiedadModal: React.FC<CotizadorPropiedadModalProps> = ({
           </Button>
         )}
         <Button onClick={onClose}>Cerrar</Button>
+    </Box>
+  )
+
+  if (asPage) {
+    return (
+      <Box sx={{ bgcolor: 'white', borderRadius: 3, boxShadow: 2, p: 2 }}>
+        {header}
+        <Box sx={{ px: { xs: 1, md: 2 } }}>
+          {body}
+          {actions}
+        </Box>
+      </Box>
+    )
+  }
+
+  return (
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
+      <DialogTitle sx={{ p: 0 }}>
+        {header}
+      </DialogTitle>
+
+      <DialogContent>
+        {body}
+      </DialogContent>
+      <DialogActions>
+        {actions}
       </DialogActions>
     </Dialog>
   )

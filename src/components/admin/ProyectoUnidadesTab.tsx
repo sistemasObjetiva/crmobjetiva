@@ -158,21 +158,36 @@ const ProyectoUnidadesTab: React.FC<ProyectoUnidadesTabProps> = ({
 
   // ---- Importación por Excel/CSV ----
   const downloadUnidadesTemplate = () => {
-  const base = ['numerounidad', 'unidadprivativa', 'preciolista', 'estatus'];
-  const extrasHeader = proyecto.extrasOrder?.length ? proyecto.extrasOrder : extrasKeys;
-  const header = [...base, ...extrasHeader];
+    const base = ['numerounidad', 'unidadprivativa', 'preciolista', 'estatus'];
 
-  const wsData = [
-    header,
-    // fila de ejemplo
-    ['Ej: 101', 'Ej: 1', '1000000', 'disponible', ...extrasHeader.map(() => '')],
-  ];
+    const extrasFromProyecto = proyecto.extrasOrder?.length ? proyecto.extrasOrder : extrasKeys;
+    const extrasFromUnidades = Array.from(
+      new Set((proyecto.unidades || []).flatMap(u => Object.keys(u.extras || {})))
+    );
+    const extrasHeader = mergeExtrasOrder(extrasFromProyecto, extrasFromUnidades);
+    const header = [...base, ...extrasHeader];
 
-  const ws = XLSX.utils.aoa_to_sheet(wsData);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Unidades');
-  XLSX.writeFile(wb, 'plantilla_unidades.xlsx');
-};
+    const unidades = proyecto.unidades || [];
+    const rows =
+      unidades.length > 0
+        ? unidades.map(u => [
+            u.numerounidad ?? '',
+            u.unidadprivativa ?? '',
+            u.preciolista ?? '',
+            u.estatus ?? 'disponible',
+            ...extrasHeader.map(key => u.extras?.[key] ?? ''),
+          ])
+        : [
+            // fila de ejemplo cuando aún no hay unidades
+            ['Ej: 101', 'Ej: 1', '1000000', 'disponible', ...extrasHeader.map(() => '')],
+          ];
+
+    const wsData = [header, ...rows];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Unidades');
+    XLSX.writeFile(wb, unidades.length > 0 ? 'unidades_actuales.xlsx' : 'plantilla_unidades.xlsx');
+  };
 
 
 
