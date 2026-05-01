@@ -69,6 +69,42 @@ const headerStyle = {
   whiteSpace: "nowrap" as const,
 };
 
+function resolvePaymentPlans(proyecto: Proyecto | null): any[] {
+  if (!proyecto) return [];
+
+  const raw =
+    (proyecto as any).paymentPlans ??
+    (proyecto as any).paymentplans ??
+    (proyecto as any).payment_plans;
+
+  if (!raw) return [];
+
+  if (Array.isArray(raw)) return raw;
+
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed?.plans)) return parsed.plans;
+      return [];
+    } catch {
+      return [];
+    }
+  }
+
+  if (typeof raw === "object") {
+    if (Array.isArray((raw as any).plans)) return (raw as any).plans;
+  }
+
+  return [];
+}
+
+function formatPercent(value: any): string {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return "0.00%";
+  return `${num.toFixed(2)}%`;
+}
+
 // Helper para extraer numeros limpios (ej. "$ 1,500.00" -> 1500)
 function limpiarPrecio(precioRaw: any): number {
   if (!precioRaw) return 0;
@@ -132,16 +168,7 @@ const ListaPreciosModal: React.FC<ListaPreciosModalProps> = ({
 
   if (!proyecto) return null;
 
-  let planes: any[] = [];
-  try {
-    if (typeof proyecto.paymentPlans === "string") {
-      planes = JSON.parse(proyecto.paymentPlans || "[]");
-    } else if (Array.isArray(proyecto.paymentPlans)) {
-      planes = proyecto.paymentPlans;
-    }
-  } catch (e) {
-    console.error("Error parseando paymentPlans", e);
-  }
+  const planes = resolvePaymentPlans(proyecto);
 
   const dataFuente = filasDb.length > 0 ? filasDb : (proyecto.unidades || []);
 
@@ -287,6 +314,8 @@ const ProyectoViewModal: React.FC<ProyectoViewModalProps> = ({
 
   if (!proyecto) return null;
 
+  const planesPago = resolvePaymentPlans(proyecto);
+
   const camposBasicos = [
     { label: "Estatus", value: proyecto.estatus },
     {
@@ -294,6 +323,7 @@ const ProyectoViewModal: React.FC<ProyectoViewModalProps> = ({
       value: proyecto.fechaEntrega && new Date(proyecto.fechaEntrega).toLocaleDateString(),
     },
     { label: "Unidades", value: proyecto.unidades?.length ?? 0 },
+    { label: "Planes de Pago", value: planesPago.length },
   ];
 
   const nodesCount = ((proyecto as any).stacking?.nodes ?? []).length;
@@ -388,10 +418,56 @@ const ProyectoViewModal: React.FC<ProyectoViewModalProps> = ({
         </Box>
       )}
 
+      {planesPago.length > 0 && (
+        <Box sx={{ mt: 4 }}>
+          <Typography variant="h6" sx={{ fontWeight: 600, color: "var(--primary-color)", mb: 2 }}>
+            Planes de Pago
+          </Typography>
+          <TableContainer component={Paper} variant="outlined">
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Plan</TableCell>
+                  <TableCell align="right">Meses</TableCell>
+                  <TableCell align="right">Descuento (%)</TableCell>
+                  <TableCell align="right">Enganche (%)</TableCell>
+                  <TableCell align="right">Mensualidades (%)</TableCell>
+                  <TableCell align="right">Contraentrega (%)</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {planesPago.map((plan: any, idx: number) => {
+                  const parcialidades = Array.isArray(plan?.parcialidades) ? plan.parcialidades : [];
+                  const mensualidadesPorcentaje =
+                    parcialidades.length > 0
+                      ? parcialidades.reduce((acc: number, p: any) => acc + Number(p?.value || 0), 0)
+                      : Number(plan?.mensualidades ?? 0);
+
+                  const enganche = Number(plan?.pInicial ?? 0);
+                  const contraentrega = Number(plan?.contraentrega ?? 0);
+                  const descuento = Number(plan?.descuento ?? 0);
+
+                  return (
+                    <TableRow key={`${plan?.name ?? 'plan'}-${idx}`}>
+                      <TableCell sx={{ fontWeight: 600 }}>{plan?.name ?? `Plan ${idx + 1}`}</TableCell>
+                      <TableCell align="right">{plan?.months ?? '-'}</TableCell>
+                      <TableCell align="right">{formatPercent(descuento)}</TableCell>
+                      <TableCell align="right">{formatPercent(enganche)}</TableCell>
+                      <TableCell align="right">{formatPercent(mensualidadesPorcentaje)}</TableCell>
+                      <TableCell align="right">{formatPercent(contraentrega)}</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Box>
+      )}
+
       {proyecto.unidades && proyecto.unidades.length > 0 && (
         <Box sx={{ mt: 4 }}>
           <Typography variant="h6" sx={{ fontWeight: 600, color: "var(--primary-color)", mb: 2 }}>
-            Unidades Disponibles
+            Todas las Unidades
           </Typography>
           <TableContainer component={Paper} variant="outlined">
             <Table size="small">
@@ -404,7 +480,7 @@ const ProyectoViewModal: React.FC<ProyectoViewModalProps> = ({
                 </TableRow>
               </TableHead>
               <TableBody>
-                {proyecto.unidades.slice(0, 10).map((u, i) => {
+                {proyecto.unidades.map((u, i) => {
                   const chip = unidadChipProps(u.estatus);
                   const precioBase = limpiarPrecio(u.preciolista);
                   return (

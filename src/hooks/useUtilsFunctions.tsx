@@ -3,6 +3,50 @@ import { supabase } from "../config/supabase";
 import {  Document, Empresa, ESTATUS_OPCIONES,   } from "../config/types";
 import { Chip } from "@mui/material";
 
+type SignedUrlCacheEntry = {
+  signedUrl: string;
+  expiresAt: number;
+};
+
+const signedUrlCache = new Map<string, SignedUrlCacheEntry>();
+const signedUrlInFlight = new Map<string, Promise<string | null>>();
+
+function normalizeStoragePath(path: string, bucket: string): string {
+  if (!path) return "";
+
+  const trimmed = path.trim();
+  if (!trimmed) return "";
+
+  // Acepta path puro, URL pública o signed URL previa y extrae la key interna.
+  if (!trimmed.startsWith("http")) {
+    return trimmed.replace(/^\/+/, "");
+  }
+
+  try {
+    const url = new URL(trimmed);
+    const publicPrefix = `/storage/v1/object/public/${bucket}/`;
+    const signPrefix = `/storage/v1/object/sign/${bucket}/`;
+
+    if (url.pathname.includes(publicPrefix)) {
+      return url.pathname.split(publicPrefix)[1]?.replace(/^\/+/, "") ?? "";
+    }
+
+    if (url.pathname.includes(signPrefix)) {
+      return url.pathname.split(signPrefix)[1]?.replace(/^\/+/, "") ?? "";
+    }
+
+    const parts = url.pathname.split("/");
+    const bucketIdx = parts.findIndex((p) => p === bucket);
+    if (bucketIdx >= 0) {
+      return parts.slice(bucketIdx + 1).join("/").replace(/^\/+/, "");
+    }
+  } catch {
+    return "";
+  }
+
+  return "";
+}
+
 
 export const getRandomInt = (max: number): number => {
     if (typeof max !== "number" || max <= 0) {
@@ -63,16 +107,52 @@ export async function getSignedUrl(
   bucket: string,
   expires = 60 * 60
 ): Promise<string | null> {
+  const normalizedPath = normalizeStoragePath(path, bucket);
+  if (!normalizedPath || !bucket) return null;
+
+  const cacheKey = `${bucket}:${normalizedPath}`;
+  const now = Date.now();
+  const cached = signedUrlCache.get(cacheKey);
+
+  // Reutiliza URL vigente para evitar pedir firma en cada render.
+  if (cached && cached.expiresAt > now) {
+    return cached.signedUrl;
+  }
+
+  const pending = signedUrlInFlight.get(cacheKey);
+  if (pending) {
+    return pending;
+  }
+
+  const request = (async () => {
   const { data, error } = await supabase
     .storage
     .from(bucket)
-    .createSignedUrl(path, expires)
+    .createSignedUrl(normalizedPath, expires)
 
   if (error) {
     console.error('Error generando URL firmada:', error.message)
+    // Si falla, intenta reutilizar el último valor cacheado.
+    if (cached?.signedUrl) return cached.signedUrl;
     return null
   }
+
+  const safeTtlSeconds = Math.max(30, Math.min(expires - 30, 15 * 60));
+  signedUrlCache.set(cacheKey, {
+    signedUrl: data.signedUrl,
+    expiresAt: now + safeTtlSeconds * 1000,
+  });
+
   return data.signedUrl
+  })();
+
+  signedUrlInFlight.set(cacheKey, request);
+
+  try {
+    return await request;
+  } finally {
+    signedUrlInFlight.delete(cacheKey);
+  }
 }
 
 export const eliminarLetras = (valor: string): string => {
