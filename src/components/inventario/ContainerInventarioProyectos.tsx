@@ -1,6 +1,6 @@
 import React from 'react'
 import { Box, Grid, Typography } from '@mui/material'
-import { Proyecto, Unidad } from '../../config/types'
+import { Proyecto } from '../../config/types'
 import CardProyectoVisor from './CardProyectoView'
 import { useFetchProyects } from '../../hooks/useFetchFunctions'
 import { useNavigate } from 'react-router-dom'
@@ -8,10 +8,6 @@ import { useNavigate } from 'react-router-dom'
 const ContainerProyectosView: React.FC = () => {
     const {proyectos}=useFetchProyects()
     const navigate = useNavigate()
-
-    const handleCotizarUnidad = (unidad: Unidad, proyecto: Proyecto) => {
-      navigate(`/productos/cotizar/unidad/${proyecto.id}/${unidad.id}`)
-    };
 
     const handleViewProyecto = (proyecto: Proyecto) => {
       navigate(`/productos/proyecto/${proyecto.id}`)
