@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Modal,
   Box,
@@ -17,10 +17,15 @@ import {
   TableContainer,
   Button,
   CircularProgress,
+  Menu,
+  MenuItem,
+  Checkbox,
+  ListItemText,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
+import ViewColumnIcon from "@mui/icons-material/ViewColumn";
 import SignedAvatar from "../general/SignedAvatar";
 import SignedImage from "../general/SignedImage";
 import { formatoMoneda } from "../../hooks/useUtilsFunctions";
@@ -144,6 +149,29 @@ const ListaPreciosModal: React.FC<ListaPreciosModalProps> = ({
   const [filasDb, setFilasDb] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // Estados para el menú de columnas
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [columnasOcultas, setColumnasOcultas] = useState<string[]>([]);
+
+  // Cargar preferencias ÚNICAS por cada proyecto al abrir el modal
+  useEffect(() => {
+    if (open && proyecto) {
+      const storageKey = `crm_columnas_ocultas_${proyecto.nombre}`;
+      const guardadas = localStorage.getItem(storageKey);
+      
+      if (guardadas) {
+        try {
+          setColumnasOcultas(JSON.parse(guardadas));
+        } catch (e) {
+          console.error("Error leyendo preferencias de columnas", e);
+          setColumnasOcultas([]);
+        }
+      } else {
+        setColumnasOcultas([]);
+      }
+    }
+  }, [open, proyecto]);
+
   useEffect(() => {
     if (!open || !proyecto) return;
 
@@ -169,8 +197,39 @@ const ListaPreciosModal: React.FC<ListaPreciosModalProps> = ({
   if (!proyecto) return null;
 
   const planes = resolvePaymentPlans(proyecto);
-
   const dataFuente = filasDb.length > 0 ? filasDb : (proyecto.unidades || []);
+
+  const nombresPlanes = planes.map((p) => p.name);
+  const todasLasColumnas = [
+    "Unidad",
+    "Nivel",
+    "Unidad Priv.",
+    "M2 Interiores",
+    "Precio Lista Base",
+    ...nombresPlanes,
+    "Estatus",
+  ];
+
+  const handleMenuClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    setAnchorEl(event.currentTarget);
+  };
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+  };
+
+  const toggleColumna = (columna: string) => {
+    setColumnasOcultas((prev) => {
+      const nuevasOcultas = prev.includes(columna)
+        ? prev.filter((c) => c !== columna) // Mostrarla
+        : [...prev, columna]; // Ocultarla
+
+      if (proyecto) {
+        const storageKey = `crm_columnas_ocultas_${proyecto.nombre}`;
+        localStorage.setItem(storageKey, JSON.stringify(nuevasOcultas));
+      }
+      return nuevasOcultas;
+    });
+  };
 
   return (
     <Modal open={open} onClose={onClose}>
@@ -195,9 +254,38 @@ const ListaPreciosModal: React.FC<ListaPreciosModalProps> = ({
           <CloseIcon />
         </IconButton>
 
-        <Typography variant="h5" sx={{ fontWeight: "bold", color: "var(--primary-color)", mb: 0.5 }}>
-          Precios por Plan
-        </Typography>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.5, pr: 4 }}>
+          <Typography variant="h5" sx={{ fontWeight: "bold", color: "var(--primary-color)" }}>
+            Precios por Plan
+          </Typography>
+
+          <Box>
+            <Button
+              variant="outlined"
+              startIcon={<ViewColumnIcon />}
+              onClick={handleMenuClick}
+            >
+              Columnas
+            </Button>
+            <Menu
+              anchorEl={anchorEl}
+              open={Boolean(anchorEl)}
+              onClose={handleMenuClose}
+              PaperProps={{ style: { maxHeight: 300 } }}
+            >
+              {todasLasColumnas.map((columna) => (
+                <MenuItem key={columna} onClick={() => toggleColumna(columna)}>
+                  <Checkbox
+                    checked={!columnasOcultas.includes(columna)}
+                    size="small"
+                  />
+                  <ListItemText primary={columna} />
+                </MenuItem>
+              ))}
+            </Menu>
+          </Box>
+        </Stack>
+
         <Typography variant="subtitle2" sx={{ color: "#888", mb: 3 }}>
           {proyecto.nombre}
         </Typography>
@@ -215,22 +303,25 @@ const ListaPreciosModal: React.FC<ListaPreciosModalProps> = ({
             <Table size="small" stickyHeader>
               <TableHead>
                 <TableRow>
-                  <TableCell sx={headerStyle}>Unidad</TableCell>
-                  <TableCell sx={headerStyle}>Nivel</TableCell>
-                  <TableCell sx={headerStyle}>Unidad Priv.</TableCell>
-                  <TableCell sx={headerStyle}>M2 Interiores</TableCell>
-                  <TableCell sx={headerStyle}>Precio Lista Base</TableCell>
+                  {!columnasOcultas.includes("Unidad") && <TableCell sx={headerStyle}>Unidad</TableCell>}
+                  {!columnasOcultas.includes("Nivel") && <TableCell sx={headerStyle}>Nivel</TableCell>}
+                  {!columnasOcultas.includes("Unidad Priv.") && <TableCell sx={headerStyle}>Unidad Priv.</TableCell>}
+                  {!columnasOcultas.includes("M2 Interiores") && <TableCell sx={headerStyle}>M2 Interiores</TableCell>}
+                  {!columnasOcultas.includes("Precio Lista Base") && <TableCell sx={headerStyle}>Precio Lista Base</TableCell>}
 
-                  {planes.map((plan, idx) => (
-                    <TableCell key={idx} sx={headerStyle} align="right">
-                      {plan.name} <br />
-                      <span style={{ fontSize: "0.75em", fontWeight: "normal", color: "#e0e0e0" }}>
-                        ({plan.descuento || 0}% desc)
-                      </span>
-                    </TableCell>
-                  ))}
+                  {planes.map((plan, idx) => {
+                    if (columnasOcultas.includes(plan.name)) return null;
+                    return (
+                      <TableCell key={idx} sx={headerStyle} align="right">
+                        {plan.name} <br />
+                        <span style={{ fontSize: "0.75em", fontWeight: "normal", color: "#e0e0e0" }}>
+                          ({plan.descuento || 0}% desc)
+                        </span>
+                      </TableCell>
+                    );
+                  })}
 
-                  <TableCell sx={headerStyle} align="center">Estatus</TableCell>
+                  {!columnasOcultas.includes("Estatus") && <TableCell sx={headerStyle} align="center">Estatus</TableCell>}
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -264,15 +355,19 @@ const ListaPreciosModal: React.FC<ListaPreciosModalProps> = ({
 
                   return (
                     <TableRow key={idx} hover sx={{ "&:nth-of-type(odd)": { backgroundColor: "#f9f9f9" } }}>
-                      <TableCell sx={{ fontWeight: 600 }}>{depto}</TableCell>
-                      <TableCell>{nivel}</TableCell>
-                      <TableCell>{unidadPrivativa}</TableCell>
-                      <TableCell>{m2Interiores}</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>
-                        {ocultarPrecios ? valorOculto : formatoMoneda(precioBase)}
-                      </TableCell>
+                      {!columnasOcultas.includes("Unidad") && <TableCell sx={{ fontWeight: 600 }}>{depto}</TableCell>}
+                      {!columnasOcultas.includes("Nivel") && <TableCell>{nivel}</TableCell>}
+                      {!columnasOcultas.includes("Unidad Priv.") && <TableCell>{unidadPrivativa}</TableCell>}
+                      {!columnasOcultas.includes("M2 Interiores") && <TableCell>{m2Interiores}</TableCell>}
+                      {!columnasOcultas.includes("Precio Lista Base") && (
+                        <TableCell sx={{ fontWeight: 600 }}>
+                          {ocultarPrecios ? valorOculto : formatoMoneda(precioBase)}
+                        </TableCell>
+                      )}
 
                       {planes.map((plan, pIdx) => {
+                        if (columnasOcultas.includes(plan.name)) return null;
+
                         const descuento = Number(plan.descuento || 0);
                         const factor = 1 - descuento / 100;
                         const precioFinal = precioBase * factor;
@@ -284,9 +379,11 @@ const ListaPreciosModal: React.FC<ListaPreciosModalProps> = ({
                         );
                       })}
 
-                      <TableCell align="center">
-                        <Chip size="small" label={chip.label} color={chip.color} />
-                      </TableCell>
+                      {!columnasOcultas.includes("Estatus") && (
+                        <TableCell align="center">
+                          <Chip size="small" label={chip.label} color={chip.color} />
+                        </TableCell>
+                      )}
                     </TableRow>
                   );
                 })}
