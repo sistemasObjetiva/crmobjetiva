@@ -22,9 +22,15 @@ export const loginWithEmail = async (
   });
 };
 
+const CANONICAL_PRODUCTION_ORIGIN = 'https://objetiva.app';
+const productionRedirectTo = `${CANONICAL_PRODUCTION_ORIGIN}/auth/callback`;
+
 // Función para iniciar sesión con Google (OAuth)
 export const loginWithGoogle = async (): Promise<AuthResponse> => {
-    const redirectTo = `${window.location.origin}/inicio`;
+  const redirectTo = import.meta.env.PROD
+    ? productionRedirectTo
+    : `${window.location.origin}/inicio`;
+
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: { redirectTo },
@@ -39,9 +45,11 @@ export const loginWithGoogle = async (): Promise<AuthResponse> => {
 export const resetPassword = async (
   email: string
 ): Promise<AuthResponse> => {
-  return await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: window.location.origin + '/reset',
-  });
+  const redirectTo = import.meta.env.PROD
+    ? `${CANONICAL_PRODUCTION_ORIGIN}/reset`
+    : `${window.location.origin}/reset`;
+
+  return await supabase.auth.resetPasswordForEmail(email, { redirectTo });
 };
 
 export function useAuth() {
