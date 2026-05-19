@@ -31,7 +31,7 @@
     if (error) {
       setError(error.message);
     } else {
-      navigate("/inicio");
+     window.location.href = "https://crmobjetiva-seven.vercel.app/inicio";
     }
 
     setLoading(false);
