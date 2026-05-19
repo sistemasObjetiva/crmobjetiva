@@ -24,7 +24,7 @@ export const loginWithEmail = async (
 
 // Función para iniciar sesión con Google (OAuth)
 export const loginWithGoogle = async (): Promise<AuthResponse> => {
-    const redirectTo = `${window.location.origin}/inicio`;
+   const redirectTo = `https://crmobjetiva-seven.vercel.app/inicio`;
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: { redirectTo },
