@@ -6,7 +6,6 @@
   import logo from "../assets/logos/logoObjetiva.png";
   import FooterContainer from "../components/general/Footer";
   import { loginWithEmail, loginWithGoogle, resetPassword } from "../config/auth";
-  import { useNavigate } from "react-router-dom";
   import { Button } from "@mui/material";
   import Spinner from "../components/general/Spinner";
 
