@@ -27,34 +27,31 @@ interface CotizadorModalProps {
   onClose: () => void
   onAsignarCotizacion?: (doc: Document) => void
   seguimiento?: Seguimiento
+  asPage?: boolean // 👈 SOLUCIÓN AL ERROR 2
 }
 
 const CotizadorModal: React.FC<CotizadorModalProps> = ({
-  proyecto, unidad, open, onClose, onAsignarCotizacion,
+  proyecto, unidad, open, onClose, onAsignarCotizacion, asPage
 }) => {
   
   // ----------------- CÁLCULO DEL IVA (16%) -----------------
-  // Calculamos el precio de lista incluyendo el 16% de IVA de manera centralizada
   const precioLista = useMemo(() => {
     const num = parseFloat(String(unidad.preciolista).replace(/[$,]/g, ''))
     return isNaN(num) ? 0 : num * 1.16 
   }, [unidad.preciolista])
 
-  // Creamos un clon de la unidad con el precio modificado para actualizar los componentes visuales y el PDF
   const unidadConIva = useMemo(() => {
     return {
       ...unidad,
-      preciolista: precioLista
+      preciolista: String(precioLista) // 👈 SOLUCIÓN AL ERROR 1 (Convertir de nuevo a String)
     }
   }, [unidad, precioLista])
   // ---------------------------------------------------------
 
-  // ----------------- Estado del plan -----------------
   const [selectedPlan, setSelectedPlan] = useState<PlanPago | null>(null)
   const [isCustomPlan, setIsCustomPlan] = useState(false)
   const [customPayments, setCustomPayments] = useState<CustomPayment[]>([])
   
-  // Inicializa el plan personalizado directamente con el precio que ya incluye IVA
   const [customPrecioPlan, setCustomPrecioPlan] = useState<number>(() => {
     const num = parseFloat(String(unidad.preciolista).replace(/[$,]/g, '')) || 0
     return num * 1.16
@@ -62,11 +59,9 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
   const [customPagoInicial, setCustomPagoInicial] = useState<number>(0)
   const [customContraEntrega, setCustomContraEntrega] = useState<number>(0)
 
-  // ----------------- Usuario actual -----------------
   const { user } = useAuthRole()
   const { usuarios } = useFetchUsuarios()
 
-  // Normaliza email/teléfono del vendedor según user.id y catálogo de usuarios
   const { sellerEmail, sellerPhone } = useMemo(() => {
     const authId = String((user as any)?.id ?? (user as any)?.uid ?? '')
     const match = (usuarios ?? []).find(u => String(u.id) === authId)
@@ -89,7 +84,6 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
     return { sellerEmail: (email || '').trim(), sellerPhone: (phone || '').trim() }
   }, [user, usuarios])
 
-  // ----------------- Derivados -----------------
   const handleSelectedPlanChange = (plan: PlanPago | null) => setSelectedPlan(plan)
   const handleIsCustomPlanChange = (val: boolean) => setIsCustomPlan(val)
 
@@ -113,12 +107,10 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
     setCustomContraEntrega(customContraEntrega ?? 0)
   }
 
-  // ✅ Permite descargar aunque no haya plan (cuando NO es personalizado)
   const canDownload = isCustomPlan
     ? (customPrecioPlan > 0 && restante === 0 && (customPagoInicial + customContraEntrega + customPayments.length > 0))
     : true
 
-  // --- Firmar medios y convertir a base64 para @react-pdf ---
   const prepararMedios = async () => {
     const logoUrl = proyecto.logo?.path
       ? await getSignedUrl(proyecto.logo.path, proyecto.logo.bucket!)
@@ -148,14 +140,11 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
     return { logoBase, renderBase, isoBase, planoBase, galeriaBases }
   }
 
-  // --- Construir plan personalizado con MONTOS ABSOLUTOS ---
   const buildCustomPlanConMontos = (): PlanPago => {
-    // Convertir a porcentajes para mantener compatibilidad con estructura PlanPago
     const totalSeguro = customPrecioPlan > 0 ? customPrecioPlan : 1
     const pInicialPct = (customPagoInicial / totalSeguro) * 100
     const contraPct = (customContraEntrega / totalSeguro) * 100
     
-    // Las parcialidades guardan los MONTOS reales, no porcentajes
     const parcialidades = customPayments.map((p, i) => ({
       month: i + 1,
       value: p.monto,
@@ -176,7 +165,6 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
     } as PlanPago
   }
 
-  // ----------------- Acciones -----------------
   const handleDownloadPdf = async () => {
     let planParaPdf: PlanPago | null = selectedPlan
 
@@ -197,7 +185,7 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
     const blobPdf = await pdf(
       <CotizacionPDF
         proyecto={proyecto}
-        unidad={unidadConIva} 
+        unidad={unidadConIva as Unidad} // 👈 Forzamos a TypeScript a que confíe
         planSeleccionado={planParaPdf || undefined}
         planes={planesParaPdf}
         logoUrl={logoBase}
@@ -239,7 +227,7 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
     const blobPdf = await pdf(
       <CotizacionPDF
         proyecto={proyecto}
-        unidad={unidadConIva} 
+        unidad={unidadConIva as Unidad} 
         planSeleccionado={planParaPdf || undefined}
         planes={planesParaPdf}
         logoUrl={logoBase}
@@ -267,7 +255,6 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
     onClose()
   }
 
-  // ----------------- UI -----------------
   return (
     <Dialog
       open={open}
@@ -303,8 +290,8 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
           )}
         </Box>
 
-        <UnidadInfo unidad={unidadConIva} extrasOrder={proyecto.extrasOrder} />
-        <UnidadImagenes unidad={unidadConIva} />
+        <UnidadInfo unidad={unidadConIva as Unidad} extrasOrder={proyecto.extrasOrder} />
+        <UnidadImagenes unidad={unidadConIva as Unidad} />
 
         <SelectorPlanPago
           paymentPlans={proyecto.paymentPlans || []}
