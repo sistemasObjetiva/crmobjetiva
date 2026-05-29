@@ -31,7 +31,7 @@ interface CotizadorModalProps {
 }
 
 const CotizadorModal: React.FC<CotizadorModalProps> = ({
-  proyecto, unidad, open, onClose, onAsignarCotizacion, asPage
+  proyecto, unidad, open, onClose, onAsignarCotizacion,
 }) => {
   
   // ----------------- CÁLCULO DEL IVA (16%) -----------------
