@@ -27,27 +27,61 @@ interface CotizadorModalProps {
   onClose: () => void
   onAsignarCotizacion?: (doc: Document) => void
   seguimiento?: Seguimiento
-  asPage?: boolean
+  asPage?: boolean 
 }
 
 const CotizadorModal: React.FC<CotizadorModalProps> = ({
-  proyecto, unidad, open, onClose, onAsignarCotizacion, asPage = false,
+  proyecto, unidad, open, onClose, onAsignarCotizacion,
 }) => {
+  
+  // ----------------- FUNCIÓN EVALUADORA DE "LOCAL" -----------------
+  // Esta función evalúa si la unidad es un local comercial para aplicar IVA
+  const verificarSiEsLocal = (u: Unidad): boolean => {
+    const nombreUnidad = String(u.numerounidad || '').toLowerCase()
+    const unidadPrivativa = String(u.unidadprivativa || '').toLowerCase()
+    const tipoUnidad = String((u as any).tipo || '').toLowerCase()
+    
+    return nombreUnidad.includes('local') || 
+           unidadPrivativa.includes('local') || 
+           tipoUnidad.includes('local')
+  }
+
+  // ----------------- CÁLCULO DEL IVA CONDICIONAL -----------------
+  // El IVA (1.16) solo se aplica si pasa la prueba de ser un "local"
+  const precioLista = useMemo(() => {
+    const num = parseFloat(String(unidad.preciolista).replace(/[$,]/g, ''))
+    if (isNaN(num)) return 0
+    
+    const esLocal = verificarSiEsLocal(unidad)
+    return esLocal ? num * 1.16 : num // 👈 Si es local x1.16, si no, precio normal
+  }, [unidad.preciolista, unidad.numerounidad, unidad.unidadprivativa])
+
+  // Clonamos el objeto con el precio calculado (con o sin IVA según corresponda)
+  const unidadFinal = useMemo(() => {
+    return {
+      ...unidad,
+      preciolista: String(precioLista) 
+    }
+  }, [unidad, precioLista])
+  // -----------------------------------------------------------------
+
   // ----------------- Estado del plan -----------------
   const [selectedPlan, setSelectedPlan] = useState<PlanPago | null>(null)
   const [isCustomPlan, setIsCustomPlan] = useState(false)
   const [customPayments, setCustomPayments] = useState<CustomPayment[]>([])
-  const [customPrecioPlan, setCustomPrecioPlan] = useState<number>(
-    parseFloat(String(unidad.preciolista).replace(/[$,]/g, '')) || 0
-  )
+  
+  // El plan personalizado también hereda de forma inteligente el precio con o sin IVA
+  const [customPrecioPlan, setCustomPrecioPlan] = useState<number>(() => {
+    const num = parseFloat(String(unidad.preciolista).replace(/[$,]/g, '')) || 0
+    const esLocal = verificarSiEsLocal(unidad)
+    return esLocal ? num * 1.16 : num
+  })
   const [customPagoInicial, setCustomPagoInicial] = useState<number>(0)
   const [customContraEntrega, setCustomContraEntrega] = useState<number>(0)
 
-  // ----------------- Usuario actual -----------------
   const { user } = useAuthRole()
   const { usuarios } = useFetchUsuarios()
 
-  // Normaliza email/teléfono del vendedor según user.id y catálogo de usuarios
   const { sellerEmail, sellerPhone } = useMemo(() => {
     const authId = String((user as any)?.id ?? (user as any)?.uid ?? '')
     const match = (usuarios ?? []).find(u => String(u.id) === authId)
@@ -70,14 +104,8 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
     return { sellerEmail: (email || '').trim(), sellerPhone: (phone || '').trim() }
   }, [user, usuarios])
 
-  // ----------------- Derivados -----------------
   const handleSelectedPlanChange = (plan: PlanPago | null) => setSelectedPlan(plan)
   const handleIsCustomPlanChange = (val: boolean) => setIsCustomPlan(val)
-
-  const precioLista = useMemo(() => {
-    const num = parseFloat(String(unidad.preciolista).replace(/[$,]/g, ''))
-    return isNaN(num) ? 0 : num
-  }, [unidad.preciolista])
 
   const totalCustomMonthly = customPayments.reduce((sum, p) => sum + Number(p.monto), 0)
   const totalProgramado = customPagoInicial + customContraEntrega + totalCustomMonthly
@@ -99,12 +127,10 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
     setCustomContraEntrega(customContraEntrega ?? 0)
   }
 
-  // ✅ Permite descargar aunque no haya plan (cuando NO es personalizado)
   const canDownload = isCustomPlan
     ? (customPrecioPlan > 0 && restante === 0 && (customPagoInicial + customContraEntrega + customPayments.length > 0))
     : true
 
-  // --- Firmar medios y convertir a base64 para @react-pdf ---
   const prepararMedios = async () => {
     const logoUrl = proyecto.logo?.path
       ? await getSignedUrl(proyecto.logo.path, proyecto.logo.bucket!)
@@ -134,18 +160,15 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
     return { logoBase, renderBase, isoBase, planoBase, galeriaBases }
   }
 
-  // --- Construir plan personalizado con MONTOS ABSOLUTOS ---
   const buildCustomPlanConMontos = (): PlanPago => {
-    // Convertir a porcentajes para mantener compatibilidad con estructura PlanPago
     const totalSeguro = customPrecioPlan > 0 ? customPrecioPlan : 1
     const pInicialPct = (customPagoInicial / totalSeguro) * 100
     const contraPct = (customContraEntrega / totalSeguro) * 100
     
-    // Las parcialidades guardan los MONTOS reales, no porcentajes
     const parcialidades = customPayments.map((p, i) => ({
       month: i + 1,
-      value: p.monto,  // 👈 MONTO ABSOLUTO, no porcentaje
-      isAbsolute: true as const, // 👈 Bandera para que el PDF lo interprete como monto
+      value: p.monto,
+      isAbsolute: true as const, 
     }))
 
     return {
@@ -156,13 +179,12 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
       mensualidades: customPayments.length,
       months: customPayments.length,
       parcialidades,
-      precioBase: customPrecioPlan,  // 👈 Precio total del plan
-      engancheMonto: customPagoInicial,  // 👈 Montos absolutos
+      precioBase: customPrecioPlan,
+      engancheMonto: customPagoInicial,
       contraentregaMonto: customContraEntrega,
     } as PlanPago
   }
 
-  // ----------------- Acciones -----------------
   const handleDownloadPdf = async () => {
     let planParaPdf: PlanPago | null = selectedPlan
 
@@ -183,7 +205,7 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
     const blobPdf = await pdf(
       <CotizacionPDF
         proyecto={proyecto}
-        unidad={unidad}
+        unidad={unidadFinal as Unidad} 
         planSeleccionado={planParaPdf || undefined}
         planes={planesParaPdf}
         logoUrl={logoBase}
@@ -194,9 +216,8 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
         esPersonalizado={isCustomPlan}
         userEmail={sellerEmail || undefined}
         userPhone={sellerPhone || undefined}
-        extrasOrder={proyecto.extrasOrder}   // 👈 NUEVO
+        extrasOrder={proyecto.extrasOrder}
       />
-
     ).toBlob()
 
     const blobUrl = URL.createObjectURL(blobPdf)
@@ -226,7 +247,7 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
     const blobPdf = await pdf(
       <CotizacionPDF
         proyecto={proyecto}
-        unidad={unidad}
+        unidad={unidadFinal as Unidad} 
         planSeleccionado={planParaPdf || undefined}
         planes={planesParaPdf}
         logoUrl={logoBase}
@@ -237,9 +258,8 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
         esPersonalizado={isCustomPlan}
         userEmail={sellerEmail || undefined}
         userPhone={sellerPhone || undefined}
-        extrasOrder={proyecto.extrasOrder}   // 👈 NUEVO
+        extrasOrder={proyecto.extrasOrder}
       />
-
     ).toBlob()
 
     const archivoNombre = `${proyecto.nombre.replace(/\s+/g, '_')}_cotizacion.pdf`
@@ -255,102 +275,6 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
     onClose()
   }
 
-  // ----------------- UI -----------------
-  const header = (
-    <Box
-      sx={{
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        mb: 1, color: 'white', background: 'var(--secondary-color)', p: 2, borderRadius: asPage ? 2 : 0
-      }}
-    >
-      <Typography variant="h6" component="div">
-        Cotización {proyecto.nombre}
-      </Typography>
-      {!asPage && (
-        <IconButton onClick={onClose} color="inherit">
-          <CloseIcon />
-        </IconButton>
-      )}
-    </Box>
-  )
-
-  const body = (
-    <>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, mb: 3, flexWrap: 'wrap' }}>
-        <SignedAvatar value={proyecto.logo!} alt="Logo del Proyecto" sx={{ width: 90, height: 90, boxShadow: 2 }} />
-        {proyecto.render && (
-          <SignedImage
-            path={proyecto.render.path!}
-            bucket={proyecto.render.bucket!}
-            alt="Fachada del Proyecto"
-            sx={{ width: 260, height: 150, borderRadius: 2, boxShadow: '2px 2px 10px rgba(0,0,0,0.13)' }}
-          />
-        )}
-      </Box>
-
-      <UnidadInfo unidad={unidad} extrasOrder={proyecto.extrasOrder} />
-      <UnidadImagenes unidad={unidad} />
-
-      <SelectorPlanPago
-        paymentPlans={proyecto.paymentPlans || []}
-        precioLista={precioLista}
-        selectedPlan={selectedPlan}
-        isCustomPlan={isCustomPlan}
-        customPayments={customPayments}
-        customPrecioPlan={customPrecioPlan}
-        customPagoInicial={customPagoInicial}
-        customContraEntrega={customContraEntrega}
-        restante={restante}
-        onPlanSelected={handlePlanSelected}
-        onCustomPaymentsChange={setCustomPayments}
-        onCustomPrecioPlanChange={setCustomPrecioPlan}
-        onCustomPagoInicialChange={setCustomPagoInicial}
-        onCustomContraEntregaChange={setCustomContraEntrega}
-        onSelectedPlanChange={handleSelectedPlanChange}
-        onIsCustomPlanChange={handleIsCustomPlanChange}
-      />
-    </>
-  )
-
-  const actions = (
-    <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, p: asPage ? 0 : 2, mt: asPage ? 2 : 0 }}>
-      <Button
-        variant="outlined"
-        startIcon={<PictureAsPdfIcon />}
-        onClick={handleDownloadPdf}
-        disabled={!canDownload}
-        sx={{ color: 'var(--primary-color)', borderColor: '#fff' }}
-      >
-        Descargar PDF
-      </Button>
-
-      {onAsignarCotizacion && (
-        <Button
-          variant="contained"
-          color="primary"
-          onClick={handleAsignarPdf}
-          disabled={!canDownload}
-        >
-          Asignar a seguimiento
-        </Button>
-      )}
-
-      <Button onClick={onClose}>Cerrar</Button>
-    </Box>
-  )
-
-  if (asPage) {
-    return (
-      <Box sx={{ bgcolor: 'white', borderRadius: 3, boxShadow: 2, p: 2 }}>
-        {header}
-        <Box sx={{ px: { xs: 1, md: 2 } }}>
-          {body}
-          {actions}
-        </Box>
-      </Box>
-    )
-  }
-
   return (
     <Dialog
       open={open}
@@ -359,16 +283,79 @@ const CotizadorModal: React.FC<CotizadorModalProps> = ({
       maxWidth="xl"
       PaperProps={{ sx: { width: 'min(1200px, 96vw)' } }}
     >
-      <DialogTitle sx={{ p: 0 }}>
-        {header}
+      <DialogTitle
+        sx={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          mb: 1, color: 'white', background: 'var(--secondary-color)'
+        }}
+      >
+        <Typography variant="h6" component="div">
+          Cotización {proyecto.nombre}
+        </Typography>
+        <IconButton onClick={onClose} color="inherit">
+          <CloseIcon />
+        </IconButton>
       </DialogTitle>
 
       <DialogContent>
-        {body}
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, mb: 3, flexWrap: 'wrap' }}>
+          <SignedAvatar value={proyecto.logo!} alt="Logo del Proyecto" sx={{ width: 90, height: 90, boxShadow: 2 }} />
+          {proyecto.render && (
+            <SignedImage
+              path={proyecto.render.path!}
+              bucket={proyecto.render.bucket!}
+              alt="Fachada del Proyecto"
+              sx={{ width: 260, height: 150, borderRadius: 2, boxShadow: '2px 2px 10px rgba(0,0,0,0.13)' }}
+            />
+          )}
+        </Box>
+
+        <UnidadInfo unidad={unidadFinal as Unidad} extrasOrder={proyecto.extrasOrder} />
+        <UnidadImagenes unidad={unidadFinal as Unidad} />
+
+        <SelectorPlanPago
+          paymentPlans={proyecto.paymentPlans || []}
+          precioLista={precioLista}
+          selectedPlan={selectedPlan}
+          isCustomPlan={isCustomPlan}
+          customPayments={customPayments}
+          customPrecioPlan={customPrecioPlan}
+          customPagoInicial={customPagoInicial}
+          customContraEntrega={customContraEntrega}
+          restante={restante}
+          onPlanSelected={handlePlanSelected}
+          onCustomPaymentsChange={setCustomPayments}
+          onCustomPrecioPlanChange={setCustomPrecioPlan}
+          onCustomPagoInicialChange={setCustomPagoInicial}
+          onCustomContraEntregaChange={setCustomContraEntrega}
+          onSelectedPlanChange={handleSelectedPlanChange}
+          onIsCustomPlanChange={handleIsCustomPlanChange}
+        />
       </DialogContent>
 
       <DialogActions>
-        {actions}
+        <Button
+          variant="outlined"
+          startIcon={<PictureAsPdfIcon />}
+          onClick={handleDownloadPdf}
+          disabled={!canDownload}
+          sx={{ mr: 1, color: 'var(--primary-color)', borderColor: '#fff' }}
+        >
+          Descargar PDF
+        </Button>
+
+        {onAsignarCotizacion && (
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={handleAsignarPdf}
+            disabled={!canDownload}
+          >
+            Asignar a seguimiento
+          </Button>
+        )}
+
+        <Button onClick={onClose}>Cerrar</Button>
       </DialogActions>
     </Dialog>
   )
